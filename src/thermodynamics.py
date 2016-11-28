@@ -201,7 +201,7 @@ def energy_tension(root, model, suffix, TYPE, folder, nfolder, T, rc, LJ, csize,
 			TOTAL_TENSION = (np.array(TOTAL_TENSION) + corr_st) * st_constant
 			
 			ENERGY_ERR[n] = np.std(TOTAL_ENERGY) / np.sqrt(len(TOTAL_ENERGY))#ut.block_error(TOTAL_ENERGY, ntb)
-			TENSION_ERR[n] = np.std(TOTAL_TENSION)/ np.sqrt(len(TOTAL_TENSION))#ut.block_error(TOTAL_TENSION, ntb)
+			TENSION_ERR[n] = ut.block_error(TOTAL_TENSION, 1000)
 			
 			with file('{}/DATA/ENERGY_TENSION/{}_{}_{}_EST.txt'.format(directory, model.lower(), csize, ntraj), 'w') as outfile:
 				np.savetxt(outfile, (ENERGY[n], ENERGY_ERR[n], TEMP[n], TEMP_ERR[n], TENSION[n], TENSION_ERR[n]))
@@ -257,7 +257,7 @@ def main(root, model, nsite, AT, Q, M, LJ, T, cutoff, csize, TYPE, folder, nfold
 		if model.upper() == 'METHANOL': com = 'COM'
 		else: com = 0
 
-	nfolder = 12
+	nfolder = 1
 	ENERGY, ENERGY_ERR, TEMP, TEMP_ERR, TENSION, TENSION_ERR, N_RANGE, A_RANGE, intA_RANGE, Z_RANGE, ZA_RANGE, lnZ_RANGE = energy_tension(
 		root, model, suffix, TYPE, folder, nfolder, T, rc, LJ, csize, l_constant, st_constant, ntraj, com, 'Y')
 	plot_graphs(ENERGY, ENERGY_ERR, TENSION, TENSION_ERR, N_RANGE, A_RANGE, intA_RANGE, Z_RANGE, ZA_RANGE, lnZ_RANGE, 'b')
