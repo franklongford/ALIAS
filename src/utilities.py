@@ -9,7 +9,7 @@ Created 24/11/2016 by Frank Longford
 
 Contributors: Frank Longford
 
-Last modified 24/11/2016 by Frank Longford
+Last modified 28/11/2016 by Sam Munday
 """
 
 import numpy as np
