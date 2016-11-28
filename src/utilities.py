@@ -619,3 +619,11 @@ def block_error(A, ntb):
 	corr_err = (np.std(A) * np.sqrt(1. / (intercept*M)))
 
 	return pt, corr_err
+
+def blocksav(A, tb):
+	nb = len(A)/tb
+	blocks = np.zeros(nb)
+	for i in range(nb):
+		blocks[i] += np.mean(A[i*tb: (i+1)*tb])
+	return blocks
+
