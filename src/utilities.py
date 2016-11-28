@@ -597,3 +597,25 @@ def get_fourier(auv, nm):
 
         return f
 	
+	
+def block_error(A, ntb):
+
+	
+	prod = np.zeros(ntb)
+	for tb in range(1,ntb):
+		stdev1 = np.var(blocksav(A, tb))
+		prod[tb] += stdev1
+
+	var2 = np.var(A)
+
+	pt = [(tb+1)*prod[tb]/var2 for tb in range(ntb)]
+
+	x = [(1./tb) for tb in range(2,ntb+1)]
+	y = [(1./pt[i]) for i in range(1,ntb)]
+	
+	_, intercept, _, _, _ = stats.linregress(x,y)
+
+	M = len(A)
+	corr_err = (np.std(A) * np.sqrt(1. / (intercept*M)))
+
+	return pt, corr_err
