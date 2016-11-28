@@ -7,7 +7,7 @@ within ALIAS.
 ***********************************************************
 Created 24/11/2016 by Frank Longford
 
-Contributors: Frank Longford
+Contributors: Frank Longford, Sam Munday
 
 Last modified 28/11/2016 by Sam Munday
 """
