@@ -9,7 +9,7 @@ Created 24/11/2016 by Frank Longford
 
 Contributors: Frank Longford
 
-Last modified 24/11/2016 by Frank Longford
+Last modified 28/11/2016 by Frank Longford
 """
 
 import numpy as np
@@ -129,6 +129,7 @@ def energy_tension(root, model, suffix, TYPE, folder, nfolder, T, rc, LJ, csize,
 	lnZ_RANGE = np.zeros(nfolder)
 
 	sigma = np.max(LJ[1])
+	ntb = 100
 
 	for n in range(nfolder):
 		directory = '{}/{}_{}'.format(root, TYPE.upper(), n)
@@ -201,8 +202,10 @@ def energy_tension(root, model, suffix, TYPE, folder, nfolder, T, rc, LJ, csize,
 			TOTAL_TENSION = (np.array(TOTAL_TENSION) + corr_st) * st_constant
 			
 			ENERGY_ERR[n] = np.std(TOTAL_ENERGY) / np.sqrt(len(TOTAL_ENERGY))#ut.block_error(TOTAL_ENERGY, ntb)
-			TENSION_ERR[n] = np.std(TOTAL_TENSION)/ np.sqrt(len(TOTAL_TENSION))#ut.block_error(TOTAL_TENSION, ntb)
+			pt_st, TENSION_ERR[n] = ut.block_error(TOTAL_TENSION, ntb)
 			
+			with file('{}/DATA/ENERGY_TENSION/{}_{}_{}_{}_PT.txt'.format(directory, model.lower(), csize, ntraj, ntb), 'w') as outfile:
+				np.savetxt(outfile, pt_st)
 			with file('{}/DATA/ENERGY_TENSION/{}_{}_{}_EST.txt'.format(directory, model.lower(), csize, ntraj), 'w') as outfile:
 				np.savetxt(outfile, (ENERGY[n], ENERGY_ERR[n], TEMP[n], TEMP_ERR[n], TENSION[n], TENSION_ERR[n]))
 			with file('{}/DATA/ENERGY_TENSION/{}_{}_{}_TOTEST.txt'.format(directory, model.lower(), csize, ntraj), 'w') as outfile:
