@@ -31,6 +31,30 @@ from matplotlib.ticker import MaxNLocator
 import utilities as ut
 
 
+def load_pt(directory, ntraj):
+
+	proc = subprocess.Popen('ls {}/*PT.txt'.format(directory), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	out, err = proc.communicate()
+	pt_files = out.split()
+
+	length = len(directory) + 1
+	pt_st = []
+	ntb = 0
+	k = 0
+	
+	for i in xrange(len(pt_files)):
+		temp = pt_files[i][length:-4].split('_')
+		if int(temp[3]) >= ntb: 
+			k = i
+			ntb = int(temp[3])
+			
+	if os.path.exists(pt_files[k]):
+		with file(pt_files[k], 'r') as infile:
+			pt_st = np.loadtxt(infile)
+		
+	return pt_st, ntb
+
+
 def bubblesort(alist, key):
 	"Sorts arrays 'alist' and 'key' by order of elements of 'key'"
 	for passnum in range(len(alist)-1,0,-1):
@@ -202,6 +226,14 @@ def energy_tension(root, model, suffix, TYPE, folder, nfolder, T, rc, LJ, csize,
 			TOTAL_TENSION = (np.array(TOTAL_TENSION) + corr_st) * st_constant
 			
 			ENERGY_ERR[n] = np.std(TOTAL_ENERGY) / np.sqrt(len(TOTAL_ENERGY))#ut.block_error(TOTAL_ENERGY, ntb)
+			"""
+			if os.path.exists('{}/DATA/ENERGY_TENSION/{}_{}_{}_{}_PT.txt'.format(directory, model.lower(), csize, ntraj, ntb))
+				with file('{}/DATA/ENERGY_TENSION/{}_{}_{}_{}_PT.txt'.format(directory, model.lower(), csize, ntraj, ntb), 'r') as infile:
+					pt_st = np.loadtxt(infile)
+			else: old_pt_st, old_ntb = load_pt('{}/DATA/ENERGY_TENSION'.format(directory))
+			if old_ntb == 0: pt_st, TENSION_ERR[n] = ut.block_error(TOTAL_TENSION, ntb)
+			elif old_ntb > ntb:
+			"""
 			pt_st, TENSION_ERR[n] = ut.block_error(TOTAL_TENSION, ntb)
 			
 			with file('{}/DATA/ENERGY_TENSION/{}_{}_{}_{}_PT.txt'.format(directory, model.lower(), csize, ntraj, ntb), 'w') as outfile:
