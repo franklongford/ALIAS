@@ -9,7 +9,7 @@ Created 24/11/2016 by Frank Longford
 
 Contributors: Frank Longford
 
-Last modified 24/11/2016 by Frank Longford
+Last modified 28/11/2016 by Frank Longford
 """
 
 import numpy as np
@@ -29,6 +29,7 @@ from matplotlib.colors import BoundaryNorm
 from matplotlib.ticker import MaxNLocator
 
 import utilities as ut
+
 
 
 def bubblesort(alist, key):
@@ -129,6 +130,7 @@ def energy_tension(root, model, suffix, TYPE, folder, nfolder, T, rc, LJ, csize,
 	lnZ_RANGE = np.zeros(nfolder)
 
 	sigma = np.max(LJ[1])
+	ntb = 10000
 
 	for n in range(nfolder):
 		directory = '{}/{}_{}'.format(root, TYPE.upper(), n)
@@ -200,9 +202,8 @@ def energy_tension(root, model, suffix, TYPE, folder, nfolder, T, rc, LJ, csize,
 			TOTAL_ENERGY = np.array(TOTAL_ENERGY) * 4.184 + corr_e
 			TOTAL_TENSION = (np.array(TOTAL_TENSION) + corr_st) * st_constant
 			
-			ENERGY_ERR[n] = np.std(TOTAL_ENERGY) / np.sqrt(len(TOTAL_ENERGY))#ut.block_error(TOTAL_ENERGY, ntb)
-			TENSION_ERR[n] = ut.block_error(TOTAL_TENSION, 1000)
-			
+			ENERGY_ERR[n], TENSION_ERR[n] = ut.get_block_error(directory, model, csize, ntraj, TOTAL_ENERGY, TOTAL_TENSION, ntb)
+
 			with file('{}/DATA/ENERGY_TENSION/{}_{}_{}_EST.txt'.format(directory, model.lower(), csize, ntraj), 'w') as outfile:
 				np.savetxt(outfile, (ENERGY[n], ENERGY_ERR[n], TEMP[n], TEMP_ERR[n], TENSION[n], TENSION_ERR[n]))
 			with file('{}/DATA/ENERGY_TENSION/{}_{}_{}_TOTEST.txt'.format(directory, model.lower(), csize, ntraj), 'w') as outfile:
@@ -257,7 +258,7 @@ def main(root, model, nsite, AT, Q, M, LJ, T, cutoff, csize, TYPE, folder, nfold
 		if model.upper() == 'METHANOL': com = 'COM'
 		else: com = 0
 
-	nfolder = 1
+	nfolder = 20
 	ENERGY, ENERGY_ERR, TEMP, TEMP_ERR, TENSION, TENSION_ERR, N_RANGE, A_RANGE, intA_RANGE, Z_RANGE, ZA_RANGE, lnZ_RANGE = energy_tension(
 		root, model, suffix, TYPE, folder, nfolder, T, rc, LJ, csize, l_constant, st_constant, ntraj, com, 'Y')
 	plot_graphs(ENERGY, ENERGY_ERR, TENSION, TENSION_ERR, N_RANGE, A_RANGE, intA_RANGE, Z_RANGE, ZA_RANGE, lnZ_RANGE, 'b')

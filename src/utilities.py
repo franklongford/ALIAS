@@ -15,6 +15,8 @@ Last modified 28/11/2016 by Sam Munday
 import numpy as np
 import subprocess, os
 
+from scipy import stats
+
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -596,29 +598,82 @@ def get_fourier(auv, nm):
                         elif v < 0: f[index] = (auv[j1] - 1j * (auv[j2] - auv[j3]) + auv[j4]) / 4.
 
         return f
+
+
+def get_block_error(directory, model, csize, ntraj, E, ST, ntb):
+
+	if os.path.exists('{}/DATA/ENERGY_TENSION/{}_{}_{}_{}_PT.txt'.format(directory, model.lower(), csize, ntraj, ntb)):
+		with file('{}/DATA/ENERGY_TENSION/{}_{}_{}_{}_PT.txt'.format(directory, model.lower(), csize, ntraj, ntb), 'r') as infile:
+			pt_e, pt_st = np.loadtxt(infile)
+	else: 
+		old_pt_st, old_ntb = load_pt('{}/DATA/ENERGY_TENSION'.format(directory), ntraj)
+		if old_ntb == 0: 
+			pt_e = block_error(E, ntb)
+			pt_st = block_error(ST, ntb)
+		elif old_ntb > ntb:
+			with file('{}/DATA/ENERGY_TENSION/{}_{}_{}_{}_PT.txt'.format(directory, model.lower(), csize, ntraj, old_ntb), 'r') as infile:
+                        	pt_e, pt_st = np.loadtxt(infile)
+			pt_e = pt_e[:ntb]
+			pt_st = pt_st[:ntb]
+		elif old_ntb < ntb:
+			with file('{}/DATA/ENERGY_TENSION/{}_{}_{}_{}_PT.txt'.format(directory, model.lower(), csize, ntraj, old_ntb), 'r') as infile:
+                        	pt_e, pt_st = np.loadtxt(infile)
+
+			pt_e = np.concatenate((pt_e, block_error(E, ntb, old_ntb)))
+                	pt_st = np.concatenate((pt_st, block_error(ST, ntb, old_ntb)))	
+		
+		with file('{}/DATA/ENERGY_TENSION/{}_{}_{}_{}_PT.txt'.format(directory, model.lower(), csize, ntraj, ntb), 'w') as outfile:
+        		np.savetxt(outfile, (pt_e, pt_st))
+
+        M = len(E)
+
+	corr_time_e = get_corr_time(pt_e, ntb)
+	corr_time_st = get_corr_time(pt_st, ntb)
+
+        m_err_e = (np.std(E) * np.sqrt(corr_time_e / M))
+	m_err_st = (np.std(ST) * np.sqrt(corr_time_st / M))
+
+        return m_err_e, m_err_st	
+
+
+def load_pt(directory, ntraj):
+
+	proc = subprocess.Popen('ls {}/*PT.txt'.format(directory), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	out, err = proc.communicate()
+	pt_files = out.split()
+
+	length = len(directory) + 1
+	pt_st = []
+	ntb = 0
+	k = 0
 	
-	
-def block_error(A, ntb):
+	for i in xrange(len(pt_files)):
+		temp = pt_files[i][length:-4].split('_')
+		if int(temp[2]) == ntraj and int(temp[3]) >= ntb: 
+			k = i
+			ntb = int(temp[3])
+			
+	try: 
+		if os.path.exists(pt_files[k]):
+			with file(pt_files[k], 'r') as infile:
+				pt_st = np.loadtxt(infile)
+
+	except IndexError: pass
+
+	return pt_st, ntb
 
 	
-	prod = np.zeros(ntb)
-	for tb in range(1,ntb):
-		stdev1 = np.var(blocksav(A, tb))
-		prod[tb] += stdev1
-
+def block_error(A, ntb, s_ntb=2):
+	
 	var2 = np.var(A)
 
-	pt = [(tb+1)*prod[tb]/var2 for tb in range(ntb)]
+	pt = []
+	for tb in range(s_ntb, ntb):
+		stdev1 = np.var(blocksav(A, tb))
+		pt.append(stdev1 * tb / var2)
 
-	x = [(1./tb) for tb in range(2,ntb+1)]
-	y = [(1./pt[i]) for i in range(1,ntb)]
-	
-	_, intercept, _, _, _ = stats.linregress(x,y)
+	return pt
 
-	M = len(A)
-	corr_err = (np.std(A) * np.sqrt(1. / (intercept*M)))
-
-	return pt, corr_err
 
 def blocksav(A, tb):
 	nb = len(A)/tb
@@ -627,3 +682,12 @@ def blocksav(A, tb):
 		blocks[i] += np.mean(A[i*tb: (i+1)*tb])
 	return blocks
 
+
+def get_corr_time(pt, ntb):
+
+	x = [(1./tb) for tb in range(2,ntb)]
+        y = [(1./pt[i]) for i in range(ntb-2)]
+
+        _, intercept, _, _, _ = stats.linregress(x,y)
+
+	return 1. / intercept
