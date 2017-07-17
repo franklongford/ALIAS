@@ -274,7 +274,7 @@ def print_graphs_dielectric(directory, model, nsite, AT, nslice, nm, a_type, cut
 	plt.savefig('{}/{}_{}_int_dielectric.png'.format(groot, model.lower(), cutoff))
 	plt.savefig('{}/{}_{}_int_dielectric.pdf'.format(groot, model.lower(), cutoff))
 
-	for i in xrange(3):
+	for i in xrange(4):
 	
 		plt.figure(i+2, figsize=(fig_x,fig_y))
 		plt.scatter(Z3, e_arrays[i*2], c='orange', label=r'$\epsilon_\parallel$', lw=0, s=msize)

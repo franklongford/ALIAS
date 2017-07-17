@@ -80,7 +80,13 @@ def plot_graphs(ENERGY, ENERGY_ERR, TENSION, TENSION_ERR, VAR_TENSION, N_RANGE, 
 	plt.scatter(np.array(AN_RANGE)[cut:], ENERGY[cut:], color=col, s=msize)
 	plt.errorbar(np.array(AN_RANGE)[cut:], ENERGY[cut:], color=col, linestyle='none', yerr=np.array(ENERGY_ERR[cut:])*5)
 
+	energy_err = [ENERGY_ERR[x] * N_RANGE[x] / (Z_RANGE[x]) for x in range(len(ENERGY_ERR))]
 	plt.figure(6, figsize=(fig_x,fig_y))
+	plt.scatter(np.array(AZ_RANGE)[cut:], EZ_RANGE[cut:], color=col, s=msize)
+	plt.errorbar(np.array(AZ_RANGE)[cut:], EZ_RANGE[cut:], color=col, linestyle='none', yerr=energy_err[cut:])
+	#plt.scatter(intAN_RANGE, ENERGY, color=col, s=msize, marker='x')
+
+	plt.figure(7, figsize=(fig_x,fig_y))
 	plt.scatter(np.array(AN_RANGE)[cut:], TENSION[cut:], color=col, s=msize)
 	plt.errorbar(np.array(AN_RANGE)[cut:], TENSION[cut:], color=col, linestyle='none', yerr=np.array(TENSION_ERR[cut:]))
 

@@ -1,0 +1,123 @@
+import numpy as np
+import os
+
+def write_eq1(ROOT, element, cutoff, T, vdwmeth, start, ndim):
+
+	for i in xrange(ndim):
+		size = i * 5 + start
+		if atom == "argon":
+			if vdwmeth == 0: root2 = '{}/CUT_{}_A/{}_{}/EQ1'.format(ROOT, cutoff, element.upper(), size)
+			else: root2 = '{}/CUT_{}_A/{}_{}/EQ1_2'.format(ROOT, cutoff, element.upper(), size)
+		else: root2 = '{}/CUT_{}_A/{}_{}/EQ1'.format(ROOT, cutoff, element.upper(), size)
+		FILE = open('{}/eq1_{}_{}.in'.format(root2, element.lower(), cutoff), 'w')
+		FILE.write('{}: 100ps MD with equilibration T 0-->298K, cutoff = {}  \n'.format(element.upper(), cutoff))
+		FILE.write(' &cntrl\n  imin   = 0,\n  irest  = 0,\n  ntx    = 1,\n  ntb    = 1,\n  cut    = {},\n  ntc    = 2,\n  ntf    = 2,\n'.format(float(cutoff)))
+		FILE.write('  tempi  = 0.0,\n  temp0  = {},\n  ntt    = 3,\n  gamma_ln   = 10.0,\n  nstlim = 50000, dt = 0.002,\n'.format(T))
+		FILE.write('  ntpr = 1000, ntwx = 1000, ntwr = 10000,\n  ioutfm = 1, iwrap = 1, ig = -1,\n  nmropt = 1,\n/\n')
+		FILE.write(' &ewald\n  vdwmeth = 0 \n/\n')
+		FILE.write(' &wt TYPE=TEMP0, ISTEP1=1, ISTEP2=40000, VALUE1=0, VALUE2={}\n /\n'.format(T))
+		FILE.write(' &wt TYPE=TEMP0, ISTEP1=40001, ISTEP2=50000, VALUE1={}, VALUE2={}\n /\n'.format(T,T))
+		FILE.write(' &wt TYPE=END\n / \n/')
+		FILE.close()
+
+		FILE = open('{}/eq1_{}_{}.sh'.format(root2, element.lower(), size), 'w')
+		FILE.write('#!/bin/bash\n\n')
+		FILE.write('$AMBERHOME/bin/sander -O -i eq1_{}_{}.in -o {}_{}_eq1.out -p ../{}_{}.prmtop -c ../{}_{}.inpcrd -r {}_{}_eq1.rst\n'.format(element.lower(), cutoff,
+				element.lower(), size, element.lower(), size, element.lower(), size, element.lower(), size))
+		FILE.close()
+
+
+def write_eq2(ROOT, element, cutoff, T, vdwmeth, start, ndim):
+
+	for i in xrange(ndim):
+		size = i * 5 + start
+		if atom == "argon":
+			if vdwmeth == 0: root2 = '{}/CUT_{}_A/{}_{}/EQ2'.format(ROOT, cutoff, element.upper(), size)
+			else: root2 = '{}/CUT_{}_A/{}_{}/EQ2_2'.format(ROOT, cutoff, element.upper(), size)
+		else: root2 = '{}/CUT_{}_A/{}_{}/EQ2'.format(ROOT, cutoff, element.upper(), size)
+		FILE = open('{}/eq2_{}_{}.in'.format(root2, element.lower(), cutoff), 'w')
+		FILE.write('{}: 500ps MD, cutoff = {}  \n'.format(element.upper(), cutoff))
+		FILE.write(' &cntrl\n  imin   = 0,\n  irest  = 1,\n  ntx    = 5,\n  ntb    = 2,\n  ntp    = 1,\n  pres0  = 1,\n  cut    = {},\n  ntc    = 2,\n  ntf    = 2,\n'.format(float(cutoff)))
+		FILE.write('  tempi  = {},\n  temp0  = {},\n  ntt    = 3,\n  gamma_ln   = 10.0,  taup = 2,\n  nstlim = 250000, dt = 0.002,\n'.format(T,T))
+		FILE.write('  ntpr = 1000, ntwx = 1000, ntwr = 10000,\n  ioutfm = 1, iwrap = 1, ig = -1,\n /\n')
+		FILE.write(' &ewald\n  vdwmeth = 0 \n/\n')
+		FILE.close()
+
+		FILE = open('{}/eq2_{}_{}.sh'.format(root2, element.lower(), size), 'w')
+		FILE.write('#!/bin/bash\n\n')
+		FILE.write('$AMBERHOME/bin/sander -O -i eq2_{}_{}.in -o {}_{}_eq2.out -p ../{}_{}.prmtop -c ../EQ1/{}_{}_eq1.rst -r {}_{}_eq2.rst\n'.format(element.lower(), cutoff,
+				element.lower(), size, element.lower(), size, element.lower(), size, element.lower(), size))
+		FILE.close()
+
+def write_vac(ROOT, element, cutoff, T, vdwmeth, start, ndim):
+
+	for i in xrange(ndim):
+		size = i * 5 + start
+		if atom == "argon":
+			if vdwmeth == 0: root2 = '{}/CUT_{}_A/{}_{}/VAC'.format(ROOT, cutoff, element.upper(), size)
+			else:root2 = '{}/CUT_{}_A/{}_{}/VAC_2'.format(ROOT, cutoff, element.upper(), size)
+		else: root2 = '{}/CUT_{}_A/{}_{}/VAC'.format(ROOT, cutoff, element.upper(), size)
+		FILE = open('{}/vac_{}_{}.in'.format(root2, element.lower(), cutoff), 'w')
+		FILE.write('{}: 500ps MD vacuum, cutoff = {}  \n'.format(element.upper(), cutoff))
+		FILE.write(' &cntrl\n  imin   = 0,\n  irest  = 1,\n  ntx    = 5,\n  ntb    = 1,\n  cut    = {},\n  ntc    = 2,\n  ntf    = 2,\n'.format(float(cutoff)))
+		FILE.write('  tempi  = {},\n  temp0  = {},\n  ntt    = 3,\n  gamma_ln   = 10.0,\n  nstlim = 250000, dt = 0.002,\n'.format(T,T))
+		FILE.write('  ntpr = 1000, ntwx = 1000, ntwr = 10000,\n  ioutfm = 1, iwrap = 1, ig = -1,\n /\n')
+		if atom == "argon": FILE.write(' &ewald\n  vdwmeth = {}, \n nfft1 = 6\n, nfft2 = 6\n, nfft3 = 6\n/\n'.format(vdwmeth))
+		else: FILE.write(' &ewald\n  vdwmeth = {}, \n nfft3 = {}\n/\n'.format(vdwmeth, 2*size))
+		FILE.close()
+
+		FILE = open('{}/vac_{}_{}.sh'.format(root2, element.lower(), size), 'w')
+		FILE.write('#!/bin/bash\n\n')
+		FILE.write('$AMBERHOME/bin/sander -O -i vac_{}_{}.in -o {}_{}_vac.out -p ../{}_{}.prmtop -c {}_{}_vin.rst -r {}_{}_vac.rst\n'.format(
+			   element.lower(), cutoff, element.lower(), size, element.lower(), size, element.lower(), size, element.lower(), size))
+		FILE.close()
+
+def write_surface(ROOT, element, cutoff, T, vdwmeth, start, ndim):
+
+	for i in xrange(ndim):
+		size = i * 5 + start
+		if atom == "argon":
+			if vdwmeth == 0: root2 = '{}/CUT_{}_A/{}_{}/SURFACE'.format(ROOT, cutoff, element.upper(), size)
+			else:root2 = '{}/CUT_{}_A/{}_{}/SURFACE_2'.format(ROOT, cutoff, element.upper(), size)
+		else: root2 = '{}/CUT_{}_A/{}_{}/SURFACE'.format(ROOT, cutoff, element.upper(), size)
+		FILE = open('{}/surface_{}_{}.in'.format(root2, element.lower(), cutoff), 'w')
+		FILE.write('{}: 20ps MD surface, cutoff = {}  \n'.format(element.upper(), cutoff))
+		FILE.write(' &cntrl\n  imin   = 0,\n  irest  = 1,\n  ntx    = 5,\n  ntb    = 1,\n  cut    = {},\n  ntc    = 2,\n  ntf    = 2,\n'.format(float(cutoff)))
+		FILE.write('  tempi  = {},\n  temp0  = {},\n  ntt    = 3,\n  gamma_ln   = 10.0,\n  nstlim = 10000, dt = 0.002,\n'.format(T,T))
+		FILE.write('  ntpr = 1000, ntwx = 1000, ntwr = 10000,\n  ioutfm = 1, iwrap = 1, ig = -1,\n /\n')
+		if atom == "argon": FILE.write(' &ewald\n  vdwmeth = {}, \n nfft1 = 6\n, nfft2 = 6\n, nfft3 = 6\n/\n'.format(vdwmeth))
+		else: FILE.write(' &ewald\n  vdwmeth = {}, \n nfft3 = {}\n/\n'.format(vdwmeth, 2*size))
+		FILE.close()
+
+		FILE = open('{}/surface_{}_{}.sh'.format(root2, element.lower(), size), 'w')
+		FILE.write('#!/bin/bash\n\n')
+		FILE.write('for i in {0..99}\ndo\n	')
+		FILE.write('$AMBERHOME/bin/sander -O -i surface_{}_{}.in -o {}_{}_surface$i.out -p ../{}_{}.prmtop -c {}_{}_vac.rst -r {}_{}_surface$i.rst\n	'.format(element.lower(), cutoff,
+				element.lower(), size, element.lower(), size, element.lower(), size, element.lower(), size))
+		FILE.write('cp {}_{}_surface$i.rst {}_{}_vac.rst\n'.format(element.lower(), size, element.lower(), size))
+		FILE.write('done')
+		FILE.close()
+
+CUTOFF = [8]#8, 9, 10, 11, 12]
+
+TYPE = raw_input("Which atom type? ")
+
+atom = TYPE.lower()
+if atom == "argon": 
+	root = '/data/fl7g13/AMBER/{}'.format(atom.upper())
+	T = 85
+	
+else: 
+	root = '/data/fl7g13/AMBER/WATER/{}'.format(atom.upper())
+	T = 298
+
+start = 40
+ndim = 15
+
+vdwmeth = 3
+
+for cutoff in CUTOFF:
+	write_eq1(root, atom, cutoff, T, vdwmeth, start, ndim)
+	write_eq2(root, atom, cutoff, T, vdwmeth, start, ndim)
+	write_vac(root, atom, cutoff, T, vdwmeth, start, ndim)
+	write_surface(root, atom, cutoff, T, vdwmeth, start, ndim)

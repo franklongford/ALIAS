@@ -1,17 +1,14 @@
 """
-*************** POSITION ANALYSIS *******************
+*************** INTRINSIC SURFACE MODULE *******************
 
-PROGRAM INPUT:
-	       
-
-PROGRAM OUTPUT: 
-		
-		
+Defines coefficients for a fouier series that represents
+the periodic surfaces in the xy plane of an air-liquid 
+interface. 	
 
 ***************************************************************
-Created 11/12/15 by Frank Longford
+Created 24/11/16 by Frank Longford
 
-Last modified 10/05/16 by Frank Longford
+Last modified 29/11/16 by Frank Longford
 """
 
 import numpy as np
@@ -34,47 +31,43 @@ import utilities as ut
 
 #from mpi4py import MPI
 
-def intrinsic_surface(traj, root, model, csize, suffix, nsite, ncube, DIM, vlim, sigma, M, nm, image, nimage, com, ow_coeff):
+def intrinsic_surface(directory, model, csize, suffix, nsite, nmol, ncube, DIM, COM, nm, vlim, mol_sigma, M, image, nimage, ow_coeff):
 	"Creates intrinsic surface of image." 
 
 	phi = 5E-2
-	tau = 0.4 * sigma	
-	if model.upper() == 'TIP4P2005': c = 1.1
-	else: c = 0.8
-	n0 = int(DIM[0] * DIM[1] * c / sigma**2)
+	if model.upper() == 'ARGON': c = 0.8
+	else: c = 1.1
 
-	ZYX = np.rot90(traj.xyz[image])
-	zat = ZYX[0] * 10
-	yat = ZYX[1] * 10
-	xat = ZYX[2] * 10
+	max_r = 1.5 * mol_sigma
+	tau = 0.4 * mol_sigma
+	n0 = int(DIM[0] * DIM[1] * c / mol_sigma**2)
 
-	xmol, ymol, zmol = ut.molecules(xat, yat, zat, nsite, M, com)
-	_, _, zcom = ut.centre_mass(xat, yat, zat, nsite, M)
-	natom = len(xat)
-	nmol = natom / nsite
+	if not os.path.exists("{}/DATA/ACOEFF".format(directory)): os.mkdir("{}/DATA/ACOEFF".format(directory))
 
-	if os.path.exists('{}/DATA/ACOEFF/{}_{}_{}_{}_PIVOTS.txt'.format(root, model.lower(), csize, nm, image)) and ow_coeff.upper() != 'Y':
-	   	with file('{}/DATA/ACOEFF/{}_{}_{}_{}_INTCOEFF.txt'.format(root, model.lower(), csize, nm, image), 'r') as infile: 
+	if os.path.exists('{}/DATA/ACOEFF/{}_{}_{}_{}_PIVOTS.txt'.format(directory, model.lower(), csize, nm, image)) and not ow_coeff:
+	   	with file('{}/DATA/ACOEFF/{}_{}_{}_{}_INTCOEFF.txt'.format(directory, model.lower(), csize, nm, image), 'r') as infile: 
 			auv1, auv2 = np.loadtxt(infile)
-		with file('{}/DATA/ACOEFF/{}_{}_{}_{}_PIVOTS.txt'.format(root, model.lower(), csize, nm, image), 'r') as infile:
+		with file('{}/DATA/ACOEFF/{}_{}_{}_{}_PIVOTS.txt'.format(directory, model.lower(), csize, nm, image), 'r') as infile:
 			piv_n1, piv_n2 = np.loadtxt(infile)
 	else:
-		sys.stdout.write("PROCESSING {} INTRINSIC SURFACE {} \n".format(root, image+1) )
+		sys.stdout.write("PROCESSING {} INTRINSIC SURFACE {} \n".format(directory, image) )
 		sys.stdout.flush()
-		auv1, auv2, piv_n1, piv_n2 = build_surface(xmol, ymol, zmol, DIM, nmol, ncube, sigma, nm, n0, vlim, phi, zcom, tau)
+
+		xmol, ymol, zmol = ut.read_mol_positions(directory, model, csize, image)
+		xR, yR, zR = COM[image]
+
+		auv1, auv2, piv_n1, piv_n2 = build_surface(xmol, ymol, zmol, DIM, nmol, ncube, mol_sigma, nm, n0, vlim, phi, zR, tau, max_r)
 	
-	with file('{}/DATA/ACOEFF/{}_{}_{}_{}_INTCOEFF.txt'.format(root, model.lower(), csize, nm, image), 'w') as outfile:
-		np.savetxt(outfile, (auv1, auv2), fmt='%-12.6f')
+		with file('{}/DATA/ACOEFF/{}_{}_{}_{}_INTCOEFF.txt'.format(directory, model.lower(), csize, nm, image), 'w') as outfile:
+			np.savetxt(outfile, (auv1, auv2), fmt='%-12.6f')
 
-	with file('{}/DATA/ACOEFF/{}_{}_{}_{}_PIVOTS.txt'.format(root, model.lower(), csize, nm, image), 'w') as outfile:
-		np.savetxt(outfile, (piv_n1, piv_n2), fmt='%-12.6f')
-
-	gc.collect()
+		with file('{}/DATA/ACOEFF/{}_{}_{}_{}_PIVOTS.txt'.format(directory, model.lower(), csize, nm, image), 'w') as outfile:
+			np.savetxt(outfile, (piv_n1, piv_n2), fmt='%-12.6f')
 
 	return auv1, auv2, piv_n1, piv_n2
 
 
-def build_surface(xmol, ymol, zmol, DIM, nmol, ncube, sigma, nm, n0, vlim, phi, zcom, tau):
+def build_surface(xmol, ymol, zmol, DIM, nmol, ncube, sigma, nm, n0, vlim, phi, zcom, tau, max_r):
 
 	mol_list = range(nmol)
 	piv_n1 = range(ncube**2)
@@ -88,7 +81,7 @@ def build_surface(xmol, ymol, zmol, DIM, nmol, ncube, sigma, nm, n0, vlim, phi, 
 		vapour = 0
 		for m in xrange(nmol):
 			dr2 = (xmol[n] - xmol[m])**2 + (ymol[n] - ymol[m])**2 + (zmol[n] - zmol[m])**2			
-			if n!= m and dr2 < (1.5*sigma)**2: vapour += 1
+			if n!= m and dr2 < max_r**2: vapour += 1
 			if vapour > vlim:
 
 				indexx = int(xmol[n] * ncube / DIM[0]) % ncube
@@ -267,81 +260,123 @@ def slice_area(auv, nm, z):
         return 1 + 0.5*Axi
 
 
-def intrinsic_density(traj, root, model, csize, suffix, nm, image, nslice, nsite, AT, DIM, M, nxy, auv1, auv2, com, ow_count):
-	"Saves atom, mol and mass intrinsic profiles  ntraj number of trajectory snapshots" 
+def intrinsic_density(directory, COM, model, csize, suffix, nm, image, nslice, nsite, AT, DIM, M, auv1, auv2, ow_count):
+	"Saves atom, mol and mass intrinsic profiles nimage number of trajectory snapshots" 
 	
-	if os.path.exists('{}/DATA/INTDEN/{}_{}_{}_{}_{}_COUNT.txt'.format(root, model.lower(), csize, nslice, nm, image)) and ow_count.upper() != 'Y':
-		with file('{}/DATA/INTDEN/{}_{}_{}_{}_{}_COUNT.txt'.format(root, model.lower(), csize, nslice, nm, image)) as infile:
-			mass_count, atom_count, mol_count, H_count = np.loadtxt(infile)
-			
-	else:
-		sys.stdout.write("PROCESSING {} INTRINSIC DENSITY {} \r".format(root, image) )
+	atom_types = list(set(AT))
+	n_atom_types = len(atom_types)
+
+	if os.path.exists('{}/DATA/INTDEN/{}_{}_{}_{}_{}_COUNT.txt'.format(directory, model.lower(), csize, nslice, nm, image)) and not ow_count:
+		try:
+			with file('{}/DATA/INTDEN/{}_{}_{}_{}_{}_COUNT.txt'.format(directory, model.lower(), csize, nslice, nm, image)) as infile:
+				count_array = np.loadtxt(infile)
+			for i in xrange(3 + n_atom_types): count_array[i]
+			return count_array
+		except IndexError: print "IndexError: len(count_array) != 2 + n_atom_types ({} {})".format(len(count_array), 2 + n_atom_types)
+
+	make_intz = True
+
+	if os.path.exists('{}/DATA/INTPOS/{}_{}_{}_{}_INTZ_AT.txt'.format(directory, model.lower(), csize, nm, image)):
+		try:
+			with file('{}/DATA/INTPOS/{}_{}_{}_{}_INTZ_AT.txt'.format(directory, model.lower(), csize, nm, image), 'r') as infile:
+				int_z_at_1, int_z_at_2 = np.loadtxt(infile)
+			with file('{}/DATA/INTPOS/{}_{}_{}_{}_INTZ_MOL.txt'.format(directory, model.lower(), csize, nm, image), 'r') as infile:
+				int_z_mol_1, int_z_mol_2 = np.loadtxt(infile)
+			make_intz = False
+		except: make_intz = True
+	if make_intz:
+		with file('{}/DATA/ACOEFF/{}_{}_{}_{}_INTCOEFF.txt'.format(directory, model.lower(), csize, nm, image), 'r') as infile:
+                        auv1, auv2 = np.loadtxt(infile)
+		int_z_at_1 = []
+		int_z_at_2 = []
+		int_z_mol_1 = []
+		int_z_mol_2 = []
+
+	xat, yat, zat = ut.read_atom_positions(directory, model, csize, image)
+	xmol, ymol, zmol = ut.read_mol_positions(directory, model, csize, image)
+	xR, yR, zR = COM[image]
+
+	count_array = [np.zeros(nslice) for n in range(3 + n_atom_types)]
+
+	Aslice = DIM[0] * DIM[1]
+	natom = len(xat)
+	nmol = len(xmol)
+
+       	for n in xrange(natom):
+		sys.stdout.write("PROCESSING {} INTRINSIC DENSITY {}: make_intz = {}  {} out of {}  atoms\r".format(directory, image, make_intz, n, natom) )
 		sys.stdout.flush()
 
-		ZYX = np.rot90(traj.xyz[image])
-		zat = ZYX[0] * 10
-		yat = ZYX[1] * 10
-		xat = ZYX[2] * 10
+		m = n % nsite
+		at_type = AT[m]
+	
+		x = xat[n]
+		y = yat[n]
+		z = zat[n] - zR
 
-		xmol, ymol, zmol = ut.molecules(xat, yat, zat, nsite, M, com)
-		xR, yR, zR = ut.centre_mass(xat, yat, zat, nsite, M)
+		if make_intz: 
+			int_z1 = xi(x, y, nm, auv1, DIM)
+			int_z2 = xi(x, y, nm, auv2, DIM)
+			int_z_at_1.append(int_z1)
+			int_z_at_2.append(int_z2)
+		else:
+			int_z1 = int_z_at_1[n]
+			int_z2 = int_z_at_2[n]
+ 
+		z1 = z - int_z1
+		z2 = -z + int_z2
 
-		mass_count = np.zeros(nslice)
-		atom_count = np.zeros(nslice)
-		mol_count = np.zeros(nslice)
-		H_count = np.zeros(nslice)
+		index1_at = int((z1 + DIM[2]/2.) * nslice / (DIM[2])) % nslice
+		index2_at = int((z2 + DIM[2]/2.) * nslice / (DIM[2])) % nslice
 
-		Aslice = DIM[0] * DIM[1]
-		natom = len(xat)
-		nmol = len(xmol)
+		count_array[0][index1_at] += M[m]
+		count_array[0][index2_at] += M[m]
+		count_array[1 + atom_types.index(at_type)][index1_at] += 1./2
+		count_array[1 + atom_types.index(at_type)][index2_at] += 1./2
 
-	       	for n in xrange(natom):	
-			x = xat[n]
-			y = yat[n]
-			z = zat[n] - zR
+		if m == 0:
+			x = xmol[n/nsite]
+			y = ymol[n/nsite]
+			z = zmol[n/nsite] - zR
 
-			z1 = z - xi(x, y, nm, auv1, DIM)
-			An1 = Aslice * slice_area(auv1, nm, z1)
+			if make_intz: 
+				int_z1 = xi(x, y, nm, auv1, DIM)
+				int_z2 = xi(x, y, nm, auv2, DIM)
+				int_z_mol_1.append(int_z1)
+				int_z_mol_2.append(int_z2)
+			else:
+				int_z1 = int_z_mol_1[n/nsite]
+				int_z2 = int_z_mol_2[n/nsite]
 
-			z2 = -z + xi(x, y, nm, auv2, DIM)
-			An2 = Aslice * slice_area(auv2, nm, z2)
+			z1 = z - int_z1
+			z2 = -z + int_z2
 
-			index1_at = int((z1 + DIM[2]/2.) * nslice / (DIM[2])) % nslice
-			index2_at = int((z2 + DIM[2]/2.) * nslice / (DIM[2])) % nslice
+			index1_mol = int((z1 + DIM[2]/2.) * nslice / (DIM[2])) % nslice
+			index2_mol = int((z2 + DIM[2]/2.) * nslice / (DIM[2])) % nslice
 
-			m = n % nsite
-			mass_count[index1_at] += M[m] / An1
-			mass_count[index2_at] += M[m] / An2
-			atom_count[index1_at] += 1 / An1
-			atom_count[index2_at] += 1 / An2
+			#if index2_mol == 0: print  z, int_z2, z2, DIM[2]/2, int((z2 + DIM[2]/2.) * nslice / (DIM[2])), "\n"
 
-			if m == 0:
-				x = xmol[n/nsite]
-				y = ymol[n/nsite]
-				z = zmol[n/nsite] - zR
-				z1 = z - xi(x, y, nm, auv1, DIM)
-				An1 = Aslice * slice_area(auv1, nm, z1)
-				z2 = -z + xi(x, y, nm, auv2, DIM)
-				An2 = Aslice * slice_area(auv2, nm, z2)
-				index1_mol = int((z1 + DIM[2]/2.) * nslice / (DIM[2])) % nslice
-				index2_mol = int((z2 + DIM[2]/2.) * nslice / (DIM[2])) % nslice
-				mol_count[index1_mol] += 1 / An1
-				mol_count[index2_mol] += 1 / An2
+			count_array[-2][index1_mol] += 1
+			count_array[-1][index2_mol] += 1
 
-			if AT[m]== 'H':
-				H_count[index1_at] += 1 / An1
-				H_count[index2_at] += 1 / An2
+	count_array[-1] = count_array[-1][::-1]
 
-		with file('{}/DATA/INTDEN/{}_{}_{}_{}_{}_COUNT.txt'.format(root, model.lower(), csize, nslice, nm, image), 'w') as outfile:
-			np.savetxt(outfile, (mass_count, atom_count, mol_count, H_count), fmt='%-12.6f')
+	with file('{}/DATA/INTDEN/{}_{}_{}_{}_{}_COUNT.txt'.format(directory, model.lower(), csize, nslice, nm, image), 'w') as outfile:
+		np.savetxt(outfile, (count_array), fmt='%-12.6f')
 
-	return mass_count, atom_count, mol_count, H_count
+	if make_intz: 
+		with file('{}/DATA/INTPOS/{}_{}_{}_{}_INTZ_AT.txt'.format(directory, model.lower(), csize, nm, image), 'w') as outfile:
+			np.savetxt(outfile, (int_z_at_1, int_z_at_2))
+
+		with file('{}/DATA/INTPOS/{}_{}_{}_{}_INTZ_MOL.txt'.format(directory, model.lower(), csize, nm, image), 'w') as outfile:
+			np.savetxt(outfile, (int_z_mol_1, int_z_mol_2))
+
+	return count_array
 
 
-def curve_mesh(root, model, csize, nm, nxy, image, auv1, auv2, DIM, ow_curve):
+def curve_mesh(directory, model, csize, nm, nxy, image, auv1, auv2, DIM, ow_curve):
 
-	if not os.path.exists('{}/DATA/INTDEN/{}_{}_{}_{}_{}_CURVE.npz'.format(root, model.lower(), csize, nm, nxy, image)) and ow_curve.upper() != 'Y':
-		sys.stdout.write("PROCESSING {} SURFACE CURVE MESH {}\r".format(root,  image) )
+	if not os.path.exists('{}/DATA/INTDEN/{}_{}_{}_{}_{}_CURVE.npz'.format(directory, model.lower(), csize, nm, nxy, image)) and not ow_curve:
+		sys.stdout.write("PROCESSING {} SURFACE CURVE MESH {}\r".format(directory,  image) )
 		sys.stdout.flush()
 
 		X = np.linspace(0, DIM[0], nxy)
@@ -383,126 +418,203 @@ def curve_mesh(root, model, csize, nm, nxy, image, auv1, auv2, DIM, ow_curve):
 						DXDY1[j][k] += dfunction(x, u, DIM[0]) * dfunction(y, v, DIM[1]) * auv1[l]
 						DXDY2[j][k] += dfunction(x, u, DIM[0]) * dfunction(y, v, DIM[1]) * auv2[l]
 
-		with file('{}/DATA/INTDEN/{}_{}_{}_{}_{}_CURVE.npz'.format(root, model.lower(), csize, nm, nxy, image), 'w') as outfile:
+		with file('{}/DATA/INTDEN/{}_{}_{}_{}_{}_CURVE.npz'.format(directory, model.lower(), csize, nm, nxy, image), 'w') as outfile:
 			np.savez(outfile, XI1=XI1, XI2=XI2, DX1=DX1, DY1=DY1, DX2=DX2, DY2=DY2, DDX1=DDX1, DDY1=DDY1, DDX2=DDX2, DDY2=DDY2, DXDY1=DXDY1, DXDY2=DXDY2)
 
 
-def effective_density(root, model, csize, nslice, ntraj, suffix, DIM, nm, nxy, av_mol_den):
+def effective_density(directory, model, csize, nslice, nimage, suffix, DIM, nm, av_density_array, ow_cwden):
 
-	print "\nBUILDING SLAB DENSITY PLOT"
+	print "\nBUILDING SLAB DENSITY PLOT {}/DATA/INTDEN/ CWDEN.txt".format(directory)
 
-	X = np.linspace(0, DIM[0], nxy)
-	Y = np.linspace(0, DIM[1], nxy)
-	Z = np.linspace(-1/2.*DIM[2], 1/2.*DIM[2], nslice)
+	Z1 = np.linspace(0, DIM[2], nslice)
+	Z2 = np.linspace(-1/2.*DIM[2], 1/2.*DIM[2], nslice)
+	lslice = DIM[2] / nslice
 
-	w_den_1 = np.zeros(nslice)
-	w_den_2 = np.zeros(nslice)
+	av_cw_den_1 = np.zeros(nslice)
+        av_cw_den_2 = np.zeros(nslice)
 
-	for image in xrange(ntraj):
-		sys.stdout.write("PROCESSING {} out of {} IMAGES\r".format(image+1, ntraj) )
+	mean_auv1 = np.zeros(nimage)
+	mean_auv2 = np.zeros(nimage)
+
+	av_auv1_2 = np.zeros((2*nm+1)**2)
+	av_auv2_2 = np.zeros((2*nm+1)**2)
+
+	for image in xrange(nimage):
+		sys.stdout.write("PROCESSING {} out of {} IMAGES\r".format(image, nimage) )
 		sys.stdout.flush()
 
-		if os.path.exists('{}/DATA/INTDEN/{}_{}_{}_{}_{}_WDEN.txt'.format(root, model.lower(), csize, nslice, nm, image)):
-			with file('{}/DATA/INTDEN/{}_{}_{}_{}_{}_WDEN.txt'.format(root, model.lower(), csize, nslice, nm, image), 'r') as infile:
-				w_den_1_temp, w_den_2_temp = np.loadtxt(infile)
-		else:
-			w_den_1_temp = np.zeros(nslice)
-			w_den_2_temp = np.zeros(nslice)
-		
-			with file('{}/DATA/INTDEN/{}_{}_{}_{}_{}_CURVE.npz'.format(root, model.lower(), csize, nm, nxy, image), 'r') as infile:
-				npzfile = np.load(infile)
-				XI1 = npzfile['XI1']
-				XI2 = npzfile['XI2']
+		with file('{}/DATA/INTDEN/{}_{}_{}_{}_{}_COUNT.txt'.format(directory, model.lower(), csize, nslice, nm, image)) as infile:
+			count_array = np.loadtxt(infile)
+		with file('{}/DATA/ACOEFF/{}_{}_{}_{}_INTCOEFF.txt'.format(directory, model.lower(), csize, nm, image), 'r') as infile:
+			auv1, auv2 = np.loadtxt(infile)		
 
-			for n in xrange(nslice):
-				for j in xrange(nxy):
-					for k in xrange(nxy):
-						dz = Z[n] - XI1[j][k]
-						m = int((dz+DIM[2]/2.) * nslice / DIM[2]) % nslice
-						w_den_1_temp[n] += av_mol_den[m] / (nxy**2)
+		mean_auv1[image] += auv1[len(auv1)/2]
+                mean_auv2[image] += auv2[len(auv2)/2]
 
-						dz = XI2[j][k] - Z[n]
-						m = int((dz+DIM[2]/2.) * nslice / DIM[2]) % nslice
-						w_den_2_temp[n] += av_mol_den[m] / (nxy**2)
-			
-			with file('{}/DATA/INTDEN/{}_{}_{}_{}_{}_WDEN.txt'.format(root, model.lower(), csize , nslice, nm, image), 'w') as outfile:
-				np.savetxt(outfile, (w_den_1_temp, w_den_2_temp))
+		auv1_2 = auv1**2
+		auv2_2 = auv2**2
+
+                av_auv1_2 += auv1_2 / nimage
+                av_auv2_2 += auv2_2 / nimage
+
+		"""
+		"NUMERICAL EQUIVALENT"
+		den_grid1 = np.zeros((nxy, nxy, nslice))
+		den_grid2 = np.zeros((nxy, nxy, nslice))
+
+		for j in xrange(nxy):
+			for k in xrange(nxy):
+
+				indent1 = nslice / 2 - int((XI1[j][k] + DIM[2]/2) / DIM[2] * nslice)
+				indent2 = nslice / 2 - int((XI2[j][k] + DIM[2]/2) / DIM[2] * nslice)
+				
+				wave_den1 = np.array(list(mol_den1[indent1:]) + list(mol_den1[:indent1]))
+				wave_den2 = np.array(list(mol_den2[indent2:]) + list(mol_den2[:indent2]))
+
+				den_grid1[j][k] += wave_den1
+				den_grid2[j][k] += wave_den2
+
+		w_den_1_temp = np.array([np.mean(np.rollaxis(den_grid1, 2)[n]) for n in range(nslice)])
+		w_den_2_temp = np.array([np.mean(np.rollaxis(den_grid2, 2)[n]) for n in range(nslice)])
+		"""
+		"""
+		"CAPILLARY WAVE SMOOTHING PER SNAPSHOT"
+		if not os.path.exists('{}/DATA/INTDEN/{}_{}_{}_{}_{}_CWDEN.txt'.format(directory, model.lower(), csize, nslice, nm, image)) or ow_cwden:
 	
-		w_den_1 += w_den_1_temp / ntraj
-		w_den_2 += w_den_2_temp / ntraj
+			cw_den_1 = np.zeros(nslice)
+			cw_den_2 = np.zeros(nslice)
+		
+			mol_den1 = count_array[-2] * nslice / np.sum(np.array(DIM)**2)
+			mol_den2 = count_array[-1] * nslice / np.sum(np.array(DIM)**2)
 
-	return w_den_1, w_den_2
+			Delta1 = (ut.sum_auv_2(auv1_2, nm) - mean_auv1[image]**2)
+                	Delta2 = (ut.sum_auv_2(auv2_2, nm) - mean_auv2[image]**2)
+
+                	P1_array = [ut.gaussian(z, 0, Delta1) for z in Z2]
+                	P2_array = [ut.gaussian(z, 0, Delta2) for z in Z2]
+
+			for n1, z1 in enumerate(Z1):
+				for n2, z2 in enumerate(Z2):
+					index1 = int((z1 - z2 - mean_auv1[image]) / DIM[2] * nslice) % nslice
+					index2 = int((z1 - z2 - mean_auv2[image]) / DIM[2] * nslice) % nslice
+
+					try: cw_den_1[n1] += mol_den1[index1] * P1_array[n2] * lslice
+					except IndexError: pass
+
+					try: cw_den_2[n1] += mol_den2[index2] * P2_array[n2] * lslice
+					except IndexError: pass
+
+			with file('{}/DATA/INTDEN/{}_{}_{}_{}_{}_CWDEN.txt'.format(directory, model.lower(), csize , nslice, nm, image), 'w') as outfile:
+				np.savetxt(outfile, (cw_den_1, cw_den_2), fmt='%-12.6f')
+		"""
+	print ""
+
+	"""
+	with file('{}/DATA/DEN/{}_{}_{}_{}_DEN.txt'.format(directory, model.lower(), csize, nslice, nimage), 'r') as infile:
+		av_density = np.loadtxt(infile)
+	rho = 0.5 * (av_cw_den_1 + av_cw_den_2[::-1])
+
+	popt, pcov = curve_fit(gaussian_smoothing, rho, av_density[-1], p0=[1., np.mean(mean_auv1), DIM, nslice], bounds=([-np.inf, np.mean(mean_auv1), DIM, nslice], [np.inf, np.mean(mean_auv1), DIM, nslice])
+	"""
+	Delta1 = (ut.sum_auv_2(av_auv1_2, nm) - np.mean(mean_auv1)**2)
+	Delta2 = (ut.sum_auv_2(av_auv2_2, nm) - np.mean(mean_auv2)**2)
+
+	P1_array = [ut.gaussian(z, 0, Delta1) for z in Z2]
+        P2_array = [ut.gaussian(z, 0, Delta2) for z in Z2]
+
+	for n1, z1 in enumerate(Z1):
+		for n2, z2 in enumerate(Z2):
+			sys.stdout.write("PERFORMING GAUSSIAN SMOOTHING {0:.1%} COMPLETE\r".format(float(n1 * nslice + n2) / nslice**2) )
+			sys.stdout.flush()
+
+			index1 = int((z1 - z2 - np.mean(mean_auv1)) / DIM[2] * nslice) % nslice
+			index2 = int((z1 - z2 - np.mean(mean_auv2)) / DIM[2] * nslice) % nslice
+
+			try: av_cw_den_1[n1] += av_density_array[-4][index1] * P1_array[n2] * lslice
+			except IndexError: pass
+
+			try: av_cw_den_2[n1] += av_density_array[-3][index2] * P2_array[n2] * lslice
+			except IndexError: pass		
+
+	return av_cw_den_1, av_cw_den_2
 
 
-def intrinsic_profile(traj, root, csize, suffix, AT, DIM, M, ntraj, model, nsite, natom, nmol, sigma, nslice, ncube, nm, nxy, vlim, ow_coeff, ow_count, ow_curve):
 
-	if model.upper() == 'METHANOL': com = 'COM'
-	else: com = '0'
+def intrinsic_profile(directory, model, csize, suffix, nimage, natom, nmol, nsite, AT, M, mol_sigma, COM, DIM, nslice, ncube, nm, vlim, ow_coeff, ow_curve, ow_count, ow_wden):
 
-	dz = DIM[2] / nslice
+	lslice = DIM[2] / nslice
 	Aslice = DIM[0]*DIM[1]
-	Vslice = DIM[0]*DIM[1]*dz
+	Vslice = DIM[0]*DIM[1]*lslice
 	Acm = 1E-8
 
-	av_mass_den = np.zeros(nslice)
-	av_atom_den = np.zeros(nslice)
-	av_mol_den = np.zeros(nslice)
-	av_H_den = np.zeros(nslice)
+	atom_types = list(set(AT))
+	n_atom_types = len(atom_types)
+
+	av_density_array = [np.zeros(nslice) for n in range(5 + n_atom_types)]
 
 	start_image_count = 0
 	start_image_curve = 0
 
-	for image in xrange(ntraj):
+	for image in xrange(nimage):
+		auv1, auv2, piv_n1, piv_n2 = intrinsic_surface(directory, model, csize, suffix, nsite, nmol, ncube, DIM, COM, nm, vlim, mol_sigma, M, image, nimage, ow_coeff)
+		#curve_mesh(directory, model, csize, nm, nxy, image, auv1, auv2, DIM, ow_curve)
+		count_array = intrinsic_density(directory, COM, model, csize, suffix, nm, image, nslice, nsite, AT, DIM, M, auv1, auv2, ow_count)
+		for i in xrange(3 + n_atom_types): av_density_array[i] += count_array[i] / (nimage * Vslice)
 
-		auv1, auv2, piv_n1, piv_n2 = intrinsic_surface(traj, root, model, csize, suffix, nsite, ncube, DIM, vlim, sigma, M, nm, image, ntraj, com, ow_coeff)
-		curve_mesh(root, model, csize, nm, nxy, image, auv1, auv2, DIM, ow_curve)
-		mass_count, atom_count, mol_count, H_count = intrinsic_density(traj, root, model, csize, suffix, nm, image, nslice, nsite, AT, DIM, M, nxy, auv1, auv2, com, ow_count)						  
-		av_mass_den += mass_count / (2 * dz * ntraj * con.N_A * Acm**3)
-		av_atom_den += atom_count / (2 * dz * ntraj)
-		av_mol_den += mol_count / (2 * dz * ntraj)
-		av_H_den += H_count / (2 * dz * ntraj)
+	av_density_array[0] = av_density_array[0] / (con.N_A * Acm**3)
 
-	w_den_1, w_den_2 = effective_density(root, model, csize, nslice, ntraj, suffix, DIM, nm, nxy, av_mol_den)
+	with file('{}/DATA/INTDEN/{}_{}_{}_{}_{}_DEN.txt'.format(directory, model.lower(), csize, nslice, nm, nimage), 'w') as outfile:
+		np.savetxt(outfile, (av_density_array), fmt='%-12.6f')
+
+	cw_den_1, cw_den_2 = effective_density(directory, model, csize, nslice, nimage, suffix, DIM, nm, av_density_array, ow_wden)
+
+	av_density_array[-2] += cw_den_1
+	av_density_array[-1] += cw_den_2
 
 	print '\n'
 	print "WRITING TO FILE..."
 
-	with file('{}/DATA/INTDEN/{}_{}_{}_{}_{}_DEN.txt'.format(root, model.lower(), csize, nslice, nm, ntraj), 'w') as outfile:
-		np.savetxt(outfile, (av_mass_den, av_atom_den, av_mol_den, av_H_den, w_den_1, w_den_2), fmt='%-12.6f')
+	with file('{}/DATA/INTDEN/{}_{}_{}_{}_{}_DEN.txt'.format(directory, model.lower(), csize, nslice, nm, nimage), 'w') as outfile:
+		np.savetxt(outfile, (av_density_array), fmt='%-12.6f')
 
-	print "{} {} {} COMPLETE\n".format(root, model.upper(), csize)
+	print "{} {} {} COMPLETE\n".format(directory, model.upper(), csize)
 
 
-def main(root, model, nsite, AT, Q, M, LJ, T, cutoff, csize, TYPE, folder, nfolder, suffix, ntraj):
+def main(root, model, nsite, AT, Q, M, LJ, T, cutoff, csize, TYPE, folder, sfolder, nfolder, suffix, nimage=0):
 
-	for i in xrange(nfolder):
-		directory = '{}/{}_{}'.format(root, TYPE.upper(), i)
-		if not os.path.exists('{}/{}/{}_{}_{}_{}.nc'.format(directory, folder.upper(), model.lower(), csize, suffix, 800)): 
-			ut.make_nc(directory, folder.upper(),  model.lower(), csize, suffix, ntraj, 'N')
-		traj = ut.load_nc(directory, folder.upper())							
+	for i in xrange(sfolder, nfolder):
+		if TYPE.upper() != 'SLAB': directory = '{}/{}_{}'.format(root, TYPE.upper(), i)
+		else: directory = root
+		traj = ut.load_nc(directory, folder, model, csize, suffix)						
 		directory = '{}/{}'.format(directory, folder.upper())
 
 		natom = traj.n_atoms
 		nmol = traj.n_residues
+		if nimage == 0: ntraj = traj.n_frames
+		else: ntraj = nimage
 		DIM = np.array(traj.unitcell_lengths[0]) * 10
 		sigma = np.max(LJ[1])
 		lslice = 0.05 * sigma
 		nslice = int(DIM[2] / lslice)
 		vlim = 3
 		ncube = 3
-		nm = int(DIM[0] / sigma)
-		nxy = 30
+		nm = int((DIM[0] + DIM[1]) / (2 * sigma))
+		nxy = int((DIM[0]+DIM[1])/ sigma)
 
-		if not os.path.exists("{}/DATA/ACOEFF".format(directory)): os.mkdir("{}/DATA/ACOEFF".format(directory))
 		if not os.path.exists("{}/DATA/INTDEN".format(directory)): os.mkdir("{}/DATA/INTDEN".format(directory))
 
 		if os.path.exists('{}/DATA/INTDEN/{}_{}_{}_{}_{}_DEN.txt'.format(directory, model.lower(), csize, nslice, nm, ntraj)):
-			print "FILE FOUND '{}/DATA/INTDEN/{}_{}_{}_{}_{}_DEN.txt".format(directory, model.lower(), csize, nslice, nm, ntraj)
-			overwrite = raw_input("OVERWRITE? (Y/N): ")
-			if overwrite.upper() == 'Y': 
-				ow_coeff = raw_input("OVERWRITE ACOEFF? (Y/N): ")
-				ow_curve = raw_input("OVERWRITE CURVE? (Y/N): ")
-				ow_count = raw_input("OVERWRITE COUNT? (Y/N): ")
-				intrinsic_profile(traj, directory, csize, suffix, AT, DIM, M, ntraj, model, nsite, natom, nmol, sigma, nslice, ncube, nm, nxy, vlim, ow_coeff, ow_count, ow_curve)
-		else: intrinsic_profile(traj, directory, csize, suffix, AT, DIM, M, ntraj, model, nsite, natom, nmol, sigma, nslice, ncube, nm, nxy, vlim, 'N','N', 'N')
+			with file('{}/DATA/INTDEN/{}_{}_{}_{}_{}_DEN.txt'.format(directory, model.lower(), csize, nslice, nm, ntraj), 'r') as infile:
+				check = np.loadtxt(infile)
+			if np.sum(check[-1]) != 0:
+				print "FILE FOUND '{}/DATA/INTDEN/{}_{}_{}_{}_{}_DEN.txt".format(directory, model.lower(), csize, nslice, nm, ntraj)
+				overwrite = raw_input("OVERWRITE? (Y/N): ")
+				if overwrite.upper() == 'Y': 
+					ow_coeff = raw_input("OVERWRITE ACOEFF? (Y/N): ")
+					ow_curve = raw_input("OVERWRITE CURVE? (Y/N): ")
+					ow_count = raw_input("OVERWRITE COUNT? (Y/N): ")
+					ow_wden = raw_input("OVERWRITE WDEN? (Y/N): ")
+					intrinsic_profile(traj, directory, csize, suffix, AT, DIM, M, ntraj, model, nsite, natom, nmol, sigma, nslice, ncube, nm, nxy, vlim, ow_coeff, ow_curve, ow_count, ow_wden)
+			else: intrinsic_profile(traj, directory, csize, suffix, AT, DIM, M, ntraj, model, nsite, natom, nmol, sigma, nslice, ncube, nm, nxy, vlim, 'N','N', 'N', 'N')
+		else: intrinsic_profile(traj, directory, csize, suffix, AT, DIM, M, ntraj, model, nsite, natom, nmol, sigma, nslice, ncube, nm, nxy, vlim, 'N','N','N', 'N')
 

@@ -9,9 +9,11 @@ PROGRAM OUTPUT:
 		
 
 ***************************************************************
-Created 11/07/16 by Frank Longford
+Created 24/11/2016 by Frank Longford
 
-Last modified 11/07/16 by Frank Longford
+Contributors: Frank Longford
+
+Last modified 24/11/2016 by Frank Longford
 """
 
 import numpy as np
@@ -37,6 +39,70 @@ sys.path.append('/data/fl7g13/tmm-0.1.5/')
 import tmm_core
 import csv
 
+ERROR = sys.float_info.epsilon
+
+def ellips(n, theta, lam_vac, d_list, nslice, pol):
+
+	angles = snell_angle_array(n, theta)
+	kz_list = 2 * np.pi * n * np.cos(angles) / lam_vac
+	delta = kz_list * d_list
+
+	t_list = np.zeros((nslice/2, nslice/2), dtype=complex)
+	r_list = np.zeros((nslice/2, nslice/2), dtype=complex)
+
+	M_list = np.zeros((nslice/2, 2, 2), dtype=complex)
+
+	
+	Mtilde = np.array([[1,0], [0,1]], dtype=complex)
+
+	r_list[0][1], t_list[0][1] = get_ref_tran(pol, n[0], n[1], angles[0], angles[1])
+
+	for i in xrange(1, nslice/2-1):
+		j = i+1
+		r_list[i][j], t_list[i][j] = get_ref_tran(pol, n[i], n[j], angles[i], angles[j])
+		Mn1 = np.array([[np.exp(-1j*delta[i]), 0], [0, np.exp(1j*delta[i])]], dtype=complex)
+		Mn2 = np.array([[1, r_list[i][j]], [r_list[i][j], 1]], dtype=complex)
+		M_list[i] = (1. / t_list[i][j]) * np.dot(Mn1, Mn2)
+		Mtilde = np.dot(Mtilde, M_list[i])
+
+	Mtilde = np.dot(np.array([[1, r_list[0][1]], [r_list[0][1], 1]], dtype=complex) / t_list[0][1], Mtilde)
+	
+	r = Mtilde[0][1] / Mtilde[0][0]
+	t = 1 / Mtilde[0][0]
+
+	return r, t
+
+def snell_angle_array(n, theta_0):
+
+	angles = sp.arcsin(np.real_if_close(n[0] / n * np.sin(theta_0)))
+
+	if not check_forward_angle(n[0], angles[0]): angles[0] = np.pi - angles[0]
+	if not check_forward_angle(n[-1], angles[-1]): angles[-1] = np.pi - angles[-1]
+
+	return angles
+
+def check_forward_angle(n_i, theta_i):
+
+	n_cos_theta = n_i * np.cos(theta_i)
+
+	if abs(n_cos_theta.imag) > 100 * ERROR: answer = bool(n_cos_theta.imag > 0)
+	else: answer = bool(n_cos_theta.real > 0)
+
+	return answer
+
+def get_ref_tran(pol, n_1, n_2, theta_1, theta_2):
+
+	if pol == 's':
+		denom = (n_1 * np.cos(theta_1) + n_2 * np.cos(theta_2))
+		r = (n_1 * np.cos(theta_1) - n_2 * np.cos(theta_2)) / denom
+	if pol == 'p':
+		denom = (n_2 * np.cos(theta_1) + n_1 * np.cos(theta_2))
+		r = (n_2 * np.cos(theta_1) - n_1 * np.cos(theta_2)) / denom
+
+	t = 2 * n_1 * np.cos(theta_1) / denom
+
+	return r, t
+
 
 def n_func(x, a, b, c): return a*(x-b)**2 + c
 
@@ -57,70 +123,93 @@ def increase_deriv(m, n, Z):
 
 	return new_n 
 
-def main(TYPE):
+def load_experimental(wkdir):
 
-	"INPUT DATA"
-
-	if TYPE.upper() == 'TEST':
-
-		#model = 'SPCE'
-		model = 'METHANOL'
-		model = 'TIP4P2005'
-		nsite, AT, Q, M, LJ = ut.get_param(model)
-		sigma = np.max(LJ[1])
-		lslice = 0.05 * sigma
-		print lslice / 10.
-		cutoff = 18
-		vlim = 3
-		ncube = 3
-		CSIZE = ([50])
-		#CSIZE = ([40])
-		ndim = len(CSIZE)
-		nimage = 2000
-		a_type = 'exp'
-		suffix = "surface"
-		nfolder = 1
-		T = 298
-		force = 0
-		csize = CSIZE[0]
-		folder = 'surface'
-		if model == 'TIP4P2005':root = '/data/fl7g13/AMBER/WATER/{}/T_{}_K/CUT_{}_A/{}_{}/{}'.format(model.upper(), T, cutoff, model.upper(), csize, folder.upper())
-		else: root = '/data/fl7g13/AMBER/{}/T_{}_K/CUT_{}_A/{}_{}/{}'.format(model.upper(), T, cutoff, model.upper(), csize, folder.upper())
-
-	degree = np.pi/180.
+	nruns = 10
 	start_lam =200
 	end_lam = 1000
 	lambda_list = np.linspace(start_lam,end_lam,100)
-	COLOUR = ['b', 'g', 'r', 'c', 'm', 'saddlebrown', 'navy']
-	nruns = 9
 
 	theta1 = np.arange(40,71)
 	theta2 = np.arange(50, 55.01, 0.1)
-	theta3 = np.arange(52, 54.01, 0.1)
-	standard_theta = np.arange(52, 54.08, 0.1)
+	theta3 = np.linspace(52.0, 54.00, 21) 
+	theta4 = np.linspace(51.5, 53.50, 21) 
 
-	psi = np.zeros((nruns, len(theta3)))
-	delta = np.zeros((nruns, len(theta3)))
-	av_psi = np.zeros(len(theta3)+7)
-	av_delta = np.zeros(len(theta3)+7)
+	psi_w = np.zeros((nruns, 21))
+	delta_w = np.zeros((nruns, 21))
+	theta_w = np.array((theta3+0.2, theta3, theta3, theta3+0.2, theta3, theta3, theta3+0.7, theta3+0.7, theta3+0.2, theta4+0.7))	
 
-	theta = np.array((theta3+0.2, theta3, theta3, theta3+0.2, theta3, theta3, theta3+0.7, theta3+0.7, theta3+0.2))
+	theta_m = np.zeros((2, 21))
+	psi_m = np.zeros((2, 21))
+	delta_m = np.zeros((2, 21))
 
-	with file("ellipsometry_data_psi.csv", 'r') as infile:
-		psi[0], psi[1], psi[2], _, psi[3], psi[4], psi[5], psi[6], psi[7], psi[8] = np.loadtxt(infile)
-	with file("ellipsometry_data_delta.csv", 'r') as infile:
-		delta[0], delta[1], delta[2], _, delta[3], delta[4], delta[5], delta[6], delta[7], delta[8] = np.loadtxt(infile)
+	with file("{}/datasheets/water_ellipsometry_data_psi.csv".format(wkdir), 'r') as infile:
+		psi_w[0], psi_w[1], psi_w[2], _, psi_w[3], psi_w[4], psi_w[5], psi_w[6], psi_w[7], psi_w[8], psi_w[9] = np.loadtxt(infile)
+	with file("{}/datasheets/water_ellipsometry_data_delta.csv".format(wkdir), 'r') as infile:
+		delta_w[0], delta_w[1], delta_w[2], _, delta_w[3], delta_w[4], delta_w[5], delta_w[6], delta_w[7], delta_w[8], delta_w[9] = np.loadtxt(infile)
+	with file("{}/datasheets/methanol_ellipsometry_data_theta.csv".format(wkdir), 'r') as infile:
+		theta_m[0], theta_m[1] = np.loadtxt(infile)
+	with file("{}/datasheets/methanol_ellipsometry_data_psi.csv".format(wkdir), 'r') as infile:
+		psi_m[0], psi_m[1] = np.loadtxt(infile)
+	with file("{}/datasheets/methanol_ellipsometry_data_delta.csv".format(wkdir), 'r') as infile:
+		delta_m[0], delta_m[1] = np.loadtxt(infile)
+	with file("{}/datasheets/ethanol_ellipsometry_data_theta.csv".format(wkdir), 'r') as infile:
+		theta_e = np.loadtxt(infile)
+	with file("{}/datasheets/ethanol_ellipsometry_data_psi.csv".format(wkdir), 'r') as infile:
+		psi_e = np.loadtxt(infile)
+	with file("{}/datasheets/ethanol_ellipsometry_data_delta.csv".format(wkdir), 'r') as infile:
+		delta_e = np.loadtxt(infile)
+ 	"""
+	theta_e = np.arange(52.5, 54.51, 0.1)	psi_e = [1.927, 1.772, 1.645, 1.495, 1.359, 1.221, 1.072, 0.934, 0.792, 0.625, 0.481, 0.334, 0.187, 0.074, 0.145, 0.269, 0.419, 0.558, 0.673, 0.824, 0.964 ]
+	delta_e = [178.082, 177.911, 177.928, 178.004, 177.563, 177.192, 177.246, 176.199, 175.123, 174.095, 172.755, 171.083, 160.932, 126.738, 28.259, 12.762, 7.436, 5.611, 4.541, 4.125, 3.157]
 
-	for i in xrange(9):
-		for j in xrange(len(theta3)):
-			the = theta[j][i]
-			index = (the - 52) / 0.1
-			print the, index, psi[i][j]
-			av_psi[index] += psi[j][i] / 9.
-			av_delta[index] += delta[j][i] / 9.
+	with file("datasheets/ethanol_ellipsometry_data_theta.csv", 'w') as outfile:
+		np.savetxt(outfile, (theta_e), fmt='%-12.6f')
+	with file("datasheets/ethanol_ellipsometry_data_psi.csv", 'w') as outfile:
+		np.savetxt(outfile, (psi_e), fmt='%-12.6f')
+	with file("datasheets/ethanol_ellipsometry_data_delta.csv", 'w') as outfile:
+		np.savetxt(outfile, (delta_e), fmt='%-12.6f')
+	"""
+
+	av_theta_w = np.arange(np.min(theta_w), np.max(theta_w)+0.01, 0.1) 
+	count_w = np.zeros(len(av_theta_w))
+	av_psi_w = np.zeros(len(av_theta_w))
+	av_delta_w = np.zeros(len(av_theta_w))
+
+	av_theta_m = np.arange(np.min(theta_m), np.max(theta_m)+0.01, 0.1) 
+	count_m = np.zeros(len(av_theta_m))
+	av_psi_m = np.zeros(len(av_theta_m))
+	av_delta_m = np.zeros(len(av_theta_m)) 
+
+	for j, thej in enumerate(av_theta_m):
+		for i in xrange(2):
+			for k, thek in enumerate(theta_m[i]):				
+				if abs(thej - thek) < 0.05:
+					av_psi_m[j] += psi_m[i][k]
+					av_delta_m[j] += delta_m[i][k]
+					count_m[j] += 1
 	
-	print standard_theta, av_psi, av_delta
-	sys.exit()
+	for j, the in enumerate(av_theta_m):
+		if count_m[j] != 0:
+			av_psi_m[j] = av_psi_m[j] / count_m[j]
+			av_delta_m[j] = av_delta_m[j] / count_m[j]
+
+	for j, thej in enumerate(av_theta_w):
+		for i in xrange(nruns):
+			for k, thek in enumerate(theta_w[i]):
+				#try:
+				#print thej - thek 				
+				if abs(thej - thek) < 0.05:
+					av_psi_w[j] += psi_w[i][k]
+					av_delta_w[j] += delta_w[i][k]
+					count_w[j] += 1
+				#except ValueError: pass
+	
+	for j, the in enumerate(av_theta_w):
+		if count_w[j] != 0:
+			av_psi_w[j] = av_psi_w[j] / count_w[j]
+			av_delta_w[j] = av_delta_w[j] / count_w[j]
+
 
 	n = [1.396+1.10E-7j, 1.373+4.9E-8j, 1.362+3.35E-8j, 1.354+2.35E-8j, 1.349+1.6E-8j, 1.346+1.08E-8j, 1.343+6.5E-9j, 1.341+3.5E-9j, 
 	     1.339+1.86E-9j, 1.338+1.3E-9j, 1.337+1.02E-9j, 1.336+9.35E-10j, 1.335+1.00E-9j, 1.334+1.32E-9j, 1.333+1.96E-9j, 
@@ -129,373 +218,243 @@ def main(TYPE):
 	     1.328+1.06E-6j, 1.327+2.93E-6j, 1.327+3.48E-6j, 1.327+2.89E-6j]
 	k = np.linspace(start_lam,end_lam,len(n))
 
-	print n, k
-
 	real_param, _ = curve_fit(n_func, k , np.real(n), [1.331, 700, 1.331])
 	real_n = map (lambda x: real_param[0]*(x-real_param[1])**2 + real_param[2], lambda_list)
 	imag_param, _ = curve_fit(n_func, k , np.imag(n), [5E-13, 450, 5E-13])
 	imag_n = map (lambda x: imag_param[0]*(x-imag_param[1])**2 + imag_param[2], lambda_list)
 
-	"""
-	plt.figure(0)
-	plt.plot(k,np.imag(n))
-	plt.plot(lambda_list, imag_n)
-	#plt.axis([300, 700, imag_param[2], 5E-8])
+	EXPERIMENT = {'TIP4P2005': (av_theta_w, av_psi_w, av_delta_w, theta_w, psi_w, delta_w ),
+		      'AMOEBA': (av_theta_w, av_psi_w, av_delta_w, theta_w, psi_w, delta_w ),
+		      'METHANOL': (av_theta_m, av_psi_m, av_delta_m, theta_m, psi_m, delta_m), 
+		      'ETHANOL' : (psi_e, delta_e, theta_e, theta_e, psi_e, delta_e)}
+
+	return EXPERIMENT
+
+
+def load_theoretical(directory, model, csize, nslice, a_type, DIM, nm, nimage, angles):
+
+	with file('{}/DATA/INTDIELEC/{}_{}_{}_{}_{}_{}_DIE.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
+		int_exx, int_ezz = np.loadtxt(infile)
+	with file('{}/DATA/INTDIELEC/{}_{}_{}_{}_{}_{}_CWDIE.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
+		cw_exx_A, cw_ezz_A, cw_exx_B, cw_ezz_B, cw_exx_C, cw_ezz_C = np.loadtxt(infile)
+	with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NO.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
+		no_sm, cw_no_A, cw_no_B, cw_no_C, cw_no_D = np.loadtxt(infile)
+
+	if os.path.exists('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_A.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage)):# and False:
+		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_A.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
+			cw_ne_A = np.loadtxt(infile)
+		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_B.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
+			cw_ne_B = np.loadtxt(infile)
+		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_C.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
+			cw_ne_C = np.loadtxt(infile)
+		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_D.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
+			cw_ne_D = np.loadtxt(infile)
+	else:
 	
-	plt.figure(1)
-	plt.plot(k,np.real(n))
-	plt.plot(lambda_list, real_n)
-	#plt.axis([start_lam, end_lam, 1.330, 1.400])
-	#plt.show()
-	"""
+		mean_auv1 = np.zeros(nimage)
+		mean_auv2 = np.zeros(nimage)
 
-	natom, nmol, DIM = ut.read_atom_mol_dim("{}/{}_{}_{}0".format(root, model.lower(), csize, suffix))
-	nslice = int(DIM[2] / lslice)
-	nm = int(DIM[0] / sigma)
-	Z = np.linspace(-DIM[2]/2, DIM[2]/2, nslice)
-	nxy = 30
+		av_auv1_2 = np.zeros((2*nm+1)**2)
+		av_auv2_2 = np.zeros((2*nm+1)**2)
 
-	with file('{}/DATA/DEN/{}_{}_{}_{}_PAR.txt'.format(root, model.lower(), csize, nslice, nimage), 'r') as infile:
+		print "BUILDING CAPILLARY WAVE DIELECTRIC PROFILE"
+		for image in xrange(nimage):
+			sys.stdout.write("LOADING SURFACE VARIANCE {} out of {} images\r".format(image, nimage))
+		        sys.stdout.flush()
+
+			with file('{}/DATA/ACOEFF/{}_{}_{}_{}_INTCOEFF.txt'.format(directory, model.lower(), csize, nm, image), 'r') as infile: 
+				auv1, auv2 = np.loadtxt(infile)
+
+			av_auv1_2 += auv1**2 / nimage
+			av_auv2_2 += auv2**2 / nimage
+
+			mean_auv1[image] += auv1[len(auv1)/2]
+		        mean_auv2[image] += auv2[len(auv2)/2]
+
+		Delta1 = (ut.sum_auv_2(av_auv1_2, nm) - np.mean(mean_auv1)**2)
+		Delta2 = (ut.sum_auv_2(av_auv2_2, nm) - np.mean(mean_auv2)**2)
+
+		print "GAUSSIAN WIDTHS: {} {}  AVERAGE = {}".format(Delta1, Delta2, 0.5*(Delta1+Delta2))
+
+		centres = np.ones(2) * np.mean(mean_auv1)
+		deltas = np.ones(2) * 0.5 * (Delta1 + Delta2)
+
+		nangles = len(angles)
+
+		cw_ne_A = np.zeros((nangles, nslice/2))
+		cw_ne_B = np.zeros((nangles, nslice/2))
+		cw_ne_C = np.zeros((nangles, nslice/2))
+		cw_ne_D = np.zeros((nangles, nslice/2))
+
+		for i, theta in enumerate(angles):
+			anis = np.array([1 - (cw_ezz_A[n] - cw_exx_A[n]) * np.sin(theta)**2 / cw_ezz_A[n] for n in range(nslice/2)])
+			cw_ne_A[i] += np.array([np.sqrt(cw_exx_A[n] / anis[n]) for n in range(nslice/2)])
+			anis = np.array([1 - (cw_ezz_B[n] - cw_exx_B[n]) * np.sin(theta)**2 / cw_ezz_B[n] for n in range(nslice/2)])
+			cw_ne_B[i] += np.array([np.sqrt(cw_exx_B[n] / anis[n]) for n in range(nslice/2)])
+			anis = np.array([1 - (cw_ezz_C[n] - cw_exx_C[n]) * np.sin(theta)**2 / cw_ezz_C[n] for n in range(nslice/2)])
+			cw_ne_C[i] += np.array([np.sqrt(cw_exx_C[n] / anis[n]) for n in range(nslice/2)])
+			anis = np.array([1 - (int_ezz[n] - int_exx[n]) * np.sin(theta)**2 / int_ezz[n] for n in range(nslice)])
+			temp_cw_ne_D = np.array([np.sqrt(int_exx[n] / anis[n]) for n in range(nslice)])
+			temp_cw_ne_D = ut.gaussian_smoothing((temp_cw_ne_D, np.zeros(nslice)), centres, deltas, DIM, nslice)[0]
+			cw_ne_D[i] += temp_cw_ne_D[:nslice/2]
+
+
+		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_A.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'w') as outfile:
+			np.savetxt(outfile, cw_ne_A, fmt='%-12.6f')
+		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_B.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'w') as outfile:
+			np.savetxt(outfile, cw_ne_B, fmt='%-12.6f')
+		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_C.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'w') as outfile:
+			np.savetxt(outfile, cw_ne_C, fmt='%-12.6f')
+		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_D.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'w') as outfile:
+			np.savetxt(outfile, cw_ne_D, fmt='%-12.6f')
+
+	no_sm = no_sm[:nslice/2]
+	cw_no_A = cw_no_A[:nslice/2]
+	cw_no_B = cw_no_B[:nslice/2]
+	cw_no_C = cw_no_C[:nslice/2]
+	cw_no_D = cw_no_D[:nslice/2]
+
+	no_array = (cw_no_A, cw_no_B, cw_no_C, cw_no_D)
+	ne_array = (cw_ne_A, cw_ne_B, cw_ne_C, cw_ne_D)
+
+	return no_array, ne_array
+
+def transfer_matrix(directory, model, csize, AT, sigma, nslice, nimage, a_type, nm, DIM, cutoff):
+
+	"INPUT DATA"
+
+	wkdir = '/data/fl7g13/alias'
+
+	EXPERIMENT = load_experimental(wkdir)
+
+	""" FIGURE PARAMETERS """
+	fig_x = 12
+	fig_y = 8
+	msize = 50
+	plt.rc('text', usetex=True)
+	plt.rc('font', family='serif', size='20.0')
+	plt.rc('lines', linewidth='1.5', markersize=7)
+	plt.rc('axes', labelsize='25.0')
+	plt.rc('xtick', labelsize='25.0')
+	plt.rc('ytick', labelsize='25.0')
+
+	lslice = DIM[2] / nslice
+	degree = np.pi/180.
+
+	with file('{}/DATA/DEN/{}_{}_{}_{}_PAR.txt'.format(directory, model.lower(), csize, nslice, nimage), 'r') as infile:
 		param = np.loadtxt(infile)
 
-	with file('{}/DATA/DIELEC/{}_{}_{}_{}_{}_DEN.txt'.format(root, model.lower(), csize, nslice, a_type, nimage), 'r') as infile:
-		exx, ezz, no, ne, ni = np.loadtxt(infile)
-
-	with file('{}/DATA/DIELEC/{}_{}_{}_{}_{}_{}_INTDEN.txt'.format(root, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
-		int_exx,int_ezz,int_no,int_ne,int_ni = np.loadtxt(infile)
-	
-	with file('{}/DATA/DIELEC/{}_{}_{}_{}_{}_{}_WINTDEN.txt'.format(root, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
-		_, _, int_no1, int_ne1, int_ni1, _, _, _, _, _ = np.loadtxt(infile)
-	
-	if model.upper() == 'METHANOL':
-		start_z = 10
-		end_z = 50
-	else:
-		start_z = 15
-		end_z = 40	
-
-	#no = map (lambda x: no[x] + 0j, range(len(no))[int(nslice/6.):int(nslice*1/2.)])
-	no = no[int(nslice * start_z / DIM[2]):int(nslice * end_z / DIM[2])]
-	int_no = int_no[int(nslice * (DIM[2]/2+(start_z-24.5))/DIM[2]):int(nslice *(DIM[2]/2+(end_z-24.5))/DIM[2])]
-	print int_no
-
-	int_no1 = int_no1[int(nslice * start_z / DIM[2]):int(nslice * end_z / DIM[2])]
-	Z1 = Z[int(nslice * start_z / DIM[2]):int(nslice * end_z / DIM[2])]
-	Z2 = Z[int(nslice * (DIM[2]/2-7.5)/DIM[2]):int(nslice *(DIM[2]/2+6.5)/DIM[2])]
-
-	print no
-
-	param, _ = curve_fit(den_func, Z1 , no, [1, no[-1], -20, 1 ])
-	no = map (lambda x: den_func(x, param[0], param[1], param[2], param[3]), Z1)
-
-	print no
-	function1 = map(lambda x: den_func2(Z1[x], 1.15, param[2]-1, param[2]+1, 0.5), range(len(Z1)))
-	function2 = map(lambda x: den_func2(Z1[x], 1.075, -18, -17, 0.5), range(len(Z1)))
-	#int_no1_test = map(lambda x: function1[x] * function2[x] * int_no1[x], range(len(Z1)))
-	int_no1_test = increase_deriv(6.5, int_no1, Z1)
-
-	"""
-	plt.plot(Z1, int_no)
-	plt.plot(Z1, int_no1)
-	#plt.plot(Z1, function1)
-	#plt.plot(Z1, function2)
-	plt.plot(Z1, no)
-	plt.show()
-	"""
-
-	start_d = 59
-	end_d = 60
-	n_d = 20
-
-	start_n = 0.980
-	end_n = 1.05
-	n_n = 10
-
-	d_0 = 0.10 * sigma
-	n_0 = 1.00
-
-	PSI1 = []
-	DELTA1 = []
-	PSI2 = []
-	DELTA2 = []
-	int_PSI1 = []
-	int_DELTA1 = []
-	int_PSI2 = []
-	int_DELTA2 = []
-	int_PSI3 = []
-	int_DELTA3 = []
-	int_PSI4 = []
-	int_DELTA4 = []
-	int_PSI5 = []
-	int_DELTA5 = []
-
-	percent1 = 5
-	percent2 = 5
+	Z = np.linspace(0, DIM[2]/2, nslice/2)
 
 	scan_type = 0
 
-	fig_x = 22
-	fig_y = 14
-
-	plt.rc('text', usetex=True)
-	font = {'family' : 'normal','weight' : 'bold', 'size'   : 22}
-	plt.rc('font', **font)
-	plt.rc('xtick', labelsize=20)
-	plt.rc('ytick', labelsize=20)
-	
-	groot = "/home/fl7g13/Documents/Figures/{}_{}_{}".format(model.upper(),CSIZE[0],cutoff)
+	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}".format(model.upper(),csize,cutoff)
 	if not os.path.exists(groot): os.mkdir(groot)
 
-	#for d_0 in np.linspace(start_d, end_d, n_d):
-	if scan_type == 0: 
-		lam = 514.5
+	if model.upper() == 'METHANOL':
+		n = 1.3372 
+	else:
 		n = 1.3344
-		n = 1.3295
+
+	lam_vac = 514.5
+
+	Bangle = np.real(np.arctan(n)) / degree
+
+	if model.upper() == 'ARGON':
+		start_angle = 50.5 
+		end_angle = 51.2
+	elif model.upper() == 'ETHANOL':
+		start_angle = 52.5 
+		end_angle = 54.5
+	elif model.upper() == 'METHANOL':
+		start_angle = 52.4 
+		end_angle = 54.5
+	elif model.upper() == 'DMSO':
+		start_angle = 55 
+		end_angle = 57
+	else:
+		start_angle = 52.0 
+		end_angle = 54.5
+
+	n_angle = 100
+
+	ellip_angles = np.linspace(start_angle * degree, end_angle * degree, n_angle)
+
+	no_array, ne_array = load_theoretical(directory, model, csize, nslice, a_type, DIM, nm, nimage, ellip_angles)
+
+	for ne in ne_array[4]:
+		plt.plot(ne)
+	plt.show()
+
+	d_list = np.ones(len(Z)) * lslice
+	d_list[0] = np.inf
+	d_list[-1] = np.inf
+
+	LEGEND = [r'$\hat{n}_1(z)$', r'$\hat{n}_2(z)$', r'$\hat{n}_3(z)$', r'$\hat{n}_4(z)$']
+	POL = ['p', 's']
+
+	for i, no in enumerate(no_array):
+
+		signal = []
+		for t, theta in enumerate(ellip_angles):
+			r_ps = []
+
+			for p, pol in enumerate(POL):
+				if pol == 's': n = no
+				else: n = ne_array[i][t]
+				r, t = ellips(n, theta, lam_vac, d_list, nslice, pol)
+				r_ps.append(r)
+
+			signal.append(r_ps[0] / r_ps[1])
+
+		Psi = [np.arctan(abs(ratio)) / degree for ratio in signal]
+		Delta = [np.angle(-ratio, deg=True) + 180  for ratio in signal]
+
+		plt.figure(0, figsize=(fig_x,fig_y))
+		plt.plot(Z, no, label=LEGEND[i])
+
+		plt.figure(1, figsize=(fig_x,fig_y))
+		plt.plot(ellip_angles / degree, Psi, label=LEGEND[i])
+
+		plt.figure(2, figsize=(fig_x,fig_y))
+		plt.plot(ellip_angles / degree, Delta, label=LEGEND[i])
+		#plt.savefig('{}/DATA/ellipsometry_{}_delta.png'.format(directory, model.lower()))
+
+		print "surface n = {:.5f}   bulk n = {:.5f}   dn = {:.5f} ({:.2%})".format(np.max(no), no[-1], np.max(no) - n[-1], (np.max(no) - no[-1]) / no[-1])
+		print "Ellipsometry direction = {}\n".format(np.sign(Delta[-1] - Delta[0]))
+
+
+	if model.upper() != 'DMSO': experiment = EXPERIMENT[model.upper()]
 	
-		Bangle = np.real(np.arctan(n)) / degree
+	plt.figure(0, figsize=(fig_x,fig_y))
+        plt.xlabel(r'z Coordinate (\AA)')
+        plt.ylabel(r'n (a.u.)')
+        plt.legend(loc=2)
+        plt.axis([param[3]-10, param[3]+15, 1, 1.5])
+        plt.savefig('{}/{}_{}_{}_{}_n_profile.png'.format(groot, model.lower(), nimage,nslice,nm))
+	plt.savefig('{}/{}_{}_{}_{}_n_profile.pdf'.format(groot, model.lower(), nimage,nslice,nm))
 
-		start_angle = 52 #np.real(Bangle) - 0.5 #
-		end_angle = 54 #np.real(Bangle) + 0.5 #
-		n_angle = 200
+	plt.figure(1, figsize=(fig_x,fig_y))
+	if model.upper() != 'DMSO':
+		for i in xrange(len(experiment[3])):plt.scatter(experiment[3][i], experiment[4][i], s=15, c='black', marker='x')
+		plt.plot(experiment[0], experiment[1], linestyle='dashed', c='black')
+	plt.xlabel(r'$\theta_i$ ($^\circ$)')
+	plt.ylabel(r'$\Psi$')
+	plt.axis([start_angle, end_angle, 0, 2.0])
+	plt.legend(loc=4)
+	plt.savefig('{}/{}_{}_{}_{}_amplitude.png'.format(groot, model.lower(), nimage,nslice,nm))
+	plt.savefig('{}/{}_{}_{}_{}_amplitude.pdf'.format(groot, model.lower(), nimage,nslice,nm))
 
-		ANGLE = np.linspace(start_angle * degree, end_angle * degree, n_angle)
-
-		no1 = [1, n]
-		intno1 = [1, n * (1+percent1/100.), n]
-		intno2 = [1, n * (1-percent2/100.), n]
-		#intno1 = [1, n * (1+percent/20.), 1.02, n * (1+percent/40.), n]
-		D = [np.inf, np.inf]
-		intD1 = [np.inf, d_0, np.inf]
-		intD2 = [np.inf, d_0, np.inf]
-		#intD2 = [np.inf, d_0, 0.5*d_0, 0.75*d_0, np.inf]
-		print param[2]
-		surf = param[2]
-
-		intZ1 = [Z1[0], surf, surf, surf+d_0*10, surf+d_0*10, Z1[-1]]
-		intn1 = [1, 1, intno1[1], intno1[1],  intno1[2], intno1[2]]
-		intZ2 = [Z1[0], surf, surf, surf+d_0*10, surf+d_0*10, Z1[-1]]
-		intn2 = [1, 1, intno2[1], intno2[1],  intno2[2], intno2[2]]
-
-		#intZ1 = [Z1[0], surf, surf, surf+intD2[1]*10, surf+intD2[1]*10, surf+(intD2[1]+intD2[2])*10, surf+(intD2[1]+intD2[2])*10, surf+(intD2[1]+intD2[2]+intD2[3])*10, surf+(intD2[1]+intD2[2]+intD2[3])*10, Z1[-1]]
-		#intn1 = [1, 1, intno1[1], intno1[1], intno1[2], intno1[2], intno1[3], intno1[3], intno1[4], intno1[4]]
-		
-		int_no[-1] = np.max([param[0], param[1]])
-		no2 = no #+ 1j * (no - 1) / (no[-1] - 1) * np.imag(n[13])
-		intno3 = int_no #+ 1j * (int_no - 1) / (int_no[-1] - 1) * np.imag(n[13])
-		intno4 = int_no1
+	plt.figure(2, figsize=(fig_x,fig_y))
+	if model.upper() != 'DMSO':
+		for i in xrange(len(experiment[3])):plt.scatter(experiment[3][i], experiment[5][i], s=15, c='black', marker='x')
+		plt.plot(experiment[0], experiment[2], linestyle='dashed', c='black')
+	plt.xlabel(r'$\theta_i$ ($^\circ$)')
+	plt.ylabel(r'$\Delta$ ($^\circ$)')
+	plt.axis([start_angle, end_angle, 0, 360])
+	plt.legend(loc=2)
+	plt.savefig('{}/{}_{}_{}_{}_delta.png'.format(groot, model.lower(), nimage,nslice,nm))
+	plt.savefig('{}/{}_{}_{}_{}_delta.pdf'.format(groot, model.lower(), nimage,nslice,nm))
 	
-		#no[0] = 1
-		#intno[0] = 1
-		#intno1[0] = 1
-
-		print param
-
-		#no2[-1] = np.max([param[0], param[1]])
-		#intno3[-1] = np.max([param[0], param[1]])
-
-		plt.figure(10, figsize=(fig_x,fig_y))
-		plt.plot([Z1[0], surf, surf, Z1[-1]], [1, 1, no1[1], no1[1]], label='Ideal', linestyle='dashdot')
-		plt.plot(intZ1, intn1, label='Higher', linestyle='dashed')
-		plt.plot(intZ2, intn2, label='Lower', linestyle='dashed')
-		
-		#plt.legend(loc=1)
-		plt.xlabel(r'z Coordinate (\AA)')
-		plt.ylabel(r'n (a.u.)')
-		#plt.figure(11, figsize=(fig_x,fig_y))
-		plt.plot(Z1, no,  label=r'$\rho(z)$')
-		#plt.plot(np.linspace(Z[0], Z[-1], len(int_no1)), int_no1,  label=r'$\tilde{\rho}(z)$')
-		plt.plot(Z1, int_no,  label=r'$\tilde{\rho}(z)$')
-		plt.plot(Z1, int_no1,  label=r'$\tilde{\rho}_e(z)$')
-		#plt.plot(Z1, int_no1_test,  label=r'$m\tilde{\rho}_e(z)$')
-		plt.legend(loc=2)
-		plt.axis([-DIM[2]/2+start_z, -DIM[2]/2+end_z, 1, 2.2])
-		plt.savefig('{}/{}_{}_{}_{}_n_profile.pdf'.format(groot,nimage,nslice,force,nm))
-		
-
-		D2 = np.ones(len(no)) * lslice / 10. 
-		D2[0] = np.inf
-		D2[-1] = np.inf
-
-		D3 = np.ones(len(int_no1)) * lslice / 10. 
-		D3[0] = np.inf
-		D3[-1] = np.inf
-
-		for angle in ANGLE:
-			sys.stdout.write("PROCESSING ANGLE {} out of {}\r".format(angle, ANGLE[-1]))
-			sys.stdout.flush()
-			reg_e1 = tmm_core.ellips(no1, D, angle, lam)
-			int_e1 = tmm_core.ellips(intno1, intD2, angle, lam)
-			int_e2 = tmm_core.ellips(intno2, intD1, angle, lam)
-
-			reg_e2 = tmm_core.ellips(no2, D2, angle, lam)
-			int_e3 = tmm_core.ellips(intno3, D2, angle, lam)
-			int_e4 = tmm_core.ellips(intno4, D2, angle, lam)
-			int_e5 = tmm_core.ellips(int_no1_test, D2, angle, lam)
-
-			"""
-			PSI.append(reg_e['psi'] / degree)
-			DELTA.append(-reg_e['Delta']/ degree)
-			int_PSI1.append(int_e1['psi'] /degree)
-			int_DELTA1.append(-int_e1['Delta']  / degree)
-			int_PSI2.append(int_e2['psi']  /degree)
-			int_DELTA2.append(-int_e2['Delta'] / degree)
-			"""
-			PSI1.append((reg_e1['psi']) / degree)
-			DELTA1.append((-reg_e1['Delta'] + np.pi) / degree)
-			PSI2.append((reg_e2['psi']) / degree)
-			DELTA2.append((-reg_e2['Delta'] + np.pi) / degree)
-			int_PSI1.append((int_e1['psi']) /degree)
-			int_DELTA1.append((-int_e1['Delta'] + np.pi) / degree)
-			int_PSI2.append((int_e2['psi']) /degree)
-			int_DELTA2.append((-int_e2['Delta'] + np.pi) / degree)
-			int_PSI3.append((int_e3['psi']) /degree)
-			int_DELTA3.append((-int_e3['Delta'] + np.pi) / degree)
-			int_PSI4.append((int_e4['psi']) /degree)
-			int_DELTA4.append((-int_e4['Delta'] + np.pi) / degree)
-			int_PSI5.append((int_e5['psi']) /degree)
-			int_DELTA5.append((-int_e5['Delta'] + np.pi) / degree)
-			#"""
-
-	elif scan_type == 1: 
-		angle = 52.9 * degree
-		for i in xrange(len(k)):
-			lam = -k[i]
-
-			no1 = [1, n[i]]
-			intno1 = [1, n[i] * (1+percent*10/100.), n[i]]
-			intno2 = [1, n[i] * (1-percent/100.), n[i]]
-			D = [np.inf, np.inf]
-			intD1 = [np.inf, d_0, np.inf]
-
-			no[0] = 1.0
-			intno1[0] = 1.0
-
-			D2 = np.ones(len(no)) * lslice / 10. 
-			D2[0] = np.inf
-			D2[-1] = np.inf
-
-			D3 = np.ones(len(int_no1)) * lslice / 10. 
-			D3[0] = np.inf
-			D3[-1] = np.inf
-
-			no2 = (no - 1) / (no[-1] - 1) * (n[i] - 1) + 1
-			intno3 = (int_no1 - 1) / (int_no1[-1] - 1) * (n[i] - 1) + 1
-			intno4 = (int_no2 - 1) / (int_no2[-1] - 1) * (n[i] - 1) + 1
-
-			no2[0] = 1.0
-			intno3[0] = 1.0
-			intno4[0] = 1.0
-
-			print n[i], no2[-1], intno3[-1], intno4[-1]
-
-			if i == 0:
-				surf = param[2]-DIM[2]/2 + 0.5
-
-				intZ1 = [Z[0], surf, surf, surf+d_0*10, surf+d_0*10, Z[-1]]
-				intn1 = [1, 1, intno1[1], intno1[1],  intno1[2], intno1[2]]
-				intZ2 = [Z[0], surf, surf, surf+d_0*10, surf+d_0*10, Z[-1]]
-				intn2 = [1, 1, intno2[1], intno2[1],  intno2[2], intno2[2]]
-		
-				plt.figure(10)
-				plt.plot([Z[0], surf, surf, Z[-1]], [1, 1, no1[1], no1[1]], label='Ideal {} nm'.format(lam))
-				plt.plot(intZ1, intn1, label='Higher {} nm'.format(lam))
-				plt.plot(intZ2, intn2, label='Lower {} nm'.format(lam))
-				plt.plot(Z, no2, label='Slab {} nm'.format(lam))
-				plt.plot(np.linspace(Z[0], Z[-1], len(int_no1)), intno3, label='Intrinsic {} nm'.format(lam))
-				plt.plot(Z, intno4, label='Smoothed Intrinsic {} nm'.format(lam))
-				plt.legend(loc=2)
-
-			reg_e1 = tmm_core.ellips(no1, D, angle, lam)
-			int_e1 = tmm_core.ellips(intno1, intD1, angle, lam)
-			int_e2 = tmm_core.ellips(intno2, intD1, angle, lam)
-
-			reg_e2 = tmm_core.ellips(no2, D2, angle, lam)
-			int_e3 = tmm_core.ellips(intno3, D3, angle, lam)
-			int_e4 = tmm_core.ellips(intno4, D2, angle, lam)
-			#"""
-		
-			"""
-			PSI.append(reg_e['psi'] / degree)
-			DELTA.append(-reg_e['Delta']/ degree)
-			int_PSI1.append(int_e1['psi'] /degree)
-			int_DELTA1.append(-int_e1['Delta']  / degree)
-			int_PSI2.append(int_e2['psi']  /degree)
-			int_DELTA2.append(-int_e2['Delta'] / degree)
-			"""
-			PSI1.append((reg_e1['psi']) / degree)
-			DELTA1.append((-reg_e1['Delta'] + np.pi) / degree)
-			PSI2.append((reg_e2['psi']) / degree)
-			DELTA2.append((-reg_e2['Delta'] + np.pi) / degree)
-			int_PSI1.append((int_e1['psi']) /degree)
-			int_DELTA1.append((-int_e1['Delta'] + np.pi) / degree)
-			int_PSI2.append((int_e2['psi']) /degree)
-			int_DELTA2.append((-int_e2['Delta'] + np.pi) / degree)
-			int_PSI3.append((int_e3['psi']) /degree)
-			int_DELTA3.append((-int_e3['Delta'] + np.pi) / degree)
-			int_PSI4.append((int_e4['psi']) /degree)
-			int_DELTA4.append((-int_e4['Delta'] + np.pi) / degree)
-			#"""
-
-
-	plt.figure(5, figsize=(fig_x,fig_y))
-	if scan_type == 0:
-		plt.plot(ANGLE / degree,PSI1, label='Ideal', linestyle='dashdot')
-		plt.plot(ANGLE / degree,int_PSI1, label='Higher', linestyle='dashed')
-		plt.plot(ANGLE / degree,int_PSI2, label='Lower', linestyle='dashed')
-		plt.plot(ANGLE / degree,PSI2, label=r'$\rho(z)$')
-		plt.plot(ANGLE / degree,int_PSI3, label=r'$\tilde{\rho}(z)$')
-		plt.plot(ANGLE / degree,int_PSI4, label=r'$\tilde{\rho}_e(z)$')
-		#plt.plot(ANGLE / degree,int_PSI5, label=r'$m\tilde{\rho}_e(z)$')
-		#plt.scatter(theta, psi1, label='Experimental', c='b', linestyle='dashed', )
-		for i in xrange(nruns):
-			plt.plot(theta[i], psi[i], label='Experimental {}'.format(i), linestyle='dotted')
-		plt.plot(standard_theta, av_psi, label='Experimental Average'.format(i), linestyle='solid')
-		plt.xlabel(r'$\theta_i$ ($^\circ$)')
-		plt.axis([start_angle, end_angle, 0, 2])
-	if scan_type == 1:
-		plt.plot(k,PSI1, label='Ideal {} nm'.format(514.5))
-		plt.plot(k,int_PSI1, label='Higher {} nm'.format(514.5))
-		plt.plot(k,int_PSI2, label='Lower {} nm'.format(514.5))
-		plt.plot(k, PSI2, label='Slab 514.5 nm')
-		plt.plot(k, int_PSI3, label='Intrinsic 514.5 nm')
-		plt.plot(k, int_PSI4, label='Smoothed Intrinsic 514.5 nm')
-		plt.xlabel('k (nm)')		
-	#plt.xlabel('angle ($^\circ$)')
-	#plt.ylabel('$\Psi$')
-	#plt.title('Amplitude $\Psi$')
-	plt.legend(loc=3)
-	plt.savefig('{}/{}_{}_{}_{}_amplitude.pdf'.format(groot,nimage,nslice,force,nm))
-	
-
-	plt.figure(6, figsize=(fig_x,fig_y))
-	if scan_type == 0:
-		plt.plot(ANGLE / degree,DELTA1, label='Ideal', linestyle='dashdot')
-		plt.plot(ANGLE / degree, int_DELTA1, label='Higher', linestyle='dashed')
-		plt.plot(ANGLE / degree, int_DELTA2, label='Lower', linestyle='dashed')
-		plt.plot(ANGLE / degree, DELTA2, label=r'$\rho(z)$')
-		plt.plot(ANGLE / degree, int_DELTA3, label=r'$\tilde{\rho}(z)$')
-		plt.plot(ANGLE / degree, int_DELTA4, label=r'$\tilde{\rho}_e(z)$')
-		#plt.plot(ANGLE / degree, int_DELTA5, label=r'$m\tilde{\rho}_e(z)$')
-		#plt.scatter(theta, delta1, label= 'Experimental 1', c='b', linestyle='dashed')
-		for i in xrange(nruns):
-			plt.plot(theta[i], delta[i], label='Experimental {}'.format(i), linestyle='dotted')
-		plt.plot(standard_theta, av_delta, label='Experimental Average'.format(i), linestyle='solid')
-		plt.xlabel(r'$\theta_i$ ($^\circ$)')
-		plt.xlabel(r'$\theta_i$ ($^\circ$)')
-		plt.axis([start_angle, end_angle, 0, 360])
-	if scan_type == 1:
-		plt.plot(k,PSI1, label='Ideal'.format(514.5))
-		plt.plot(k,int_PSI1, label='Higher {} nm'.format(514.5))
-		plt.plot(k,int_PSI2, label='Lower {} nm'.format(514.5))
-		plt.plot(k,PSI2, label='Slab 514.5 nm')
-		plt.plot(k,int_PSI3, label='Intrinsic 514.5 nm')
-		plt.plot(k,int_PSI4, label='Smoothed Intrinsic 514.5 nm')
-		plt.xlabel('k (nm)')
-		plt.axis([300, 700, 0, 360])
-	#plt.ylabel('$\Delta$')
-	#plt.title('Phase Shift $\Delta$ at {:3.4}$^\circ$ incidence'.format(angle/degree))
-	#plt.title('Phase Shift $\Delta$ ')
-	plt.legend(loc=3)
-	plt.savefig('{}/{}_{}_{}_{}_delta.pdf'.format(groot,nimage,nslice,force,nm))
 	plt.show()
 
