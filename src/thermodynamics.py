@@ -105,61 +105,53 @@ def get_A_excess(root, model, csize, nm, nxy, DIM, nimage, ow_area):
 	return np.mean(tot_a_excess)
 
 
-def get_thermo(directory, model, csize, suffix, nslice, ntraj, DIM, nmol, rc, sigma, epsilon, A, l_constant, lslice, ow_ntb):
+def get_thermo(directory, model, csize, suffix, nslice, ntraj, DIM, nmol, rc, sigma, epsilon, l_constant, ow_ntb):
 
-	ENERGY = 0
-	TENSION = 0
+	energy = 0
+	potential = 0
+	kinetic = 0
+	tension = 0
 
-	with file('{}/DATA/DEN/{}_{}_{}_{}_DEN.txt'.format(directory, model.lower(), csize, nslice, ntraj), 'r') as infile:
-		av_density = np.loadtxt(infile)
+	lslice = DIM[2] / nslice
 
-	corr_e = ut.E_janecek(av_density[-1], rc, sigma, epsilon, lslice, A /  l_constant**2) 
-	corr_st = ut.ST_janecek(av_density[-1], rc, sigma, epsilon, lslice) * 1E26 / con.N_A
+	if not os.path.exists("{}/DATA/ENERGY_TENSION".format(directory)): os.mkdir("{}/DATA/ENERGY_TENSION".format(directory))
 
-	print corr_e, corr_st
+	FILE = '{}/{}_{}_{}'.format(directory, model.lower(), csize, suffix)
+	E, POT, KIN, T_, T_err, ST, TOTAL_ENERGY, TOTAL_POTENTIAL, TOTAL_KINETIC, TOTAL_TENSION, TOTAL_TEMP = ut.read_energy_temp_tension(FILE)
 
-	ENERGY += corr_e / nmol
-	TENSION += corr_st  
+	if rc < 22:
 
-	if not os.path.exists('{}/{}_{}_{}.out'.format(directory, model.lower(), csize, suffix)):
-		TOTAL_ENERGY = []
-		TOTAL_TENSION = []
-		TOTAL_TEMP = []
-		TEMP = 0
-		TEMP_ERR = 0
-		for image in xrange(ntraj):
-			sys.stdout.write("PROCESSING {} IMAGE {} \r".format(directory, image) )
-			sys.stdout.flush()
+		with file('{}/DATA/DEN/{}_{}_{}_DEN.txt'.format(directory, model.lower(), nslice, ntraj), 'r') as infile:
+			av_density = np.loadtxt(infile)
 
-			FILE = '{}/{}_{}_{}{}'.format(directory, model.lower(), csize, suffix, image)
-			E, _, T_, Terr, ST, _, energy, tension, temp = ut.read_energy_temp_tension(FILE)
+		corr_e = ut.E_janecek(av_density[-1], rc, sigma, epsilon, lslice, DIM[0]*DIM[1]) 
+		corr_st = ut.ST_janecek(av_density[-1], rc, sigma, epsilon, lslice) * 1E26 / con.N_A
 
-			TOTAL_ENERGY += energy
-			TOTAL_TENSION += tension
-			TOTAL_TEMP += temp
+		energy += corr_e / nmol
+		potential += corr_e / nmol
+		tension += corr_st  
 
-			ENERGY += E * 4.184 / (nmol * ntraj)
-			TEMP += T_ / ntraj
-			TEMP_ERR += Terr / ntraj
-			TENSION += ST / ntraj
+		TOTAL_ENERGY = np.array(TOTAL_ENERGY) + corr_e
+		TOTAL_POTENTIAL = np.array(TOTAL_POTENTIAL) + corr_e
+		TOTAL_TENSION = np.array(TOTAL_TENSION) + corr_st
 
-	else: 
-		FILE = '{}/{}_{}_{}'.format(directory, model.lower(), csize, suffix)
-		E, _, T_, Terr, ST, _, TOTAL_ENERGY, TOTAL_TENSION, TOTAL_TEMP = ut.read_energy_temp_tension(FILE)
-
-		ENERGY += E * 4.184 / nmol
-		TEMP = T_ 
-		TEMP_ERR = Terr 
-		TENSION += ST 
+	energy += E * 4.184 / nmol
+	potential += POT * 4.184 / nmol
+	kinetic += KIN * 4.184 / nmol
+	temp = T_ 
+	temp_err = T_err 
+	tension += ST 
 
 	ntb = int(len(TOTAL_TENSION) / 100)
-	ENERGY_ERR, TENSION_ERR = ut.get_block_error(directory, model, csize, ntraj, TOTAL_ENERGY, TOTAL_TENSION, ntb, ow_ntb)
-	ENERGY_ERR = ENERGY_ERR / nmol
+	energy_err, potential_err, kinetic_err, tension_err = ut.get_block_error_thermo(TOTAL_ENERGY, TOTAL_POTENTIAL, TOTAL_POTENTIAL, TOTAL_KINETIC, directory, model, csize, ntraj, ntb, ow_ntb)
+	energy_err = energy_err / nmol
+	potential_err = potential_err / nmol
+	kinetic_err = kinetic_err / nmol
 
 	with file('{}/DATA/ENERGY_TENSION/{}_{}_EST.txt'.format(directory, model.lower(), csize), 'w') as outfile:
-		np.savetxt(outfile, (ENERGY, ENERGY_ERR, TEMP, TEMP_ERR, TENSION, TENSION_ERR))
+		np.savetxt(outfile, (energy, energy_err, potential, potential_err, kinetic, kinetic_err, temp, temp_err, tension, tension_err))
 	with file('{}/DATA/ENERGY_TENSION/{}_{}_TOTEST.txt'.format(directory, model.lower(), csize), 'w') as outfile:
-		np.savetxt(outfile, (TOTAL_ENERGY, TOTAL_TENSION, TOTAL_TEMP))
+		np.savetxt(outfile, (TOTAL_ENERGY, TOTAL_POTENTIAL, TOTAL_KINETIC, TOTAL_TENSION, TOTAL_TEMP))
 
 
 def energy_tension(root, model, suffix, TYPE, folder, sfolder, nfolder, T, rc, LJ, csize, e_constant, l_constant, st_constant, com, ow_area, ow_ntb, ow_est):

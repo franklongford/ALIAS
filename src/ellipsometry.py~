@@ -16,6 +16,7 @@ Contributors: Frank Longford
 Last modified 24/11/2016 by Frank Longford
 """
 
+
 import numpy as np
 import scipy as sp
 import subprocess, time, sys, os, math, copy
@@ -33,7 +34,6 @@ from matplotlib.colors import BoundaryNorm
 from matplotlib.ticker import MaxNLocator
 
 import utilities as ut
-import intrinsic_surface as IS
 
 sys.path.append('/data/fl7g13/tmm-0.1.5/')
 import tmm_core
@@ -41,23 +41,38 @@ import csv
 
 ERROR = sys.float_info.epsilon
 
-def ellips(n, theta, lam_vac, d_list, nslice, pol):
+def ellips(n, theta, lam_vac, d_list, nlayers, pol, var=0):
 
 	angles = snell_angle_array(n, theta)
 	kz_list = 2 * np.pi * n * np.cos(angles) / lam_vac
 	delta = kz_list * d_list
 
-	t_list = np.zeros((nslice/2, nslice/2), dtype=complex)
-	r_list = np.zeros((nslice/2, nslice/2), dtype=complex)
+	t_list = np.zeros((nlayers, nlayers), dtype=complex)
+	r_list = np.zeros((nlayers, nlayers), dtype=complex)
 
-	M_list = np.zeros((nslice/2, 2, 2), dtype=complex)
+	M_list = np.zeros((nlayers, 2, 2), dtype=complex)
 
-	
 	Mtilde = np.array([[1,0], [0,1]], dtype=complex)
 
 	r_list[0][1], t_list[0][1] = get_ref_tran(pol, n[0], n[1], angles[0], angles[1])
 
-	for i in xrange(1, nslice/2-1):
+	for i in xrange(1, nlayers-3):
+		j = i+1
+		r_list[i][j], t_list[i][j] = get_ref_tran(pol, n[i], n[j], angles[i], angles[j])
+
+		Mn1 = np.array([[np.exp(-1j*delta[i]), 0], [0, np.exp(1j*delta[i])]], dtype=complex)
+
+		if var != 0:
+			Mn2 = np.array([[1.0,  r_list[i][j] * np.exp(2 * delta[j]**2 * var)], 
+					[r_list[i][j] * np.exp(-2 * delta[i]**2 * var), np.exp(- 2 * (delta[i] - delta[j])**2 * var)]], dtype=complex)
+			M_list[i] = (np.exp((delta[i] - delta[j])**2 * var / 2.) / t_list[i][j]) * np.dot(Mn1, Mn2)
+		else:
+			Mn2 = np.array([[1, r_list[i][j]], [r_list[i][j], 1]], dtype=complex)
+			M_list[i] = (1. / t_list[i][j]) * np.dot(Mn1, Mn2)
+
+		Mtilde = np.dot(Mtilde, M_list[i])
+
+	for i in xrange(nlayers-3, nlayers-1):
 		j = i+1
 		r_list[i][j], t_list[i][j] = get_ref_tran(pol, n[i], n[j], angles[i], angles[j])
 		Mn1 = np.array([[np.exp(-1j*delta[i]), 0], [0, np.exp(1j*delta[i])]], dtype=complex)
@@ -72,6 +87,7 @@ def ellips(n, theta, lam_vac, d_list, nslice, pol):
 
 	return r, t
 
+
 def snell_angle_array(n, theta_0):
 
 	angles = sp.arcsin(np.real_if_close(n[0] / n * np.sin(theta_0)))
@@ -81,6 +97,7 @@ def snell_angle_array(n, theta_0):
 
 	return angles
 
+
 def check_forward_angle(n_i, theta_i):
 
 	n_cos_theta = n_i * np.cos(theta_i)
@@ -89,6 +106,7 @@ def check_forward_angle(n_i, theta_i):
 	else: answer = bool(n_cos_theta.real > 0)
 
 	return answer
+
 
 def get_ref_tran(pol, n_1, n_2, theta_1, theta_2):
 
@@ -106,9 +124,12 @@ def get_ref_tran(pol, n_1, n_2, theta_1, theta_2):
 
 def n_func(x, a, b, c): return a*(x-b)**2 + c
 
+
 def den_func(z, nv, nl, z0, d): return 0.5 * (nl + nv) - 0.5 * (nl - nv) * np.tanh((z - z0)/ (2*d))
 
+
 def den_func2(z, m, s1, s2, d): return 0.5 * (m + 1) - 0.5 * (m - 1) * (np.tanh((z - s1)/ (2*d)) * np.tanh((z - s2)/ (2*d)))
+
 
 def increase_deriv(m, n, Z):
 
@@ -224,6 +245,7 @@ def load_experimental(wkdir):
 	imag_n = map (lambda x: imag_param[0]*(x-imag_param[1])**2 + imag_param[2], lambda_list)
 
 	EXPERIMENT = {'TIP4P2005': (av_theta_w, av_psi_w, av_delta_w, theta_w, psi_w, delta_w ),
+		      'SPCE': (av_theta_w, av_psi_w, av_delta_w, theta_w, psi_w, delta_w ),
 		      'AMOEBA': (av_theta_w, av_psi_w, av_delta_w, theta_w, psi_w, delta_w ),
 		      'METHANOL': (av_theta_m, av_psi_m, av_delta_m, theta_m, psi_m, delta_m), 
 		      'ETHANOL' : (psi_e, delta_e, theta_e, theta_e, psi_e, delta_e)}
@@ -231,99 +253,112 @@ def load_experimental(wkdir):
 	return EXPERIMENT
 
 
-def load_theoretical(directory, model, csize, nslice, a_type, DIM, nm, nimage, angles):
+def load_theoretical(directory, model, nslice, a_type, DIM, nm, qm, n0, phi, nframe, angles, var, mean_auv):
 
-	with file('{}/DATA/INTDIELEC/{}_{}_{}_{}_{}_{}_DIE.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
+	with file('{}/DATA/DEN/{}_{}_{}_PAR.txt'.format(directory, model.lower(), nslice, nframe), 'r') as infile:
+		param = np.loadtxt(infile)
+	with file('{}/DATA/DIELEC/{}_{}_{}_{}_ELLIP_NO.txt'.format(directory, model.lower(), a_type, nslice, nframe), 'r') as infile:
+		no_sm, ni_sm = np.loadtxt(infile)
+	with file('{}/DATA/INTDIELEC/{}_{}_{}_{}_{}_{}_{}_{}_DIE.txt'.format(directory, model.lower(), a_type, nslice, nm, qm, n0, int(1 / phi + 0.5), nframe), 'r') as infile:
 		int_exx, int_ezz = np.loadtxt(infile)
-	with file('{}/DATA/INTDIELEC/{}_{}_{}_{}_{}_{}_CWDIE.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
-		cw_exx_A, cw_ezz_A, cw_exx_B, cw_ezz_B, cw_exx_C, cw_ezz_C = np.loadtxt(infile)
-	with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NO.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
-		no_sm, cw_no_A, cw_no_B, cw_no_C, cw_no_D = np.loadtxt(infile)
+	with file('{}/DATA/INTDIELEC/{}_{}_{}_{}_{}_{}_{}_{}_CWDIE.txt'.format(directory, model.lower(), a_type, nslice, nm, qm, n0, int(1 / phi + 0.5), nframe), 'r') as infile:
+		cw_exx_A, cw_ezz_A, cw_exx_B, cw_ezz_B, cw_exx_C, cw_ezz_C, cw_exx_D, cw_ezz_D = np.loadtxt(infile)
+	with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_{}_{}_ELLIP_NO.txt'.format(directory, model.lower(), a_type, nslice, nm, qm, n0, int(1 / phi + 0.5), nframe), 'r') as infile:
+		cw_no_A, cw_no_B, cw_no_C, cw_no_D = np.loadtxt(infile)
 
-	if os.path.exists('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_A.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage)):# and False:
-		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_A.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
-			cw_ne_A = np.loadtxt(infile)
-		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_B.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
-			cw_ne_B = np.loadtxt(infile)
-		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_C.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
-			cw_ne_C = np.loadtxt(infile)
-		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_D.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
-			cw_ne_D = np.loadtxt(infile)
-	else:
+	nangle = len(angles)
+
+	exx_sm = no_sm**2
+	ezz_sm = ni_sm**2
+
+	shift = int(mean_auv / DIM[2] * nslice)
+
+	int_exx = np.roll(int_exx, shift)
+	int_ezz = np.roll(int_ezz, shift)
+
+	int_no = np.sqrt(int_exx)
+
+	ne_sm = np.zeros((nangle, nslice/2))
+	cw_ne_B = np.zeros((nangle, nslice/2))
+	cw_ne_C = np.zeros((nangle, nslice/2))
+	int_ne = np.zeros((nangle, nslice/2))
+
+	for i, theta in enumerate(angles):
+                anis = np.array([1 - (ezz_sm[n] - exx_sm[n]) * np.sin(theta)**2 / ezz_sm[n] for n in range(nslice/2)])
+                ne_sm[i] += np.array([np.sqrt(exx_sm[n] / anis[n]) for n in range(nslice/2)])
+
+		anis = np.array([1 - (cw_ezz_B[n] - cw_exx_B[n]) * np.sin(theta)**2 / cw_ezz_B[n] for n in range(nslice/2)])
+		cw_ne_B[i] += np.array([np.sqrt(cw_exx_B[n] / anis[n]) for n in range(nslice/2)])
+
+		anis = np.array([1 - (cw_ezz_C[n] - cw_exx_C[n]) * np.sin(theta)**2 / cw_ezz_C[n] for n in range(nslice/2)])
+		cw_ne_C[i] += np.array([np.sqrt(cw_exx_C[n] / anis[n]) for n in range(nslice/2)])
+
+		anis = np.array([1 - (int_ezz[n] - int_exx[n]) * np.sin(theta)**2 / int_ezz[n] for n in range(nslice/2)])
+		int_ne[i] += np.array([np.sqrt(int_exx[n] / anis[n]) for n in range(nslice/2)])
 	
-		mean_auv1 = np.zeros(nimage)
-		mean_auv2 = np.zeros(nimage)
+	"""
+	if os.path.exists('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_{}_{}_{}_ELLIP_NE_A.txt'.format(directory, model.lower(), a_type, nslice, nm, qm, n0, int(1 / phi + 0.5), nframe, nangle)):# and False:
+		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_{}_{}_{}_ELLIP_NE_A.txt'.format(directory, model.lower(), a_type, nslice, nm, qm, n0, int(1 / phi + 0.5), nframe, nangle), 'r') as infile:
+			cw_ne_A = np.loadtxt(infile)
+		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_{}_{}_{}_ELLIP_NE_B.txt'.format(directory, model.lower(), a_type, nslice, nm, qm, n0, int(1 / phi + 0.5), nframe, nangle), 'r') as infile:
+			cw_ne_B = np.loadtxt(infile)
+		#with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_{}_{}_{}_ELLIP_NE_C.txt'.format(directory, model.lower(), a_type, nslice, nm, qm, n0, int(1 / phi + 0.5), nframe, nangle), 'r') as infile:
+		#	cw_ne_C = np.loadtxt(infile)
+		#with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_{}_{}_{}_ELLIP_NE_D.txt'.format(directory, model.lower(), a_type, nslice, nm, qm, n0, int(1 / phi + 0.5), nframe, nangle), 'r') as infile:
+		#	cw_ne_D = np.loadtxt(infile)
+	else:
 
-		av_auv1_2 = np.zeros((2*nm+1)**2)
-		av_auv2_2 = np.zeros((2*nm+1)**2)
+		centres = np.ones(2) * mean_auv
+		deltas = np.ones(2) * var
 
-		print "BUILDING CAPILLARY WAVE DIELECTRIC PROFILE"
-		for image in xrange(nimage):
-			sys.stdout.write("LOADING SURFACE VARIANCE {} out of {} images\r".format(image, nimage))
-		        sys.stdout.flush()
-
-			with file('{}/DATA/ACOEFF/{}_{}_{}_{}_INTCOEFF.txt'.format(directory, model.lower(), csize, nm, image), 'r') as infile: 
-				auv1, auv2 = np.loadtxt(infile)
-
-			av_auv1_2 += auv1**2 / nimage
-			av_auv2_2 += auv2**2 / nimage
-
-			mean_auv1[image] += auv1[len(auv1)/2]
-		        mean_auv2[image] += auv2[len(auv2)/2]
-
-		Delta1 = (ut.sum_auv_2(av_auv1_2, nm) - np.mean(mean_auv1)**2)
-		Delta2 = (ut.sum_auv_2(av_auv2_2, nm) - np.mean(mean_auv2)**2)
-
-		print "GAUSSIAN WIDTHS: {} {}  AVERAGE = {}".format(Delta1, Delta2, 0.5*(Delta1+Delta2))
-
-		centres = np.ones(2) * np.mean(mean_auv1)
-		deltas = np.ones(2) * 0.5 * (Delta1 + Delta2)
-
-		nangles = len(angles)
-
-		cw_ne_A = np.zeros((nangles, nslice/2))
-		cw_ne_B = np.zeros((nangles, nslice/2))
-		cw_ne_C = np.zeros((nangles, nslice/2))
-		cw_ne_D = np.zeros((nangles, nslice/2))
+		cw_ne_A = np.zeros((nangle, nslice/2))
+		cw_ne_B = np.zeros((nangle, nslice/2))
+		#cw_ne_C = np.zeros((nangle, nslice/2))
+		#cw_ne_D = np.zeros((nangle, nslice/2))
 
 		for i, theta in enumerate(angles):
 			anis = np.array([1 - (cw_ezz_A[n] - cw_exx_A[n]) * np.sin(theta)**2 / cw_ezz_A[n] for n in range(nslice/2)])
 			cw_ne_A[i] += np.array([np.sqrt(cw_exx_A[n] / anis[n]) for n in range(nslice/2)])
 			anis = np.array([1 - (cw_ezz_B[n] - cw_exx_B[n]) * np.sin(theta)**2 / cw_ezz_B[n] for n in range(nslice/2)])
 			cw_ne_B[i] += np.array([np.sqrt(cw_exx_B[n] / anis[n]) for n in range(nslice/2)])
-			anis = np.array([1 - (cw_ezz_C[n] - cw_exx_C[n]) * np.sin(theta)**2 / cw_ezz_C[n] for n in range(nslice/2)])
-			cw_ne_C[i] += np.array([np.sqrt(cw_exx_C[n] / anis[n]) for n in range(nslice/2)])
-			anis = np.array([1 - (int_ezz[n] - int_exx[n]) * np.sin(theta)**2 / int_ezz[n] for n in range(nslice)])
-			temp_cw_ne_D = np.array([np.sqrt(int_exx[n] / anis[n]) for n in range(nslice)])
-			temp_cw_ne_D = ut.gaussian_smoothing((temp_cw_ne_D, np.zeros(nslice)), centres, deltas, DIM, nslice)[0]
-			cw_ne_D[i] += temp_cw_ne_D[:nslice/2]
+			#anis = np.array([1 - (cw_ezz_C[n] - cw_exx_C[n]) * np.sin(theta)**2 / cw_ezz_C[n] for n in range(nslice/2)])
+			#cw_ne_C[i] += np.array([np.sqrt(cw_exx_C[n] / anis[n]) for n in range(nslice/2)])
+			#anis = np.array([1 - (int_ezz[n] - int_exx[n]) * np.sin(theta)**2 / int_ezz[n] for n in range(nslice)])
+			#temp_cw_ne_D = np.array([np.sqrt(int_exx[n] / anis[n]) for n in range(nslice)])
+			#temp_cw_ne_D = ut.gaussian_smoothing((temp_cw_ne_D, np.zeros(nslice)), centres, deltas, DIM, nslice)[0]
+			#cw_ne_D[i] += temp_cw_ne_D[:nslice/2]
 
 
-		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_A.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'w') as outfile:
+		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_{}_{}_{}_ELLIP_NE_A.txt'.format(directory, model.lower(), a_type, nslice, nm, qm, n0, int(1 / phi + 0.5), nframe, nangle), 'w') as outfile:
 			np.savetxt(outfile, cw_ne_A, fmt='%-12.6f')
-		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_B.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'w') as outfile:
+		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_{}_{}_{}_ELLIP_NE_B.txt'.format(directory, model.lower(), a_type, nslice, nm, qm, n0, int(1 / phi + 0.5), nframe, nangle), 'w') as outfile:
 			np.savetxt(outfile, cw_ne_B, fmt='%-12.6f')
-		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_C.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'w') as outfile:
-			np.savetxt(outfile, cw_ne_C, fmt='%-12.6f')
-		with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_ELLIP_NE_D.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'w') as outfile:
-			np.savetxt(outfile, cw_ne_D, fmt='%-12.6f')
+		#with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_{}_{}_{}_ELLIP_NE_C.txt'.format(directory, model.lower(), a_type, nslice, nm, qm, n0, int(1 / phi + 0.5), nframe, nangle), 'w') as outfile:
+		#	np.savetxt(outfile, cw_ne_C, fmt='%-12.6f')
+		#with file('{}/DATA/ELLIP/{}_{}_{}_{}_{}_{}_{}_{}_{}_ELLIP_NE_D.txt'.format(directory, model.lower(), a_type, nslice, nm, qm, n0, int(1 / phi + 0.5), nframe, nangle), 'w') as outfile:
+		#	np.savetxt(outfile, cw_ne_D, fmt='%-12.6f')
+
+	"""
 
 	no_sm = no_sm[:nslice/2]
-	cw_no_A = cw_no_A[:nslice/2]
+	int_no = int_no[:nslice/2]
+	#cw_no_A = cw_no_A[:nslice/2]
 	cw_no_B = cw_no_B[:nslice/2]
 	cw_no_C = cw_no_C[:nslice/2]
-	cw_no_D = cw_no_D[:nslice/2]
+	#cw_no_D = cw_no_D[:nslice/2]
 
-	no_array = (cw_no_A, cw_no_B, cw_no_C, cw_no_D)
-	ne_array = (cw_ne_A, cw_ne_B, cw_ne_C, cw_ne_D)
+	no_array = (no_sm, int_no, cw_no_B, cw_no_C)
+	ne_array = (ne_sm, int_ne, cw_ne_B, cw_ne_C)
 
 	return no_array, ne_array
 
-def transfer_matrix(directory, model, csize, AT, sigma, nslice, nimage, a_type, nm, DIM, cutoff):
+def transfer_matrix(directory, model, csize, AT, sigma, nslice, nframe, a_type, nm, QM, n0, phi, DIM, cutoff, scan_type=0):
 
 	"INPUT DATA"
 
 	wkdir = '/data/fl7g13/alias'
+	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}".format(model.upper(),csize,cutoff)
+	if not os.path.exists(groot): os.mkdir(groot)
 
 	EXPERIMENT = load_experimental(wkdir)
 
@@ -338,123 +373,182 @@ def transfer_matrix(directory, model, csize, AT, sigma, nslice, nimage, a_type, 
 	plt.rc('xtick', labelsize='25.0')
 	plt.rc('ytick', labelsize='25.0')
 
-	lslice = DIM[2] / nslice
 	degree = np.pi/180.
 
-	with file('{}/DATA/DEN/{}_{}_{}_{}_PAR.txt'.format(directory, model.lower(), csize, nslice, nimage), 'r') as infile:
+	with file('{}/DATA/DEN/{}_{}_{}_PAR.txt'.format(directory, model.lower(), nslice, nframe), 'r') as infile:
 		param = np.loadtxt(infile)
 
-	Z = np.linspace(0, DIM[2]/2, nslice/2)
-
-	scan_type = 0
-
-	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}".format(model.upper(),csize,cutoff)
-	if not os.path.exists(groot): os.mkdir(groot)
-
-	if model.upper() == 'METHANOL':
-		n = 1.3372 
-	else:
-		n = 1.3344
+	lslice = DIM[2] / nslice
+	nlayers = nslice/2
 
 	lam_vac = 514.5
 
-	Bangle = np.real(np.arctan(n)) / degree
-
 	if model.upper() == 'ARGON':
+		n_l = 1.2315 #A. C. Sinnock and B. L. Smith. Refractive indices of the condensed inert gases, Phys. Rev. 181, 1297-1307 (1969)
 		start_angle = 50.5 
 		end_angle = 51.2
 	elif model.upper() == 'ETHANOL':
 		start_angle = 52.5 
 		end_angle = 54.5
+		n_l = 1.3642 #E. Sani and A. Dell'Oro. Spectral optical constants of ethanol and isopropanol from ultraviolet to far infrared, Optical Materials 60, 137-141 (2016)
 	elif model.upper() == 'METHANOL':
 		start_angle = 52.4 
 		end_angle = 54.5
+		n_l = 1.3296 #K. Moutzouris, M. Papamichael, S. C. Betsis, I. Stavrakas, G. Hloupis and D. Triantis. Refractive, dispersive and thermo-optic properties of twelve organic solvents in the visible and near-infrared, Appl. Phys. B 116, 617-622 (2013)
 	elif model.upper() == 'DMSO':
 		start_angle = 55 
 		end_angle = 57
+		n_l = 1.4824 #Z. Kozma, P. Krok, and E. Riedle. Direct measurement of the group-velocity mismatch and derivation of the refractive-index dispersion for a variety of solvents in the ultraviolet, J. Opt. Soc. Am. B 22, 1479-1485 (2005)
 	else:
 		start_angle = 52.0 
 		end_angle = 54.5
+		n_l = 1.3344 #G. M. Hale and M. R. Querry. Optical constants of water in the 200-nm to 200-micm wavelength region, Appl. Opt. 12, 555-563 (1973)
+
+	ref_brewster = np.real(np.arctan(n_l)) / degree
 
 	n_angle = 100
 
 	ellip_angles = np.linspace(start_angle * degree, end_angle * degree, n_angle)
 
-	no_array, ne_array = load_theoretical(directory, model, csize, nslice, a_type, DIM, nm, nimage, ellip_angles)
+	mean_auv1 = np.zeros(nframe)
+	mean_auv2 = np.zeros(nframe)
 
-	for ne in ne_array[4]:
-		plt.plot(ne)
-	plt.show()
+	av_auv1_2 = np.zeros((2*nm+1)**2)
+	av_auv2_2 = np.zeros((2*nm+1)**2)
 
-	d_list = np.ones(len(Z)) * lslice
-	d_list[0] = np.inf
-	d_list[-1] = np.inf
+	for frame in xrange(nframe):
+		sys.stdout.write("LOADING SURFACE VARIANCE {} out of {} images\r".format(frame, nframe))
+		sys.stdout.flush()
 
-	LEGEND = [r'$\hat{n}_1(z)$', r'$\hat{n}_2(z)$', r'$\hat{n}_3(z)$', r'$\hat{n}_4(z)$']
-	POL = ['p', 's']
+		with file('{}/DATA/ACOEFF/{}_{}_{}_{}_{}_INTCOEFF.txt'.format(directory, model.lower(), nm, n0, int(1./phi + 0.5), frame), 'r') as infile:
+			auv1, auv2 = np.loadtxt(infile)
 
-	for i, no in enumerate(no_array):
+		av_auv1_2 += auv1**2 / nframe
+		av_auv2_2 += auv2**2 / nframe
 
-		signal = []
-		for t, theta in enumerate(ellip_angles):
-			r_ps = []
+		mean_auv1[frame] += auv1[len(auv1)/2]
+		mean_auv2[frame] += auv2[len(auv2)/2]
 
-			for p, pol in enumerate(POL):
-				if pol == 's': n = no
-				else: n = ne_array[i][t]
-				r, t = ellips(n, theta, lam_vac, d_list, nslice, pol)
-				r_ps.append(r)
+	Z = np.linspace(-(DIM[2]/2+np.mean(mean_auv1)), -np.mean(mean_auv1), nlayers)
 
-			signal.append(r_ps[0] / r_ps[1])
+	print ""
 
-		Psi = [np.arctan(abs(ratio)) / degree for ratio in signal]
-		Delta = [np.angle(-ratio, deg=True) + 180  for ratio in signal]
+	if model.upper() not in ['ARGON', 'DMSO']: 
+		experiment = EXPERIMENT[model.upper()]
+
+		psi_exp = experiment[4]
+		delta_exp = experiment[5]
+
+		print "EXPERIMENTAL ELLIPICITY"
+		ellipicity = []
+		for i, delta in enumerate(delta_exp):
+			index = psi_exp[i].argmin()
+			ellipicity.append(np.tan(psi_exp[i][index] * degree) * np.sin(delta[index] * degree))
+			print ellipicity[-1]
+
+		index = experiment[1].argmin()
+		print "AVERAGE = {}   {} ({})".format(np.tan(experiment[1][index] * degree) * np.sin(experiment[2][index] * degree), np.mean(ellipicity), sp.stats.sem(ellipicity))
+
+	for qm in QM:
+
+		Delta1 = (ut.sum_auv_2(av_auv1_2, nm, qm) - np.mean(mean_auv1)**2)
+		Delta2 = (ut.sum_auv_2(av_auv2_2, nm, qm) - np.mean(mean_auv2)**2)
+
+		cap_var = np.mean([Delta1, Delta2])
+
+		no_array, ne_array = load_theoretical(directory, model, nslice, a_type, DIM, nm, qm, n0, phi, nframe, ellip_angles, cap_var, np.mean(mean_auv1))
+
+	      	d_list = np.ones(nlayers) * lslice
+		d_list[0] = np.inf
+		d_list[-1] = np.inf
+
+		COLOUR = ['b', 'g', 'r', 'cyan']
+		LEGEND = [r'$n(z)$', r'$\tilde{n}(z)$', r'$\hat{n}_1(z)$', r'$\hat{n}_2(z)$', r'$\hat{n}_3(z)$', r'$\hat{n}_4(z)$']
+		POL = ['p', 's']
+		B_angle = []
+
+		print "nm = {:5d}  qm = {:5d}  var = {:5.4f}".format(nm, qm, cap_var)
+
+		for i, no in enumerate(no_array):
+
+			signal = []
+			for t, theta in enumerate(ellip_angles):
+				r_ps = []
+
+				for p, pol in enumerate(POL):
+					if pol == 's': n = no
+					else: n = ne_array[i][t]
+					
+					r, t = ellips(n, theta, lam_vac, d_list, nlayers, pol, cap_var)
+					r_ps.append(r)
+
+				signal.append(r_ps[0] / r_ps[1])
+
+			Psi = [np.arctan(abs(ratio)) / degree for ratio in signal]
+			Delta = [np.angle(-ratio, deg=True) + 180  for ratio in signal]
+
+			B_angle.append(np.array(Psi).argmin())
+			surf_index = int(2 * (DIM[2]/2 + np.mean(mean_auv1)) / DIM[2] * nlayers)
+
+			plt.figure(0, figsize=(fig_x,fig_y))
+			plt.plot(Z, no, label=LEGEND[i])
+			#plt.plot(Z, ne_array[i][B_angle[i]], label=LEGEND[i], c=COLOUR[i], linestyle='dashed')
+			#plt.plot([Z[surf_index], Z[surf_index]], [0, 2], c='black', linestyle='dashed')
+
+			plt.figure(1, figsize=(fig_x,fig_y))
+			plt.plot(ellip_angles / degree, Psi, label=LEGEND[i])
+
+			plt.figure(2, figsize=(fig_x,fig_y))
+			plt.plot(ellip_angles / degree, Delta, label=LEGEND[i])
+			#plt.savefig('{}/DATA/ellipsometry_{}_delta.png'.format(directory, model.lower()))
+
+			print "surface n = {:.5f}   bulk n = {:.5f}   dn = {:.5f} ({:.2%})".format(no[surf_index], no[-1], no[surf_index]- n[-1], (no[surf_index] - no[-1]) / no[-1])
+			print "Ellipsometry direction = {}  Ellipicity = {}\n".format(np.sign(Delta[-1] - Delta[0]), np.imag(signal[B_angle[i]]))
+
+		"""
+		"THEORETICAL ELLIPICITY"
+
+		exx_array = np.array(no_array)**2
+
+		for i, exx in enumerate(exx_array):
+			ezz = np.array(ne_array[i][B_angle[i]])**2
+			ellip = np.array([exx[i] + (exx[0] * exx[-1]) / ezz[i] - exx[-1] - exx[0] for i in range(nslice/2)]) * np.pi * np.sqrt((exx[0] + exx[-1])) / (lam_vac * (exx[0] - exx[-1]))
+			plt.figure(3, figsize=(fig_x,fig_y))
+			plt.plot(Z, exx)
+			plt.figure(4, figsize=(fig_x,fig_y))
+			plt.plot(Z, ellip)
+			print np.sum(ellip) * lslice
+		#"""
 
 		plt.figure(0, figsize=(fig_x,fig_y))
-		plt.plot(Z, no, label=LEGEND[i])
+		plt.xlabel(r'z Coordinate (\AA)')
+		plt.ylabel(r'n (a.u.)')
+		plt.legend(loc=2)
+		plt.axis([-15, 15, 1, 2.0])
+		plt.savefig('{}/{}_{}_{}_{}_{}_n_profile.png'.format(groot, model.lower(), nframe, nslice, nm, qm))
+		plt.savefig('{}/{}_{}_{}_{}_{}_n_profile.pdf'.format(groot, model.lower(), nframe, nslice, nm, qm))
 
 		plt.figure(1, figsize=(fig_x,fig_y))
-		plt.plot(ellip_angles / degree, Psi, label=LEGEND[i])
+		if model.upper() not in ['ARGON', 'DMSO']: 
+			for i in xrange(len(experiment[3])):plt.scatter(experiment[3][i], experiment[4][i], s=15, c='black', marker='x')
+			plt.plot(experiment[0], experiment[1], linestyle='dashed', c='black')
+		plt.xlabel(r'$\theta_i$ ($^\circ$)')
+		plt.ylabel(r'$\Psi$')
+		plt.axis([start_angle, end_angle, 0, 2.0])
+		plt.legend(loc=4)
+		plt.savefig('{}/{}_{}_{}_{}_{}_amplitude.png'.format(groot, model.lower(), nframe, nslice, nm, qm))
+		plt.savefig('{}/{}_{}_{}_{}_{}_amplitude.pdf'.format(groot, model.lower(), nframe, nslice, nm, qm))
 
 		plt.figure(2, figsize=(fig_x,fig_y))
-		plt.plot(ellip_angles / degree, Delta, label=LEGEND[i])
-		#plt.savefig('{}/DATA/ellipsometry_{}_delta.png'.format(directory, model.lower()))
-
-		print "surface n = {:.5f}   bulk n = {:.5f}   dn = {:.5f} ({:.2%})".format(np.max(no), no[-1], np.max(no) - n[-1], (np.max(no) - no[-1]) / no[-1])
-		print "Ellipsometry direction = {}\n".format(np.sign(Delta[-1] - Delta[0]))
-
-
-	if model.upper() != 'DMSO': experiment = EXPERIMENT[model.upper()]
+		if model.upper() not in ['ARGON', 'DMSO']: 
+			for i in xrange(len(experiment[3])):plt.scatter(experiment[3][i], experiment[5][i], s=15, c='black', marker='x')
+			plt.plot(experiment[0], experiment[2], linestyle='dashed', c='black')
+		plt.xlabel(r'$\theta_i$ ($^\circ$)')
+		plt.ylabel(r'$\Delta$ ($^\circ$)')
+		plt.axis([start_angle, end_angle, 0, 360])
+		plt.legend(loc=2)
+		plt.savefig('{}/{}_{}_{}_{}_{}_delta.png'.format(groot, model.lower(), nframe, nslice, nm, qm))
+		plt.savefig('{}/{}_{}_{}_{}_{}_delta.pdf'.format(groot, model.lower(), nframe, nslice, nm, qm))
 	
-	plt.figure(0, figsize=(fig_x,fig_y))
-        plt.xlabel(r'z Coordinate (\AA)')
-        plt.ylabel(r'n (a.u.)')
-        plt.legend(loc=2)
-        plt.axis([param[3]-10, param[3]+15, 1, 1.5])
-        plt.savefig('{}/{}_{}_{}_{}_n_profile.png'.format(groot, model.lower(), nimage,nslice,nm))
-	plt.savefig('{}/{}_{}_{}_{}_n_profile.pdf'.format(groot, model.lower(), nimage,nslice,nm))
-
-	plt.figure(1, figsize=(fig_x,fig_y))
-	if model.upper() != 'DMSO':
-		for i in xrange(len(experiment[3])):plt.scatter(experiment[3][i], experiment[4][i], s=15, c='black', marker='x')
-		plt.plot(experiment[0], experiment[1], linestyle='dashed', c='black')
-	plt.xlabel(r'$\theta_i$ ($^\circ$)')
-	plt.ylabel(r'$\Psi$')
-	plt.axis([start_angle, end_angle, 0, 2.0])
-	plt.legend(loc=4)
-	plt.savefig('{}/{}_{}_{}_{}_amplitude.png'.format(groot, model.lower(), nimage,nslice,nm))
-	plt.savefig('{}/{}_{}_{}_{}_amplitude.pdf'.format(groot, model.lower(), nimage,nslice,nm))
-
-	plt.figure(2, figsize=(fig_x,fig_y))
-	if model.upper() != 'DMSO':
-		for i in xrange(len(experiment[3])):plt.scatter(experiment[3][i], experiment[5][i], s=15, c='black', marker='x')
-		plt.plot(experiment[0], experiment[2], linestyle='dashed', c='black')
-	plt.xlabel(r'$\theta_i$ ($^\circ$)')
-	plt.ylabel(r'$\Delta$ ($^\circ$)')
-	plt.axis([start_angle, end_angle, 0, 360])
-	plt.legend(loc=2)
-	plt.savefig('{}/{}_{}_{}_{}_delta.png'.format(groot, model.lower(), nimage,nslice,nm))
-	plt.savefig('{}/{}_{}_{}_{}_delta.pdf'.format(groot, model.lower(), nimage,nslice,nm))
-	
-	plt.show()
+		plt.show()
 

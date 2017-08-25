@@ -31,24 +31,23 @@ from matplotlib.colors import BoundaryNorm
 from matplotlib.ticker import MaxNLocator
 
 import utilities as ut
-import intrinsic_surface as IS
+import intrinsic_sampling_method as ism
 import thermodynamics as thermo
 
+""" FIGURE PARAMETERS """
+fig_x = 12
+fig_y = 8
+msize = 50
+plt.rc('text', usetex=True)
+plt.rc('font', family='serif', size='20.0')
+plt.rc('lines', linewidth='2.0', markersize=7)
+plt.rc('axes', labelsize='25.0')
+plt.rc('xtick', labelsize='25.0')
+plt.rc('ytick', labelsize='25.0')
 
 def linear(x, m, c): return m*x + c
 
-def print_graphs_density(directory, model, nsite, AT, nslice, nm, cutoff, csize, folder, suffix, nimage, DIM):
-
-	""" FIGURE PARAMETERS """
-	fig_x = 12
-	fig_y = 8
-	msize = 50
-	plt.rc('text', usetex=True)
-	plt.rc('font', family='serif', size='20.0')
-	plt.rc('lines', linewidth='2.0', markersize=7)
-	plt.rc('axes', labelsize='25.0')
-	plt.rc('xtick', labelsize='25.0')
-	plt.rc('ytick', labelsize='25.0')
+def print_graphs_density(directory, model, nsite, AT, M, nslice, cutoff, csize, folder, suffix, nframe, DIM):
 
 	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}".format(model.upper(), csize, cutoff)
 	if not os.path.exists(groot): os.mkdir(groot)
@@ -59,126 +58,182 @@ def print_graphs_density(directory, model, nsite, AT, nslice, nm, cutoff, csize,
 	Z1 = np.linspace(0, DIM[2], nslice)
 	Z2 = np.linspace(-DIM[2]/2, DIM[2]/2, nslice)
 
-	with file('{}/DATA/DEN/{}_{}_{}_{}_DEN.txt'.format(directory, model.lower(), csize, nslice, nimage), 'r') as infile:
-		av_density = np.loadtxt(infile)
-	with file('{}/DATA/INTDEN/{}_{}_{}_{}_{}_DEN.txt'.format(directory, model.lower(), csize, nslice, nm, nimage), 'r') as infile:
-		int_av_density = np.loadtxt(infile)
-
-	mol_den = av_density[-1]
-	mol_int_den = 0.5 * (int_av_density[-4] + int_av_density[-3][::-1])
-
-	m_size = 40
-
-	plt.figure(0, figsize=(fig_x,fig_y))
-	plt.scatter(Z2, mol_den, c='green', lw=0, s=m_size)
-	plt.xlabel(r'$z$ (\AA)')
-	plt.ylabel(r'$\rho(z)$ (\AA$^{-3}$)')
-	plt.axis([-DIM[2]/2., DIM[2]/2., 0, 0.040])
-	#plt.legend(loc=3)
-	plt.savefig('{}/{}_{}_mol_density.png'.format(groot, model.lower(), cutoff))
-
-	plt.figure(1, figsize=(fig_x,fig_y))
-	for at_type in atom_types: plt.plot(Z2, av_density[1 + atom_types.index(at_type)])
-	plt.xlabel(r'$z$ (\AA)')
-	plt.ylabel(r'$\rho(z)$ (\AA$^{-3}$)')
-	plt.axis([-DIM[2]/2., DIM[2]/2., 0, 0.080])
-	#plt.legend(loc=3)
-	plt.savefig('{}/{}_{}_atom_density.png'.format(groot, model.lower(), cutoff))
-
-	plt.figure(2, figsize=(fig_x,fig_y))
-	plt.plot(Z2, mol_int_den, c='green')
-	plt.xlabel(r'$z$ (\AA)')
-	plt.ylabel(r'$\rho(z)$ (\AA$^{-3}$)')
-	plt.axis([-6, 8, 0, 0.11])
-	#plt.legend(loc=3)
-	plt.savefig('{}/{}_{}_int_mol_density.png'.format(groot, model.lower(), cutoff))
-
-	plt.figure(3, figsize=(fig_x,fig_y))
-	for at_type in atom_types: plt.plot(Z2, int_av_density[1 + atom_types.index(at_type)])
-	plt.xlabel(r'$z$ (\AA)')
-	plt.ylabel(r'$\rho(z)$ (\AA$^{-3}$)')
-	plt.axis([-6, 8, 0, 0.22])
-	#plt.legend(loc=4)
-	plt.savefig('{}/{}_{}_int_atom_density.png'.format(groot, model.lower(), cutoff))
-
-	"""
-	plt.figure(2, figsize=(fig_x,fig_y))
-	plt.plot(Z, int_av_density[-3]*sigma**3, c='green')
-	#plt.plot(np.linspace(0, max_r, rslice), rad_density_array[0], c='green', linestyle='dotted')
-	plt.xlabel(r'$z$ (\AA)')
-	plt.ylabel(r'$g(z)$')
-	plt.axis([-6, 8, 0, 0.11*sigma**3])
-	#plt.legend(loc=3)
-	plt.savefig('{}/{}_{}_int_mol_density_g_r.png'.format(groot, model.lower(), cutoff))
-	"""
-	plt.show()
-
-def print_graphs_orientational(directory, model, nsite, AT, nslice, nm, a_type, cutoff, csize, folder, suffix, nimage, DIM):
-
-	""" FIGURE PARAMETERS """
-	fig_x = 12
-	fig_y = 8
-	msize = 50
-	plt.rc('text', usetex=True)
-	plt.rc('font', family='serif', size='20.0')
-	plt.rc('lines', linewidth='2.0', markersize=7)
-	plt.rc('axes', labelsize='25.0')
-	plt.rc('xtick', labelsize='25.0')
-	plt.rc('ytick', labelsize='25.0')
-
-	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}".format(model.upper(), csize, cutoff)
-	if not os.path.exists(groot): os.mkdir(groot)
-
-	atom_types = list(set(AT))
-	n_atom_types = len(atom_types)
-
-	Z1 = np.linspace(0, DIM[2], nslice)
-	Z2 = np.linspace(-DIM[2]/2, DIM[2]/2, nslice)
-
-	with file('{}/DATA/DEN/{}_{}_{}_{}_PAR.txt'.format(directory, model.lower(), csize, nslice, nimage), 'r') as infile:
+	with file('{}/DATA/DEN/{}_{}_{}_PAR.txt'.format(directory, model.lower(), nslice, nframe), 'r') as infile:
 		param = np.loadtxt(infile)
-	with file('{}/DATA/EULER/{}_{}_{}_{}_{}_EUL.txt'.format(directory, model.lower(), csize, nslice, a_type, nimage), 'r') as infile:
-		axx, azz, av_theta, av_phi, av_varphi, P1, P2= np.loadtxt(infile)
-	with file('{}/DATA/INTEULER/{}_{}_{}_{}_{}_{}_EUL1.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
-		int_axx1, int_azz1, int_av_theta1, int_av_phi1, int_av_varphi1, int_P11, int_P21 = np.loadtxt(infile)
-	with file('{}/DATA/INTEULER/{}_{}_{}_{}_{}_{}_EUL2.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
-		int_axx2, int_azz2, int_av_theta2, int_av_phi2, int_av_varphi2, int_P12, int_P22 = np.loadtxt(infile)
 
 	Z3 = np.linspace(-DIM[2]/2+param[3], DIM[2]/2+param[3], nslice)
 	
+	with file('{}/DATA/DEN/{}_{}_{}_DEN.txt'.format(directory, model.lower(), nslice, nframe), 'r') as infile:
+		av_density = np.loadtxt(infile)
+
+	mass_den = av_density[0]
+	mol_den = av_density[-1]
+
+	sm_mol_den = [ut.den_func(z, param[0], param[1], param[2], param[3], param[4]) for z in Z1]
+
 	m_size = 40
 
 	plt.figure(0, figsize=(fig_x,fig_y))
+	plt.scatter(Z3, mass_den, c='green', lw=0, s=m_size)
+	plt.plot(Z3, sm_mol_den, c='green')
+	plt.xlabel(r'$z$ (\AA)')
+	plt.ylabel(r'$\rho(z)$ (g cm$^{-3}$)')
+	plt.axis([-10., 15, 0, np.max(mass_den) + 0.1 * np.max(mass_den)])
+	#plt.legend(loc=3)
+	plt.savefig('{}/{}_{}_{}_mass_density.png'.format(groot, model.lower(), nslice, nframe))
+	plt.savefig('{}/{}_{}_{}_mass_density.pdf'.format(groot, model.lower(), nslice, nframe))
+
+	plt.figure(1, figsize=(fig_x,fig_y))
+	plt.scatter(Z3, mol_den, c='green', lw=0, s=m_size)
+	plt.xlabel(r'$z$ (\AA)')
+	plt.ylabel(r'$\rho(z)$ (\AA$^{-3}$)')
+	plt.axis([-10., 15, 0, 0.04])
+	#plt.legend(loc=3)
+	plt.savefig('{}/{}_{}_{}_mol_density.png'.format(groot, model.lower(), nslice, nframe))
+	plt.savefig('{}/{}_{}_{}_mol_density.pdf'.format(groot, model.lower(), nslice, nframe))
+
+	plt.figure(2, figsize=(fig_x,fig_y))
+	for at_type in atom_types: plt.plot(Z3, av_density[1 + atom_types.index(at_type)])
+	plt.xlabel(r'$z$ (\AA)')
+	plt.ylabel(r'$\rho(z)$ (\AA$^{-3}$)')
+	plt.axis([-10., 15, 0, 0.080])
+	#plt.legend(loc=3)
+	plt.savefig('{}/{}_{}_{}_atom_density.png'.format(groot, model.lower(), nslice, nframe))
+	plt.savefig('{}/{}_{}_{}_atom_density.pdf'.format(groot, model.lower(), nslice, nframe))
+
+	plt.show()
+
+def print_graphs_intrinsic_density(directory, model, nsite, AT, M, nslice, nm, QM, n0, phi, cutoff, csize, folder, suffix, nframe, DIM):
+
+	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}".format(model.upper(), csize, cutoff)
+	if not os.path.exists(groot): os.mkdir(groot)
+
+	atom_types = list(set(AT))
+	n_atom_types = len(atom_types)
+
+	Z1 = np.linspace(0, DIM[2], nslice)
+	Z2 = np.linspace(-DIM[2]/2, DIM[2]/2, nslice)
+
+	with file('{}/DATA/DEN/{}_{}_{}_PAR.txt'.format(directory, model.lower(), nslice, nframe), 'r') as infile:
+		param = np.loadtxt(infile)
+
+	Z3 = np.linspace(-DIM[2]/2+param[3], DIM[2]/2+param[3], nslice)
+
+	for qm in QM:
+
+		with file('{}/DATA/INTDEN/{}_{}_{}_{}_{}_{}_{}_DEN.txt'.format(directory, model.lower(), nslice, nm, qm, n0, int(1/phi + 0.5), nframe), 'r') as infile:
+			int_av_density = np.loadtxt(infile)
+
+		mol_int_den = 0.5 * (int_av_density[-4] + int_av_density[-3][::-1])
+		mass_int_den = mol_int_den * np.sum(M) / con.N_A * 1E24
+
+		m_size = 40
+
+		plt.figure(3, figsize=(fig_x,fig_y))
+		plt.plot(Z2, mol_int_den)
+		plt.xlabel(r'$z$ (\AA)')
+		plt.ylabel(r'$\rho(z)$ (\AA$^{-3}$)')
+		plt.axis([-10., 15, 0, 0.10])
+		#plt.legend(loc=3)
+		plt.savefig('{}/{}_{}_{}_{}_{}_int_mol_density.png'.format(groot, model.lower(), nslice, nm, qm, nframe))
+		plt.savefig('{}/{}_{}_{}_{}_{}_int_mol_density.pdf'.format(groot, model.lower(), nslice, nm, qm, nframe))
+		
+		"""
+		plt.figure(4, figsize=(fig_x,fig_y))
+		plt.plot(Z2, mass_int_den)
+		plt.xlabel(r'$z$ (\AA)')
+		plt.ylabel(r'$\rho(z)$ (g cm$^{-3}$)')
+		plt.axis([-10., 15, 0, 3.0])
+		#plt.legend(loc=3)
+		plt.savefig('{}/{}_{}_{}_{}_{}_int_mass_density.png'.format(groot, model.lower(), nslice, nm, qm, nframe))
+		plt.savefig('{}/{}_{}_{}_{}_{}_int_mass_density.pdf'.format(groot, model.lower(), nslice, nm, qm, nframe))
+		"""
+
+		plt.figure(5, figsize=(fig_x,fig_y))
+		for at_type in atom_types: plt.plot(Z2, int_av_density[1 + atom_types.index(at_type)])
+		plt.xlabel(r'$z$ (\AA)')
+		plt.ylabel(r'$\rho(z)$ (\AA$^{-3}$)')
+		plt.axis([-10., 15, 0, 0.15])
+		#plt.legend(loc=4)
+		plt.savefig('{}/{}_{}_{}_{}_{}_int_atom_density.png'.format(groot, model.lower(), nslice, nm, qm, nframe))
+		plt.savefig('{}/{}_{}_{}_{}_{}_int_atom_density.pdf'.format(groot, model.lower(), nslice, nm, qm, nframe))
+
+		plt.figure(6, figsize=(fig_x,fig_y))
+		plt.plot(Z2, int_av_density[-4])
+		#plt.plot(np.linspace(0, max_r, rslice), rad_density_array[0], c='green', linestyle='dotted')
+		plt.xlabel(r'$z$ (\AA)')
+		plt.ylabel(r'$g(z)$')
+		plt.axis([-10., 15, 0, 0.08])
+		#plt.legend(loc=3)
+		plt.savefig('{}/{}_{}_{}_{}_{}_int_mol_density_1.png'.format(groot, model.lower(), nslice, nm, qm, nframe))
+		plt.savefig('{}/{}_{}_{}_{}_{}_int_mol_density_1.pdf'.format(groot, model.lower(), nslice, nm, qm, nframe))
+
+		plt.figure(7, figsize=(fig_x,fig_y))
+		plt.plot(Z2, int_av_density[-3])
+		#plt.plot(np.linspace(0, max_r, rslice), rad_density_array[0], c='green', linestyle='dotted')
+		plt.xlabel(r'$z$ (\AA)')
+		plt.ylabel(r'$g(z)$')
+		plt.axis([-10., 15, 0, 0.08])
+		#plt.legend(loc=3)
+		plt.savefig('{}/{}_{}_{}_{}_{}_int_mol_density_2.png'.format(groot, model.lower(), nslice, nm, qm, nframe))
+		plt.savefig('{}/{}_{}_{}_{}_{}_int_mol_density_2.pdf'.format(groot, model.lower(), nslice, nm, qm, nframe))	
+		
+		plt.figure(8, figsize=(fig_x,fig_y))
+		plt.plot(Z3, int_av_density[-2])
+		#plt.plot(np.linspace(0, max_r, rslice), rad_density_array[0], c='green', linestyle='dotted')
+		plt.xlabel(r'$z$ (\AA)')
+		plt.ylabel(r'$g(z)$')
+		plt.axis([-10., 15, 0, 0.08])
+		#plt.legend(loc=3)
+		plt.savefig('{}/{}_{}_{}_{}_{}_eff_mol_density1.png'.format(groot, model.lower(), nslice, nm, qm, nframe))
+		plt.savefig('{}/{}_{}_{}_{}_{}_eff_mol_density1.pdf'.format(groot, model.lower(), nslice, nm, qm, nframe))
+	
+		plt.figure(9, figsize=(fig_x,fig_y))
+		plt.plot(Z3, int_av_density[-1])
+		#plt.plot(np.linspace(0, max_r, rslice), rad_density_array[0], c='green', linestyle='dotted')
+		plt.xlabel(r'$z$ (\AA)')
+		plt.ylabel(r'$g(z)$')
+		plt.axis([15., 30, 0, 0.08])
+		#plt.legend(loc=3)
+		plt.savefig('{}/{}_{}_{}_{}_{}_eff_mol_density2.png'.format(groot, model.lower(), nslice, nm, qm, nframe))
+		plt.savefig('{}/{}_{}_{}_{}_{}_eff_mol_density2.pdf'.format(groot, model.lower(), nslice, nm, qm, nframe))
+
+	plt.close('all')
+
+def print_graphs_orientational(directory, model, nsite, AT, nslice, a_type, cutoff, csize, folder, suffix, nframe, DIM):
+
+	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}".format(model.upper(), csize, cutoff)
+	if not os.path.exists(groot): os.mkdir(groot)
+
+	atom_types = list(set(AT))
+	n_atom_types = len(atom_types)
+
+	Z1 = np.linspace(0, DIM[2], nslice)
+	Z2 = np.linspace(-DIM[2]/2, DIM[2]/2, nslice)
+
+	with file('{}/DATA/DEN/{}_{}_{}_PAR.txt'.format(directory, model.lower(), nslice, nframe), 'r') as infile:
+		param = np.loadtxt(infile)
+	with file('{}/DATA/EULER/{}_{}_{}_{}_EUL.txt'.format(directory, model.lower(), a_type, nslice, nframe), 'r') as infile:
+		axx, azz, av_theta, av_phi, av_varphi, P1, P2 = np.loadtxt(infile)
+
+	Z3 = np.linspace(-DIM[2]/2+param[3], DIM[2]/2+param[3], nslice)
+	
+	a = ut.get_polar_constants(model, a_type)
+	av_a = np.mean(a)
+	d_a = 0.04 * av_a
+
+	m_size = 40
+
+	plt.figure(10, figsize=(fig_x,fig_y))
         plt.scatter(Z2, av_theta, c='blue', lw=0, s=m_size)
 	plt.scatter(Z2, av_phi, c='red', lw=0, s=m_size)
         plt.xlabel(r'$z$ (\AA)')
         plt.ylabel(r'$\left<\theta\right>(z)$')
         #plt.axis([-DIM[2]/2., DIM[2]/2., 1.44, 1.5])
         plt.legend(loc=3)
-        plt.savefig('{}/{}_{}_theta.png'.format(groot, model.lower(), cutoff))
+        plt.savefig('{}/{}_{}_{}_theta.png'.format(groot, model.lower(), nslice, nframe))
 
-	plt.figure(1, figsize=(fig_x,fig_y))
-        plt.scatter(Z2, int_av_theta1, c='blue', lw=0, s=m_size)
-	plt.scatter(Z2, int_av_phi1, c='red', lw=0, s=m_size)
-        plt.xlabel(r'$z$ (\AA)')
-        plt.ylabel(r'$\left<\theta\right>(z)$')
-        #plt.axis([-6., 8, 1.44, 1.5])
-        plt.legend(loc=3)
-        plt.savefig('{}/{}_{}_theta1.png'.format(groot, model.lower(), cutoff))
-
-	plt.figure(2, figsize=(fig_x,fig_y))
-        plt.scatter(Z2, int_av_theta2, c='blue', lw=0, s=m_size)
-	plt.scatter(Z2, int_av_phi2, c='red', lw=0, s=m_size)
-        plt.xlabel(r'$z$ (\AA)')
-        plt.ylabel(r'$\left<\theta\right>(z)$')
-        #plt.axis([-6., 8, 1.44, 1.5])
-        plt.legend(loc=3)
-        plt.savefig('{}/{}_{}_theta2.png'.format(groot, model.lower(), cutoff))
-
-	av_a = axx[nslice/2]
-	d_a = 0.04 * av_a
-
-	plt.figure(3, figsize=(fig_x,fig_y))
+	plt.figure(11, figsize=(fig_x,fig_y))
 	plt.scatter(Z3, axx, c='red', label=r'$\alpha_\parallel$', lw=0, s=m_size)
 	plt.scatter(Z3, azz, c='blue', label=r'$\alpha_\perp$', lw=0, s=m_size)
 	plt.xlabel(r'$z$ (\AA)')
@@ -186,53 +241,12 @@ def print_graphs_orientational(directory, model, nsite, AT, nslice, nm, a_type, 
 	#plt.axis([-DIM[2]/2., DIM[2]/2., av_a - 0.05, av_a + 0.05])
 	plt.axis([-10., +15, av_a - d_a, av_a + d_a])
 	plt.legend(loc=4)
-	plt.savefig('{}/{}_{}_polarisability.png'.format(groot, model.lower(), cutoff))
-	plt.savefig('{}/{}_{}_polarisability.pdf'.format(groot, model.lower(), cutoff))
-
-	av_int_axx = (int_axx1 + int_axx2[::-1]) / 2.
-	av_int_azz = (int_azz1 + int_azz2[::-1]) / 2.
-
-	plt.figure(4, figsize=(fig_x,fig_y))
-	plt.scatter(Z2, int_axx1, c='red', label=r'$\alpha_\parallel$', lw=0, s=m_size)
-	plt.scatter(Z2, int_azz1, c='blue', label=r'$\alpha_\perp$', lw=0, s=m_size)
-	plt.xlabel(r'$z$ (\AA)')
-	plt.ylabel(r'$\alpha(z)$ (\AA$^{3}$)')
-	plt.axis([-10, 15, av_a - d_a, av_a + d_a])
-	plt.legend(loc=4)
-
-	plt.figure(5, figsize=(fig_x,fig_y))
-	plt.scatter(Z2, int_axx2, c='red', label=r'$\alpha_\parallel$', lw=0, s=m_size)
-	plt.scatter(Z2, int_azz2, c='blue', label=r'$\alpha_\perp$', lw=0, s=m_size)
-	plt.xlabel(r'$z$ (\AA)')
-	plt.ylabel(r'$\alpha(z)$ (\AA$^{3}$)')
-	plt.axis([-10, 15, av_a - d_a, av_a + d_a])
-	plt.legend(loc=3)
-
-	plt.figure(6, figsize=(fig_x,fig_y))
-	plt.scatter(Z2, av_int_axx, c='red', label=r'$\alpha_\parallel$', lw=0, s=m_size)
-	plt.scatter(Z2, av_int_azz, c='blue', label=r'$\alpha_\perp$', lw=0, s=m_size)
-	plt.xlabel(r'$z$ (\AA)')
-	plt.ylabel(r'$\alpha(z)$ (\AA$^{3}$)')
-	plt.axis([-10, 15, av_a - d_a, av_a + d_a])
-	plt.legend(loc=4)
-	plt.savefig('{}/{}_{}_int_polarisability.png'.format(groot, model.lower(), cutoff))
-	plt.savefig('{}/{}_{}_int_polarisability.pdf'.format(groot, model.lower(), cutoff))
+	plt.savefig('{}/{}_{}_{}_polarisability.png'.format(groot, model.lower(), nslice, nframe))
+	plt.savefig('{}/{}_{}_{}_polarisability.pdf'.format(groot, model.lower(), nslice, nframe))
 
 	plt.show()
 
-
-def print_graphs_dielectric(directory, model, nsite, AT, nslice, nm, a_type, cutoff, csize, folder, suffix, nimage, DIM):
-
-	""" FIGURE PARAMETERS """
-	fig_x = 12
-	fig_y = 8
-	msize = 40
-	plt.rc('text', usetex=True)
-	plt.rc('font', family='serif', size='20.0')
-	plt.rc('lines', linewidth='2.0', markersize=7)
-	plt.rc('axes', labelsize='25.0')
-	plt.rc('xtick', labelsize='25.0')
-	plt.rc('ytick', labelsize='25.0')
+def print_graphs_intrinsic_orientational(directory, model, nsite, AT, nslice, nm, QM, n0, phi, a_type, cutoff, csize, folder, suffix, nframe, DIM):
 
 	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}".format(model.upper(), csize, cutoff)
 	if not os.path.exists(groot): os.mkdir(groot)
@@ -243,48 +257,163 @@ def print_graphs_dielectric(directory, model, nsite, AT, nslice, nm, a_type, cut
 	Z1 = np.linspace(0, DIM[2], nslice)
 	Z2 = np.linspace(-DIM[2]/2, DIM[2]/2, nslice)
 
-	with file('{}/DATA/DEN/{}_{}_{}_{}_PAR.txt'.format(directory, model.lower(), csize, nslice, nimage), 'r') as infile:
+	with file('{}/DATA/DEN/{}_{}_{}_PAR.txt'.format(directory, model.lower(), nslice, nframe), 'r') as infile:
 		param = np.loadtxt(infile)
-	with file('{}/DATA/DIELEC/{}_{}_{}_{}_{}_DIE.txt'.format(directory, model.lower(), csize, nslice, a_type, nimage), 'r') as infile:
+	
+	Z3 = np.linspace(-DIM[2]/2+param[3], DIM[2]/2+param[3], nslice)
+	
+	m_size = 40
+
+	a = ut.get_polar_constants(model, a_type)
+	av_a = np.mean(a)
+	d_a = 0.04 * av_a
+
+	for qm in QM:
+		with file('{}/DATA/INTEULER/{}_{}_{}_{}_{}_{}_{}_{}_EUL1.txt'.format(directory, model.lower(), a_type, nslice, nm, qm, n0, int(1/phi + 0.5), nframe), 'r') as infile:
+			int_axx1, int_azz1, int_av_theta1, int_av_phi1, int_av_varphi1, int_P11, int_P21 = np.loadtxt(infile)
+		with file('{}/DATA/INTEULER/{}_{}_{}_{}_{}_{}_{}_{}_EUL2.txt'.format(directory, model.lower(), a_type, nslice, nm, qm, n0, int(1/phi + 0.5), nframe), 'r') as infile:
+			int_axx2, int_azz2, int_av_theta2, int_av_phi2, int_av_varphi2, int_P12, int_P22 = np.loadtxt(infile)
+
+		av_int_axx = (int_axx1 + int_axx2[::-1]) / 2.
+		av_int_azz = (int_azz1 + int_azz2[::-1]) / 2.
+
+		plt.figure(12, figsize=(fig_x,fig_y))
+		plt.scatter(Z2, int_av_theta1, c='blue', lw=0, s=m_size)
+		plt.scatter(Z2, int_av_phi1, c='red', lw=0, s=m_size)
+		plt.xlabel(r'$z$ (\AA)')
+		plt.ylabel(r'$\left<\theta\right>(z)$')
+		#plt.axis([-6., 8, 1.44, 1.5])
+		plt.legend(loc=3)
+
+		plt.figure(13, figsize=(fig_x,fig_y))
+		plt.scatter(Z2, int_av_theta2, c='blue', lw=0, s=m_size)
+		plt.scatter(Z2, int_av_phi2, c='red', lw=0, s=m_size)
+		plt.xlabel(r'$z$ (\AA)')
+		plt.ylabel(r'$\left<\theta\right>(z)$')
+		#plt.axis([-6., 8, 1.44, 1.5])
+		plt.legend(loc=3)
+
+		plt.figure(14, figsize=(fig_x,fig_y))
+		plt.scatter(Z2, int_axx1, c='red', label=r'$\alpha_\parallel$', lw=0, s=m_size)
+		plt.scatter(Z2, int_azz1, c='blue', label=r'$\alpha_\perp$', lw=0, s=m_size)
+		plt.xlabel(r'$z$ (\AA)')
+		plt.ylabel(r'$\alpha(z)$ (\AA$^{3}$)')
+		plt.axis([-10, 15, av_a - d_a, av_a + d_a])
+		plt.legend(loc=4)
+
+		plt.figure(15, figsize=(fig_x,fig_y))
+		plt.scatter(Z2, int_axx2, c='red', label=r'$\alpha_\parallel$', lw=0, s=m_size)
+		plt.scatter(Z2, int_azz2, c='blue', label=r'$\alpha_\perp$', lw=0, s=m_size)
+		plt.xlabel(r'$z$ (\AA)')
+		plt.ylabel(r'$\alpha(z)$ (\AA$^{3}$)')
+		plt.axis([-10, 15, av_a - d_a, av_a + d_a])
+		plt.legend(loc=3)
+
+		plt.figure(16, figsize=(fig_x,fig_y))
+		plt.scatter(Z2, av_int_axx, c='red', label=r'$\alpha_\parallel$', lw=0, s=m_size)
+		plt.scatter(Z2, av_int_azz, c='blue', label=r'$\alpha_\perp$', lw=0, s=m_size)
+		plt.xlabel(r'$z$ (\AA)')
+		plt.ylabel(r'$\alpha(z)$ (\AA$^{3}$)')
+		plt.axis([-10, 15, av_a - d_a, av_a + d_a])
+		plt.legend(loc=4)
+		
+	plt.figure(12, figsize=(fig_x,fig_y))
+	plt.savefig('{}/{}_{}_theta1.png'.format(groot, model.lower(), cutoff))
+	plt.figure(13, figsize=(fig_x,fig_y))
+	plt.savefig('{}/{}_{}_theta2.png'.format(groot, model.lower(), cutoff))
+	plt.figure(14, figsize=(fig_x,fig_y))
+	plt.savefig('{}/{}_{}_{}_{}_{}_int_polarisability_1.png'.format(groot, model.lower(), nslice, nm, qm, nframe))
+	plt.savefig('{}/{}_{}_{}_{}_{}_int_polarisability_1.pdf'.format(groot, model.lower(), nslice, nm, qm, nframe))
+	plt.figure(15, figsize=(fig_x,fig_y))
+	plt.savefig('{}/{}_{}_{}_{}_{}_int_polarisability_2.png'.format(groot, model.lower(), nslice, nm, qm, nframe))
+	plt.savefig('{}/{}_{}_{}_{}_{}_int_polarisability_2.pdf'.format(groot, model.lower(), nslice, nm, qm, nframe))
+	plt.figure(16, figsize=(fig_x,fig_y))
+	plt.savefig('{}/{}_{}_{}_{}_{}_int_polarisability.png'.format(groot, model.lower(), nslice, nm, qm, nframe))
+	plt.savefig('{}/{}_{}_{}_{}_{}_int_polarisability.pdf'.format(groot, model.lower(), nslice, nm, qm, nframe))
+
+	plt.show()
+
+def print_graphs_dielectric(directory, model, nsite, AT, nslice, a_type, cutoff, csize, folder, suffix, nframe, DIM):
+
+	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}".format(model.upper(), csize, cutoff)
+	if not os.path.exists(groot): os.mkdir(groot)
+
+	atom_types = list(set(AT))
+	n_atom_types = len(atom_types)
+
+	Z1 = np.linspace(0, DIM[2], nslice)
+	Z2 = np.linspace(-DIM[2]/2, DIM[2]/2, nslice)
+
+	with file('{}/DATA/DEN/{}_{}_{}_PAR.txt'.format(directory, model.lower(), nslice, nframe), 'r') as infile:
+		param = np.loadtxt(infile)
+	with file('{}/DATA/DIELEC/{}_{}_{}_{}_DIE.txt'.format(directory, model.lower(), a_type, nslice, nframe), 'r') as infile:
 		exx, ezz = np.loadtxt(infile)
-	with file('{}/DATA/INTDIELEC/{}_{}_{}_{}_{}_{}_DIE.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
-		int_exx, int_ezz = np.loadtxt(infile)
-	with file('{}/DATA/INTDIELEC/{}_{}_{}_{}_{}_{}_CWDIE.txt'.format(directory, model.lower(), csize, nslice, a_type, nm, nimage), 'r') as infile:
-		e_arrays = np.loadtxt(infile)
 
 	Z3 = np.linspace(-DIM[2]/2+param[3], DIM[2]/2+param[3], nslice)
 
-	plt.figure(0, figsize=(fig_x,fig_y))
-	plt.scatter(Z3, exx, c='orange', label=r'$\epsilon_\parallel$', lw=0, s=msize)
-	plt.scatter(Z3, ezz, c='brown', label=r'$\epsilon_\perp$', lw=0, s=msize)
+	plt.figure(17, figsize=(fig_x,fig_y))
+	plt.scatter(Z3, exx, c='orange', label=r'$\epsilon_\parallel$', lw=0, s=msize, edgecolors=None)
+	plt.scatter(Z3, ezz, c='brown', label=r'$\epsilon_\perp$', lw=1, s=msize, marker='x')
 	plt.xlabel(r'$z$ (\AA)')
 	plt.ylabel(r'$\epsilon(z)$ (a.u)')
 	plt.axis([-10., +15, 1, 2.0])
 	plt.legend(loc=4)
-	plt.savefig('{}/{}_{}_dielectric.png'.format(groot, model.lower(), cutoff))
-	plt.savefig('{}/{}_{}_dielectric.pdf'.format(groot, model.lower(), cutoff))
+	plt.savefig('{}/{}_{}_{}_dielectric.png'.format(groot, model.lower(), nslice, nframe))
+	plt.savefig('{}/{}_{}_{}_dielectric.pdf'.format(groot, model.lower(), nslice, nframe))
 
-	plt.figure(1, figsize=(fig_x,fig_y))
-	plt.scatter(Z2, int_exx, c='orange', label=r'$\epsilon_\parallel$', lw=0, s=msize)
-	plt.scatter(Z2, int_ezz, c='brown', label=r'$\epsilon_\perp$', lw=0, s=msize)
-	plt.xlabel(r'$z$ (\AA)')
-	plt.ylabel(r'$\epsilon(z)$ (a.u)')
-	plt.axis([-10., +15, 1, 4.5])
-	plt.legend(loc=4)
-	plt.savefig('{}/{}_{}_int_dielectric.png'.format(groot, model.lower(), cutoff))
-	plt.savefig('{}/{}_{}_int_dielectric.pdf'.format(groot, model.lower(), cutoff))
+	plt.show()
 
-	for i in xrange(4):
+
+def print_graphs_intrinsic_dielectric(directory, model, nsite, AT, nslice, nm, QM, n0, phi, a_type, cutoff, csize, folder, suffix, nframe, DIM):
+
+	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}".format(model.upper(), csize, cutoff)
+	if not os.path.exists(groot): os.mkdir(groot)
+
+	atom_types = list(set(AT))
+	n_atom_types = len(atom_types)
+
+	Z1 = np.linspace(0, DIM[2], nslice)
+	Z2 = np.linspace(-DIM[2]/2, DIM[2]/2, nslice)
+
+	with file('{}/DATA/DEN/{}_{}_{}_PAR.txt'.format(directory, model.lower(), nslice, nframe), 'r') as infile:
+		param = np.loadtxt(infile)
 	
-		plt.figure(i+2, figsize=(fig_x,fig_y))
-		plt.scatter(Z3, e_arrays[i*2], c='orange', label=r'$\epsilon_\parallel$', lw=0, s=msize)
-		plt.scatter(Z3, e_arrays[i*2+1], c='brown', label=r'$\epsilon_\perp$', lw=0, s=msize)
+	Z3 = np.linspace(-DIM[2]/2+param[3], DIM[2]/2+param[3], nslice)
+
+	for qm in QM:
+
+		with file('{}/DATA/INTDIELEC/{}_{}_{}_{}_{}_{}_{}_{}_DIE.txt'.format(directory, model.lower(), a_type, nslice, nm, qm, n0, int(1./phi + 0.5), nframe), 'r') as infile:
+			int_exx, int_ezz = np.loadtxt(infile)
+		with file('{}/DATA/INTDIELEC/{}_{}_{}_{}_{}_{}_{}_{}_CWDIE.txt'.format(directory, model.lower(), a_type, nslice,nm, qm, n0, int(1./phi + 0.5), nframe), 'r') as infile:
+			e_arrays = np.loadtxt(infile)
+
+		plt.figure(18, figsize=(fig_x,fig_y))
+		plt.scatter(Z2, int_exx, c='orange', label=r'$\epsilon_\parallel$', lw=0, s=msize, edgecolors=None)
+		plt.scatter(Z2, int_ezz, c='brown', label=r'$\epsilon_\perp$', lw=1, s=msize, marker='x')
 		plt.xlabel(r'$z$ (\AA)')
 		plt.ylabel(r'$\epsilon(z)$ (a.u)')
-		plt.axis([-10., +15, 1, 2.0])
+		plt.axis([-10., +15, 1, 4.5])
 		plt.legend(loc=4)
-		#plt.savefig('{}/{}_{}_dielectric.png'.format(groot, model.lower(), cutoff))
-		#plt.savefig('{}/{}_{}_dielectric.pdf'.format(groot, model.lower(), cutoff))
+
+		for i in xrange(4):
+	
+			plt.figure(i+19, figsize=(fig_x,fig_y))
+			plt.scatter(Z3, e_arrays[i*2], c='orange', label=r'$\epsilon_\parallel$', lw=0, s=msize, edgecolors=None)
+			plt.scatter(Z3, e_arrays[i*2+1], c='brown', label=r'$\epsilon_\perp$', lw=1, s=msize, marker='x')
+			plt.xlabel(r'$z$ (\AA)')
+			plt.ylabel(r'$\epsilon(z)$ (a.u)')
+			plt.axis([-10., +15, 1, 2.0])
+			plt.legend(loc=4)
+			plt.savefig('{}/{}_{}_{}_dielectric.png'.format(groot, model.lower(), cutoff, i))
+			plt.savefig('{}/{}_{}_{}_dielectric.pdf'.format(groot, model.lower(), cutoff, i))
+
+	plt.figure(18, figsize=(fig_x,fig_y))
+	plt.savefig('{}/{}_{}_int_dielectric.png'.format(groot, model.lower(), cutoff))
+	plt.savefig('{}/{}_{}_int_dielectric.pdf'.format(groot, model.lower(), cutoff))
+	for i in xrange(4):
+		plt.figure(i+19, figsize=(fig_x,fig_y))
+		plt.savefig('{}/{}_{}_{}_dielectric.png'.format(groot, model.lower(), cutoff, i))
+		plt.savefig('{}/{}_{}_{}_dielectric.pdf'.format(groot, model.lower(), cutoff, i))
 
 	plt.show()
 
