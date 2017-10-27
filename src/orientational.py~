@@ -64,8 +64,8 @@ def R_tensors(directory, frame, nslice, nmol, model, csize, COM, DIM, nsite):
                                 index2 = k * 3 + l
                                 temp_O[index1][index2] += O[k][l]**2
 
-        with file('{}/DATA/EULER/{}_{}_{}_ODIST.txt'.format(directory, model.lower(), nslice, frame), 'w') as outfile:
-                np.savetxt(outfile, temp_O, fmt='%-12.6f')
+        with file('{}/EULER/{}_{}_{}_ODIST.npy'.format(directory, model.lower(), nslice, frame), 'w') as outfile:
+                np.save(outfile, temp_O)
 
         return temp_O
 
@@ -96,7 +96,7 @@ def mol_angles(directory, frame, nslice, nmol, model, csize, COM, DIM, nsite):
 
                 """NORMAL Z AXIS"""
 
-                O = ut.local_frame_molecule(MOLECULE, model)
+                O = ut.local_frame_molecule(molecule, model)
 
                 z_array[j] = z
                 if O[2][2] < -1: O[2][2] = -1.0
@@ -105,8 +105,8 @@ def mol_angles(directory, frame, nslice, nmol, model, csize, COM, DIM, nsite):
                 phi[j] = (np.arctan(-O[2][0] / O[2][1]))
                 varphi[j] =  (np.arctan(O[0][2] / O[1][2]))
 
-        with file('{}/DATA/EULER/{}_{}_ANGLE.txt'.format(directory, model.lower(), frame), 'w') as outfile:
-                np.savetxt(outfile, (z_array, theta, phi, varphi), fmt='%-12.6f')
+        with file('{}/EULER/{}_{}_ANGLE.npy'.format(directory, model.lower(), frame), 'w') as outfile:
+                np.save(outfile, (z_array, theta, phi, varphi))
 
         return z_array, theta, phi, varphi
 
@@ -123,12 +123,12 @@ def angle_dist(directory, model, csize, nframe, nmol, nsite, COM, DIM, nslice, n
                 sys.stdout.flush()
 
                 if ow_angles:
-                        angles = mol_angles(directory, frame, nslice, nmol, model, csize, COM, DIM, nsite, nm, n0, phi_)
-                        z_array, theta, phi, varphi, zeta_array1, int_theta1, int_phi1, int_varphi1, zeta_array2, int_theta2, int_phi2, int_varphi2 = angles
+                        angles = mol_angles(directory, frame, nslice, nmol, model, csize, COM, DIM, nsite)
+                        z_array, theta, phi, varphi = angles
                 else:
                         try:
-                                with file('{}/DATA/EULER/{}_{}_ANGLE.txt'.format(directory, model.lower(), frame), 'r') as infile:
-                                        z_array, theta, phi, varphi = np.loadtxt(infile)
+                                with file('{}/EULER/{}_{}_ANGLE.npy'.format(directory, model.lower(), frame), 'r') as infile:
+                                        z_array, theta, phi, varphi = np.load(infile)
 
                         except Exception:
                                 angles = mol_angles(directory, frame, nslice, nmol, model, csize, COM, DIM, nsite)
@@ -197,16 +197,16 @@ def polarisability(directory, model, csize, nframe, nmol, nsite, COM, DIM, nslic
                 sys.stdout.write("CREATING ROTATIONAL TENSOR PROFILE from {} out of {} frames\r".format(frame, nframe) )
                 sys.stdout.flush()
 
-                with file('{}/DATA/DEN/{}_{}_{}_COUNT.txt'.format(directory, model.lower(), nslice, frame)) as infile:
-                        count_array = np.loadtxt(infile)
+                with file('{}/DEN/{}_{}_{}_COUNT.npy'.format(directory, model.lower(), nslice, frame)) as infile:
+                        count_array = np.load(infile)
 
                 count_O += count_array[-1]
 
                 if ow_polar: temp_O = R_tensors(directory, frame, nslice, nmol, model, csize, COM, DIM, nsite)
                 else:
                         try:
-                                with file('{}/DATA/EULER/{}_{}_{}_ODIST.txt'.format(directory, model.lower(), nslice, frame), 'r') as infile:
-                                        temp_O = np.loadtxt(infile)
+                                with file('{}/EULER/{}_{}_{}_ODIST.npy'.format(directory, model.lower(), nslice, frame), 'r') as infile:
+                                        temp_O = np.load(infile)
 
                         except Exception: temp_O = R_tensors(directory, frame, nslice, nmol, model, csize, COM, DIM, nsite)
 
@@ -242,13 +242,13 @@ def euler_profile(directory, nframe, nslice, nmol, model, csize, suffix, AT, Q, 
 	Z1 = np.linspace(0, DIM[2], nslice)
 	Z2 = np.linspace(-1/2.*DIM[2], 1/2.*DIM[2], nslice)
 
-	with file('{}/DATA/DEN/{}_{}_{}_DEN.txt'.format(directory, model.lower(), nslice, nframe), 'r') as infile:
-		av_density = np.loadtxt(infile)
+	with file('{}/DEN/{}_{}_{}_DEN.npy'.format(directory, model.lower(), nslice, nframe), 'r') as infile:
+		av_density = np.load(infile)
 
 	axx, azz = polarisability(directory, model, csize, nframe, nmol, nsite, COM, DIM, nslice, npi, a, ow_polar)
 	av_theta, av_phi, P1, P2  = angle_dist(directory, model, csize, nframe, nmol, nsite, COM, DIM, nslice, npi, ow_angle)
 
-	with file('{}/DATA/EULER/{}_{}_{}_{}_EUL.txt'.format(directory, model.lower(), a_type, nslice, nframe), 'w') as outfile:
-		np.savetxt(outfile, (axx, azz, av_theta, av_phi, av_varphi, P1, P2), fmt='%-12.6f')
+	with file('{}/EULER/{}_{}_{}_{}_EUL.npy'.format(directory, model.lower(), a_type, nslice, nframe), 'w') as outfile:
+		np.savetxt(outfile, (axx, azz, av_theta, av_phi, av_varphi, P1, P2))
 
 #test_orientation()

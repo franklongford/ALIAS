@@ -27,11 +27,14 @@ import utilities as ut
 #import matplotlib.pyplot as plt
 
 def count(directory, model, csize, nslice, nsite, natom, AT, M, DIM, COM, frame, ow_count):
+	
+	file_name = '{}_{}_{}'.format(model.lower(), nslice, frame)
 
-	if os.path.exists('{}/DATA/DEN/{}_{}_{}_COUNT.txt'.format(directory, model.lower(), nslice, frame)) and not ow_count:
+	if os.path.exists('{}/DEN/{}_COUNT.txt'.format(directory, file_name)): ut.convert_txt_npy('{}/DEN/{}_COUNT'.format(directory, file_name))
+	if os.path.exists('{}/DEN/{}_COUNT.npy'.format(directory, file_name)) and not ow_count:
 		try:
-			with file('{}/DATA/DEN/{}_{}_{}_COUNT.txt'.format(directory, model.lower(), nslice, frame)) as infile:
-				count_array = np.loadtxt(infile)
+			with file('{}/DEN/{}_{}_{}_COUNT.npy'.format(directory, model.lower(), nslice, frame)) as infile:
+				count_array = np.load(infile)
 		except IndexError: ow_count = True
 	else: ow_count = True
 
@@ -50,7 +53,11 @@ def count(directory, model, csize, nslice, nsite, natom, AT, M, DIM, COM, frame,
 			m = n % nsite
 			at_type = AT[m]
 
-			z = (zat[n] -zR + 0.5 * DIM[2])
+			try:
+				z = (zat[n] - zR + 0.5 * DIM[2])
+			except:
+				print n, natom, len(zat) 
+				sys.exit()
 			index_at = int(z * nslice / DIM[2]) % nslice
 
 			count_array[0][index_at] += M[m]
@@ -61,8 +68,8 @@ def count(directory, model, csize, nslice, nsite, natom, AT, M, DIM, COM, frame,
 				index_mol = int(z * nslice / DIM[2]) % nslice
 				count_array[-1][index_mol] += 1
 
-		with file('{}/DATA/DEN/{}_{}_{}_COUNT.txt'.format(directory, model.lower(), nslice, frame), 'w') as outfile:
-			np.savetxt(outfile, (count_array), fmt='%-12.6f')		
+		with file('{}/DEN/{}_{}_{}_COUNT.npy'.format(directory, model.lower(), nslice, frame), 'w') as outfile:
+			np.save(outfile, (count_array))		
 
 	return count_array
 
@@ -106,11 +113,12 @@ def density_profile(directory, model, csize, suffix, nframe, natom, nmol, nsite,
 
 	print "WRITING TO FILE..."
 
-	with file('{}/DATA/DEN/{}_{}_{}_DEN.txt'.format(directory, model.lower(), nslice, nframe), 'w') as outfile:
-		np.savetxt(outfile, (av_density_array), fmt='%-12.6f')
+	file_name = '{}_{}_{}'.format(model.lower(), nslice, nframe)
 
-	with file('{}/DATA/DEN/{}_{}_{}_PAR.txt'.format(directory, model.lower(), nslice, nframe), 'w') as outfile:
-		np.savetxt(outfile, param, fmt='%-12.6f')
+	with file('{}/DEN/{}_DEN.npy'.format(directory, file_name), 'w') as outfile:
+		np.save(outfile, (av_density_array))
+	with file('{}/DEN/{}_PAR.npy'.format(directory, file_name), 'w') as outfile:
+		np.save(outfile, param)
 
 	print "{} {} {} COMPLETE\n".format(directory, model.upper(), csize)
 

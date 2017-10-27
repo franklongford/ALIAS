@@ -31,245 +31,134 @@ from matplotlib.ticker import MaxNLocator
 import utilities as ut
 import mdtraj as md
 
+def ST_chapela(Zmax, pl, pv, z1, d, r1, r2, sigma, epsilon):
 
-def bubblesort(alist, key):
-	"Sorts arrays 'alist' and 'key' by order of elements of 'key'"
-	for passnum in range(len(alist)-1,0,-1):
-		for i in range(passnum):
-			if key[i]>key[i+1]:
-				temp = alist[i]
-				alist[i] = alist[i+1]
-				alist[i+1] = temp
-
-				temp = key[i]
-				key[i] = key[i+1]
-				key[i+1] = temp
+	a, b = spin.quad(lambda r: (-2. * (sigma/r)**13 + (sigma/r)**7) * r**3 * integrate_gamma_s_z(Zmax, pl, pv, z1, d, r), r1, r2)
+	return a * 6 * epsilon / sigma * np.pi
 
 
-def plot_graphs(ENERGY, ENERGY_ERR, TENSION, TENSION_ERR, VAR_TENSION, N_RANGE, A_RANGE, AN_RANGE, Z_RANGE, col, cut):
-	"Plots graphs of energy and tension data"
+def integrate_gamma_s_z(Zmax, pl, pv, z1, d, r):
 
-	""" FIGURE PARAMETERS """
-	fig_x = 12
-	fig_y = 8
-	msize = 50
-	plt.rc('text', usetex=True)
-	plt.rc('font', family='serif', size='30.0')
-	plt.rc('lines', linewidth='2.0', markersize=7)
-	plt.rc('axes', labelsize='18.0')
-	plt.rc('xtick', labelsize='18.0')
-	plt.rc('ytick', labelsize='18.0')
-
-	ZA_RANGE = [np.sqrt(Z_RANGE[x] / A_RANGE[x]) for x in range(len(A_RANGE))]
-	EZ_RANGE = [ENERGY[x]  / Z_RANGE[x] for x in range(len(ENERGY))]
-	AZ_RANGE = [AN_RANGE[x]  / Z_RANGE[x] for x in range(len(A_RANGE))]
-
-	plt.figure(0, figsize=(fig_x,fig_y))
-	plt.scatter(Z_RANGE[cut:], A_RANGE[cut:], color=col, s=msize)
-	#plt.scatter(Z_RANGE, intA_RANGE, color=col, s=msize, marker='x')
-
-	plt.figure(1, figsize=(fig_x,fig_y))
-	plt.scatter(ZA_RANGE[cut:], TENSION[cut:], color=col, marker='x', s=msize)
-	plt.errorbar(ZA_RANGE[cut:], TENSION[cut:], color=col, linestyle='none', yerr=np.array(TENSION_ERR[cut:]))
-
-	plt.figure(2, figsize=(fig_x,fig_y))
-	plt.scatter(np.array(ZA_RANGE[cut:]), np.sqrt(np.array(VAR_TENSION[cut:])), color=col, s=msize)
-	#plt.scatter(ZintA_RANGE, TENSION_RMS, color=col, s=msize, marker='x')
-
-	plt.figure(5, figsize=(fig_x,fig_y))
-	plt.scatter(np.array(AN_RANGE)[cut:], ENERGY[cut:], color=col, s=msize)
-	plt.errorbar(np.array(AN_RANGE)[cut:], ENERGY[cut:], color=col, linestyle='none', yerr=np.array(ENERGY_ERR[cut:])*5)
-
-	plt.figure(6, figsize=(fig_x,fig_y))
-	plt.scatter(np.array(AN_RANGE)[cut:], TENSION[cut:], color=col, s=msize)
-	plt.errorbar(np.array(AN_RANGE)[cut:], TENSION[cut:], color=col, linestyle='none', yerr=np.array(TENSION_ERR[cut:]))
+	a, b = spin.quad(lambda z: integrate_gamma_s(z, pl, pv, z1, d, r), -Zmax/2, Zmax/2)
+	return a
 
 
-def get_A_excess(root, model, csize, nm, nxy, DIM, nimage, ow_area):
+def integrate_gamma_s(Z, pl, pv, z1, d, r):
 
-	if os.path.exists('{}/DATA/ENERGY_TENSION/{}_{}_{}_{}_{}_AREA.txt'.format(root, model.lower(), csize, nm, nxy, nimage)) and ow_area.upper() != 'Y':
-		with file('{}/DATA/ENERGY_TENSION/{}_{}_{}_{}_{}_AREA.txt'.format(root, model.lower(), csize, nm, nxy, nimage), 'r') as infile:
-			tot_a_excess = np.loadtxt(infile)
-	else:
-		tot_a_excess = []
-
-		for image in xrange(nimage):
-			try: 
-				_, _, a_excess = ut.curvature_aexcess(root, model, csize, nm, nxy, image)
-				tot_a_excess.append(a_excess * DIM[0] * DIM[1])
-			except IOError: raise IOError
-
-		with file('{}/DATA/ENERGY_TENSION/{}_{}_{}_{}_{}_AREA.txt'.format(root, model.lower(), csize, nm, nxy, nimage), 'w') as outfile:
-			np.savetxt(outfile, tot_a_excess)
-
-	return np.mean(tot_a_excess)
+	a, b = spin.quad(lambda s: (1 - 3 * s**2) * ut.den_func(Z+r*s, pl, pv, 0, z1, d) * ut.den_func(Z, pl, pv, 0, z1, d), -1, 1)
+	return a 
 
 
-def get_thermo(directory, model, csize, suffix, nslice, ntraj, DIM, nmol, rc, sigma, epsilon, l_constant, ow_ntb):
+def E_chapela(DIM, pl, pv, z1, d, r1, r2, sigma, epsilon):
 
-	energy = 0
-	potential = 0
-	kinetic = 0
-	tension = 0
+	a, b = spin.quad(lambda r: ((sigma/r)**12 - (sigma/r)**6) * r**2 * integrate_E_z_s(DIM[2], pl, pv, z1, d, r), r1, r2)
+	return - a * 2 * epsilon * np.pi * DIM[0] * DIM[1]
+
+
+def integrate_E_z_s(Zmax, pl, pv, z1, d, r):
+
+	a, b = spin.quad(lambda z: integrate_E_s(z, pl, pv, z1, d, r), -Zmax/2, Zmax/2)
+	return a
+
+
+def integrate_E_s(Z, pl, pv, z1, d, r):
+
+	a, b = spin.quad(lambda s: ut.den_func(Z+r*s, pl, pv, 0, z1, d) * ut.den_func(Z, pl, pv, 0, z1, d), -1, 1)
+	return a 
+
+
+def ST_janecek(rhoz, rc, sigma, epsilon, dz):
+	
+	nslice = len(rhoz)
+	zz_sum = 0.0
+	xx_sum = 0.0
+	gamma_sum = 0.0
+	force = np.zeros(nslice)
+	den_2 = np.zeros(nslice)
+	total = np.zeros(nslice)
+
+	for i in xrange(nslice):
+		z = i * dz
+		for j in xrange(nslice):
+			ddz = z - (j * dz)
+			xx = pi_xx(abs(ddz), rc, sigma) 
+			zz = pi_zz(abs(ddz), rc, sigma) * 2
+			gamma_sum += rhoz[i] * rhoz[j] * (zz - xx) * dz**2 * np.pi * epsilon
+
+	return gamma_sum
+
+
+def pi_xx(ddz, rc, sigma):
+		
+	if abs(ddz) <= rc: return ((6*rc**2-5*ddz**2)*(sigma/rc)**12 /5. - (3*rc**2 - 2*ddz**2) * (sigma/rc)**6 /2.)
+	else: return  (ddz**2./5*(sigma/ddz)**12 - ddz**2/2.*(sigma/ddz)**6)
+
+
+def pi_zz(ddz, rc, sigma):
+		
+	if abs(ddz) <= rc: return ddz**2 * ((sigma/rc)**12 - (sigma/rc)**6)
+	else: return ddz**2 * ((sigma/ddz)**12 - (sigma/ddz)**6)
+
+
+def E_janecek(rhoz, rc, sigma, epsilon, dz, A):
+	
+	nslices = len(rhoz)
+	esum = 0.0
+	
+	for i in xrange(nslices):
+		z = i * dz
+		for j in xrange(nslices):
+			ddz = z - (j * dz)
+			esum += lambda_en(ddz, rc, sigma) * rhoz[j] * rhoz[i] * dz **2 * np.pi * epsilon * A / 2
+		
+	return esum
+
+def lambda_en(ddz, rc, sigma):
+		
+	if abs(ddz) <= rc: return rc**2 * (2./5*(sigma/rc)**12 - (sigma/rc)**6)
+	else: return ddz**2 * (2./5*(sigma/ddz)**12 - (sigma/ddz)**6)
+
+
+def get_thermo(directory, model, csize, suffix, nslice, nframe, DIM, nmol, rc, sigma, epsilon, ow_ntb, corr_meth):
+	"Get internal energies in units of mJ mol-1 and surface tension in mJ m-2"
 
 	lslice = DIM[2] / nslice
 
-	if not os.path.exists("{}/DATA/ENERGY_TENSION".format(directory)): os.mkdir("{}/DATA/ENERGY_TENSION".format(directory))
-
 	FILE = '{}/{}_{}_{}'.format(directory, model.lower(), csize, suffix)
-	E, POT, KIN, T_, T_err, ST, TOTAL_ENERGY, TOTAL_POTENTIAL, TOTAL_KINETIC, TOTAL_TENSION, TOTAL_TEMP = ut.read_energy_temp_tension(FILE)
+	energy, potential, kinetic, temp, temp_err, tension, TOT_ENERGY, TOT_POTENTIAL, TOT_KINETIC, TOT_TENSION, TOT_TEMP = ut.read_energy_temp_tension(FILE)
 
-	if rc < 22:
+	with file('{}/DATA/DEN/{}_{}_{}_DEN.npy'.format(directory, model.lower(), nslice, nframe), 'r') as infile:
+		av_density = np.load(infile)
 
-		with file('{}/DATA/DEN/{}_{}_{}_DEN.txt'.format(directory, model.lower(), nslice, ntraj), 'r') as infile:
-			av_density = np.loadtxt(infile)
+	if corr_meth.upper() == 'C':
+		popt, pcov = curve_fit(ut.den_func, np.linspace(0, DIM[2], nslice), av_density[-1], [1., 0., DIM[2]/2., DIM[2]/4., 2.])
+		corr_e = E_chapela(DIM, popt[0], popt[1], popt[3], popt[4], float(rc), 200, sigma, epsilon) #total energy correction in kJ mol-1
+		corr_st = ST_chapela(DIM[2], popt[0], popt[1], popt[3], popt[4], float(rc), 200, sigma, epsilon) * 1E26 / con.N_A #surface tension correction in mJ m-2
+	elif corr_meth.upper() == 'J':
+		corr_e = E_janecek(av_density[-1], float(rc), sigma, epsilon, lslice, DIM[0]*DIM[1]) #total energy correction in kJ mol-1
+		corr_st = ST_janecek(av_density[-1], float(rc), sigma, epsilon, lslice) * 1E26 / con.N_A #surface tension correction in mJ m-2
 
-		corr_e = ut.E_janecek(av_density[-1], rc, sigma, epsilon, lslice, DIM[0]*DIM[1]) 
-		corr_st = ut.ST_janecek(av_density[-1], rc, sigma, epsilon, lslice) * 1E26 / con.N_A
+	print energy, tension
+	print corr_e, corr_st
 
-		energy += corr_e / nmol
-		potential += corr_e / nmol
-		tension += corr_st  
+	energy = (energy * 4.184 + corr_e) / nmol
+	potential = (potential * 4.184 + corr_e) / nmol
+	kinetic *= 4.184 / nmol
+	tension += corr_st  
 
-		TOTAL_ENERGY = np.array(TOTAL_ENERGY) + corr_e
-		TOTAL_POTENTIAL = np.array(TOTAL_POTENTIAL) + corr_e
-		TOTAL_TENSION = np.array(TOTAL_TENSION) + corr_st
+	TOT_ENERGY = (np.array(TOT_ENERGY) * 4.184 + corr_e) / nmol
+	TOT_POTENTIAL = (np.array(TOT_POTENTIAL) * 4.184 + corr_e) / nmol
+	TOT_KINETIC = np.array(TOT_KINETIC) * 4.184 / nmol
+	TOT_TENSION = np.array(TOT_TENSION) + corr_st
 
-	energy += E * 4.184 / nmol
-	potential += POT * 4.184 / nmol
-	kinetic += KIN * 4.184 / nmol
-	temp = T_ 
-	temp_err = T_err 
-	tension += ST 
+	ntb = int(len(TOT_TENSION) / 100)
 
-	ntb = int(len(TOTAL_TENSION) / 100)
-	energy_err, potential_err, kinetic_err, tension_err = ut.get_block_error_thermo(TOTAL_ENERGY, TOTAL_POTENTIAL, TOTAL_POTENTIAL, TOTAL_KINETIC, directory, model, csize, ntraj, ntb, ow_ntb)
-	energy_err = energy_err / nmol
-	potential_err = potential_err / nmol
-	kinetic_err = kinetic_err / nmol
+	energy_err, potential_err, kinetic_err, tension_err = get_block_error_thermo(TOT_ENERGY, TOT_POTENTIAL, TOT_KINETIC, TOT_TENSION, directory, model, csize, nframe, ntb, ow_ntb)
 
-	with file('{}/DATA/ENERGY_TENSION/{}_{}_EST.txt'.format(directory, model.lower(), csize), 'w') as outfile:
-		np.savetxt(outfile, (energy, energy_err, potential, potential_err, kinetic, kinetic_err, temp, temp_err, tension, tension_err))
-	with file('{}/DATA/ENERGY_TENSION/{}_{}_TOTEST.txt'.format(directory, model.lower(), csize), 'w') as outfile:
-		np.savetxt(outfile, (TOTAL_ENERGY, TOTAL_POTENTIAL, TOTAL_KINETIC, TOTAL_TENSION, TOTAL_TEMP))
-
-
-def energy_tension(root, model, suffix, TYPE, folder, sfolder, nfolder, T, rc, LJ, csize, e_constant, l_constant, st_constant, com, ow_area, ow_ntb, ow_est):
-	"Get time averaged energy, tension and simulation dimensions"
-	
-	nbin = 300
-
-	if model.upper() == 'ARGON':
-		gam_start = -200 * st_constant
-		gam_end = 200 * st_constant
-	else:
-		gam_start = -500 * st_constant
-		gam_end = 500 * st_constant
-
-	ENERGY = np.zeros(nfolder)
-	ENERGY_ERR = np.zeros(nfolder)
-	TEMP = np.zeros(nfolder)
-	TEMP_ERR = np.zeros(nfolder)
-	TENSION = np.zeros(nfolder)
-	TENSION_ERR = np.zeros(nfolder)
-	VAR_TENSION = np.zeros(nfolder)
-	N_RANGE = np.zeros(nfolder)
-	A_RANGE = np.zeros(nfolder)
-	AN_RANGE = np.zeros(nfolder)
-	Z_RANGE = np.zeros(nfolder)
-	DEN = np.zeros(nfolder)
-	OMEGA = np.zeros(nfolder)
-
-	sigma = np.max(LJ[1])
-	s_csize = csize
-
-	MARKER = ['o', 'v', 'x', '^', 's', 'p', '+', '*']
-	COLOUR = ['b', 'g', 'r', 'c', 'm', 'saddlebrown', 'navy'] 
-
-	for n in range(sfolder, nfolder):
-		if TYPE == 'SLAB': directory = root
-		else: directory = '{}/{}_{}'.format(root, TYPE.upper(), n)
-
-		print '{}/{}/DATA/parameters.txt'.format(directory, folder.upper())
-		if os.path.exists('{}/{}/DATA/parameters.txt'.format(directory, folder.upper())):
-			print 'loaded params'
-			DIM = np.zeros(3)
-			directory = '{}/{}'.format(directory, folder.upper())
-			with file('{}/DATA/parameters.txt'.format(directory), 'r') as infile:
-				natom, nmol, ntraj, DIM[0], DIM[1], DIM[2] = np.loadtxt(infile)
-			natom = int(natom)
-			nmol = int(nmol)
-			ntraj = int(ntraj)
-		else:
-			traj = ut.load_nc(directory, folder, model, csize, suffix)				
-			directory = '{}/{}'.format(directory, folder.upper())
-
-			natom = int(traj.n_atoms)
-			nmol = int(traj.n_residues)
-			ntraj = int(traj.n_frames)
-			DIM = np.array(traj.unitcell_lengths[0]) * 10
-
-			with file('{}/DATA/parameters.txt'.format(directory), 'w') as outfile:
-				np.savetxt(outfile, [natom, nmol, ntraj, DIM[0], DIM[1], DIM[2]])
-
-		lslice = 0.05 * sigma
-		nslice = int(DIM[2] / lslice)
-		nm = int((DIM[0] + DIM[1]) / (2 * sigma) )
-		nxy = int((DIM[0] + DIM[1])/ sigma)
-
-		with file('{}/DATA/DEN/{}_{}_{}_{}_PAR.txt'.format(directory, model.lower(), csize, nslice, ntraj), 'r') as infile:
-			param = np.loadtxt(infile)
-
-		print param
-
-		DIM = DIM * l_constant
-		A_RANGE[n] = (DIM[0] * DIM[1])
-		AN_RANGE[n] = 2 * A_RANGE[n] / nmol
-		Z_RANGE[n] = float(param[3]) * 2 * l_constant
-		N_RANGE[n] = nmol
-		DEN[n] = param[0]
-		OMEGA[n] =  param[-1] * 2.1972 * l_constant
-		
-		"""
-		try: A_excess = get_A_excess(directory, model, csize, nm, nxy, DIM , ntraj, ow_area)
-		except IOError: pass
-		else:
-			intA_RANGE[n] = A_excess * l_constant**2
-			intAN_RANGE[n] = intA_RANGE[n] / nmol 
-                        ZintA_RANGE[n] = np.sqrt(Z_RANGE[n] / intA_RANGE[n])
-		"""		
-
-		if not os.path.exists("{}/DATA/ENERGY_TENSION".format(directory)): os.mkdir("{}/DATA/ENERGY_TENSION".format(directory))
-
-		if os.path.exists('{}/DATA/ENERGY_TENSION/{}_{}_EST.txt'.format(directory, model.lower(), csize)) and not ow_est:
-			with file('{}/DATA/ENERGY_TENSION/{}_{}_EST.txt'.format(directory, model.lower(), csize), 'r') as infile:
-				ENERGY[n], ENERGY_ERR[n], TEMP[n], TEMP_ERR[n], TENSION[n], TENSION_ERR[n] = np.loadtxt(infile)
-			with file('{}/DATA/ENERGY_TENSION/{}_{}_TOTEST.txt'.format(directory, model.lower(), csize), 'r') as infile:
-				TOTAL_ENERGY, TOTAL_TENSION, TOTAL_TEMP = np.loadtxt(infile)
-				print "Data Loaded"
-
-		else:	
-			get_thermo(directory, model, csize, suffix, nslice, ntraj, DIM, nmol, rc, sigma, LJ[0], A_RANGE[n], l_constant, lslice, ow_ntb)
-			with file('{}/DATA/ENERGY_TENSION/{}_{}_EST.txt'.format(directory, model.lower(), csize), 'r') as infile:
-				ENERGY[n], ENERGY_ERR[n], TEMP[n], TEMP_ERR[n], TENSION[n], TENSION_ERR[n] = np.loadtxt(infile)
-			with file('{}/DATA/ENERGY_TENSION/{}_{}_TOTEST.txt'.format(directory, model.lower(), csize), 'r') as infile:
-				TOTAL_ENERGY, TOTAL_TENSION, TOTAL_TEMP = np.loadtxt(infile)
-
-		print TENSION[n], np.mean(TOTAL_TENSION)
-
-		VAR_TENSION[n] = np.var(TOTAL_TENSION)
-
-
-		#make_histogram(directory, len(TOTAL_TENSION), TOTAL_TENSION, nbin, gam_start, gam_end, MARKER[n%len(MARKER)], COLOUR[n%len(COLOUR)])
-
-	#plt.show()
-	ENERGY = np.array(ENERGY) * e_constant
-	ENERGY_ERR = np.array(ENERGY_ERR) * e_constant
-	TENSION = np.array(TENSION) * st_constant
-	TENSION_ERR = np.array(TENSION_ERR) * st_constant
-	VAR_TENSION = np.array(VAR_TENSION) * st_constant**2
-
-	return ENERGY, ENERGY_ERR, TEMP, TEMP_ERR, TENSION, TENSION_ERR, VAR_TENSION, N_RANGE, A_RANGE, AN_RANGE, Z_RANGE, DEN
+	with file('{}/DATA/THERMO/{}_{}_E_ST.npy'.format(directory, model.lower(), nframe), 'w') as outfile:
+		np.save(outfile, (energy, energy_err, potential, potential_err, kinetic, kinetic_err, temp, temp_err, tension, tension_err))
+	with file('{}/DATA/THERMO/{}_{}_TOT_E_ST.npy'.format(directory, model.lower(), nframe), 'w') as outfile:
+		np.save(outfile, (TOT_ENERGY, TOT_POTENTIAL, TOT_KINETIC, TOT_TENSION, TOT_TEMP))
 
 
 def make_histogram(root, nsample, gamma, nbin, gam_start, gam_end, mark, col):
@@ -301,8 +190,8 @@ def gaussian_dist(x, mean, var): return np.exp(-(x-mean)**2 / (2 * var)) / np.sq
 
 def get_U0(model, T, cutoff, csize, sigma, epsilon):
 
-	if model.upper() == 'ARGON': directory = '/data/fl7g13/AMBER/{}/T_{}_K/CUT_{}_A/W_TEST/W_12'.format(model.upper(), T, cutoff)
-	else: directory = '/data/fl7g13/AMBER/WATER/{}/T_{}_K/CUT_{}_A/W_TEST/W_12'.format(model.upper(), T, cutoff)
+	if model.upper() == 'ARGON': directory = '/data/fl7g13/AMBER/{}/T_{}_K/CUT_{}_A/T_TEST'.format(model.upper(), T, cutoff)
+	else: directory = '/data/fl7g13/AMBER/WATER/{}/T_{}_K/CUT_{}_A/T_TEST'.format(model.upper(), T, cutoff)
 
 	traj = ut.load_nc(directory, 'CUBE', model, csize, 'cube')
 	nmol = traj.n_residues
@@ -311,49 +200,76 @@ def get_U0(model, T, cutoff, csize, sigma, epsilon):
 	directory = '{}/CUBE'.format(directory)
 
 	if not os.path.exists("{}/DATA".format(directory)): os.mkdir("{}/DATA".format(directory))
-	if not os.path.exists("{}/DATA/ENERGY_TENSION".format(directory)): os.mkdir("{}/DATA/ENERGY_TENSION".format(directory))
+	if not os.path.exists("{}/DATA/THERMO".format(directory)): os.mkdir("{}/DATA/THERMO".format(directory))
 	
 	FILE = '{}/{}_{}_cube'.format(directory, model.lower(), csize)
-	E, _, T_, Terr, ST, _, TOTAL_ENERGY, TOTAL_TENSION, _ = ut.read_energy_temp_tension(FILE)
+	energy, _, _, _, _, _, TOT_ENERGY, TOT_POTENTIAL, TOT_KINETIC, TOT_TENSION, _ = ut.read_energy_temp_tension(FILE)
 	corr_e = homo_E_correction(float(cutoff), sigma, epsilon, nmol, DIM)
 
-	ntb = int(len(TOTAL_ENERGY) / 100)
-	Eerr, _ = ut.get_block_error(directory, model, csize, ntraj, TOTAL_ENERGY, TOTAL_TENSION, ntb, 'N')
+	#ntb = int(len(TOT_ENERGY) / 100)
+	#energy_err, potential_err, kinetic_err, tension_err = get_block_error_thermo(TOT_ENERGY, TOT_POTENTIAL, TOT_KINETIC, TOT_TENSION, directory, model, csize, ntraj, ntb, False)
 
-	return (np.mean(TOTAL_ENERGY) * 4.184 + corr_e) / nmol, Eerr * 4.184 / nmol
+	return (energy * 4.184 + corr_e) / nmol
 
 
 def homo_E_correction(rc, sigma, epsilon, N, DIM): return 8 * np.pi * N**2 * epsilon * sigma**3 / (DIM[0] * DIM[1] * DIM[2]) * (1./9 * (sigma/rc)**9 - 1./3 * (sigma/rc)**3)
 
+
 def NI_func(Lz, A, pl, rc): return 2 * np.pi * A * pl**2 * rc**3 * (1/3. * Lz - 1/8. * rc)
+
 
 def std_gamma(Lz, A, pl, rc, omega, std_X): return std_X * np.sqrt(NI_func(Lz, A, pl, rc, omega) / A**2 )
 
+
 def std_X(Lz, A, pl, rc, omega, std_gamma): return std_gamma / np.sqrt(NI_func(Lz, A, pl, rc, omega) / A**2 )
 
-def main(root, model, nsite, AT, Q, M, LJ, T, cutoff, csize, TYPE, folder, sfolder, nfolder, suffix):
 
-	rc = float(cutoff)
+def get_block_error_thermo(E, POT, KIN, ST, directory, model, csize, ntraj, ntb, ow_ntb):
 
-	"Conversion of length and surface tension units"
-	if model.upper() == 'ARGON':
-		LJ[0] = LJ[0] * 4.184
-		e_constant = 1 / LJ[0]
-                st_constant = ((LJ[1]*1E-10)**2) * con.N_A * 1E-6 / LJ[0]
-                l_constant = 1 / LJ[1]
-		T = 85
-		com = 0
-	else: 
-		LJ[0] = LJ[0] * 4.184
-		e_constant = 1.
-                st_constant = 1.
-                l_constant = 1E-10
-		T = 298
-		if model.upper() == 'METHANOL': com = 'COM'
-		else: com = 0
-	ow_area = bool(raw_input("OVERWRITE INTRINSIC SURFACE AREA? (Y/N): ").upper() == 'Y')
-	ow_ntb = bool(raw_input("OVERWRITE SURFACE TENSION ERROR? (Y/N): ").upper() == 'Y')
-	ow_est = bool(raw_input("OVERWRITE AVERAGE ENERGY AND TENSION? (Y/N): ").upper() == 'Y')
-	(ENERGY, ENERGY_ERR, TEMP, TEMP_ERR, TENSION, TENSION_ERR, VAR_TENSION, N_RANGE, A_RANGE, AN_RANGE, Z_RANGE, DEN) = energy_tension(
-		root, model, suffix, TYPE, folder, sfolder, nfolder, T, rc, LJ, csize, e_constant, l_constant, st_constant, com, ow_area, ow_ntb, ow_est)
+	if os.path.exists('{}/DATA/THERMO{}_{}_{}_PT.txt'.format(directory, model.lower(), ntraj, ntb)) and not ow_ntb:
+		try:
+			with file('{}/DATA/THERMO/{}_{}_{}_PT.txt'.format(directory, model.lower(), ntraj, ntb), 'r') as infile:
+				pt_e, pt_pot, pt_kin, pt_st = np.loadtxt(infile)
+		except: ow_ntb = True
+	else: ow_ntb = True
+
+	if ow_ntb: 
+		old_pt_st, old_ntb = ut.load_pt('{}/DATA/THERMO'.format(directory), ntraj)
+
+		if old_ntb == 0 or ow_ntb: 
+			pt_e, pt_pot, pt_kin, pt_st = ut.block_error((E, POT, KIN, ST), ntb)
+		elif old_ntb > ntb:
+			with file('{}/DATA/THERMO/{}_{}_{}_PT.txt'.format(directory, model.lower(), ntraj, old_ntb), 'r') as infile:
+                        	pt_e, pt_pot, pt_kin, pt_st = np.loadtxt(infile)
+			pt_e = pt_e[:ntb]
+			pt_pot = pt_pot[:ntb]
+			pt_kin = pt_kin[:ntb]
+			pt_st = pt_st[:ntb]
+		elif old_ntb < ntb:
+			with file('{}/DATA/THERMO/{}_{}_{}_PT.txt'.format(directory, model.lower(), ntraj, old_ntb), 'r') as infile:
+                        	pt_e, pt_pot, pt_kin, pt_st = np.loadtxt(infile)
+
+			old_pt_e, old_pt_pot, old_pt_kin, old_pt_st = ut.block_error((E, POT, KIN, ST), ntb)
+
+			pt_e = np.concatenate(pt_e, old_pt_e)
+			pt_pot = np.concatenate(pt_e_pot, old_pt_pot)
+			pt_kin = np.concatenate(pt_e_kin, old_pt_kin)
+			pt_st = np.concatenate(pt_st, old_pt_st)
+		
+		with file('{}/DATA/THERMO/{}_{}_{}_PT.txt'.format(directory, model.lower(), ntraj, ntb), 'w') as outfile:
+        		np.savetxt(outfile, (pt_e, pt_pot, pt_kin, pt_st))
+
+        M = len(E)
+
+	corr_time_e = ut.get_corr_time(pt_e, ntb)
+	corr_time_pot = ut.get_corr_time(pt_pot, ntb)
+	corr_time_kin = ut.get_corr_time(pt_kin, ntb)
+	corr_time_st = ut.get_corr_time(pt_st, ntb)
+
+        m_err_e = (np.std(E) * np.sqrt(corr_time_e / M))
+	m_err_pot = (np.std(POT) * np.sqrt(corr_time_pot / M))
+	m_err_kin = (np.std(KIN) * np.sqrt(corr_time_kin / M))
+	m_err_st = (np.std(ST) * np.sqrt(corr_time_st / M))
+
+        return m_err_e, m_err_pot, m_err_kin, m_err_st	
 	
