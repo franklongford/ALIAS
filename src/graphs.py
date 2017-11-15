@@ -47,6 +47,9 @@ plt.rc('axes', labelsize='25.0')
 plt.rc('xtick', labelsize='25.0')
 plt.rc('ytick', labelsize='25.0')
 
+lnsp = 25.0
+
+
 MARKER = ['o', 'v', 'x', '^', 's', 'p', '+', '*']
 COLOUR = ['b', 'g', 'r', 'c', 'm', 'saddlebrown', 'navy'] 
 
@@ -57,7 +60,7 @@ def cc(arg):
 
 def print_graphs_density(directory, model, nsite, AT, M, nslice, cutoff, csize, folder, suffix, nframe, DIM):
 
-	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}".format(model.upper(), csize, cutoff)
+	groot = "{}/Figures/DEN".format(directory)
 	if not os.path.exists(groot): os.mkdir(groot)
 
 	atom_types = list(set(AT))
@@ -111,16 +114,16 @@ def print_graphs_density(directory, model, nsite, AT, M, nslice, cutoff, csize, 
 
 	plt.close('all')
 
-def print_graphs_intrinsic_density(directory, model, nsite, AT, M, nslice, nm, QM, n0, phi, cutoff, csize, folder, suffix, nframe, DIM, pos_1, pos_2):
+def print_graphs_intrinsic_density(directory, model, nsite, AT, M, nslice, qm, QM, n0, phi, cutoff, csize, folder, suffix, nframe, DIM, pos_1, pos_2):
 
-	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}/DENSITY".format(model.upper(), csize, cutoff)
+	groot = "{}/Figures/INTDEN".format(directory)
 	if not os.path.exists(groot): os.mkdir(groot)
 
 	Z1 = np.linspace(0, DIM[2], nslice)
         Z2 = np.linspace(-DIM[2]/2, DIM[2]/2, nslice)
 	start = int((DIM[2]/2-10) / DIM[2] * nslice)
         stop = int((DIM[2]/2+15) / DIM[2] * nslice)
-	skip = (nm-1) / 4
+	skip = (qm-1) / 4
 
 	for r, recon in enumerate([False, True]):
 
@@ -139,7 +142,7 @@ def print_graphs_intrinsic_density(directory, model, nsite, AT, M, nslice, nm, Q
 
 		Z4 = np.linspace(-DIM[2]/2+param[3], DIM[2]/2+param[3], nslice)
 
-		sm_mol_den = [ut.den_func(z, param[0]/np.sum(M) * con.N_A * 1E-24, param[1], param[2], param[3], param[4]) for z in Z1]
+		sm_mol_den = [ut.den_func(z, param[0]/np.sum(M) * con.N_A * 1E-24, param[1]/np.sum(M) * con.N_A * 1E-24, param[2], param[3], param[4]) for z in Z1]
 		start = int((DIM[2]/2-param[3]-10) / DIM[2] * nslice)
                 stop = int((DIM[2]/2-param[3]+15) / DIM[2] * nslice)
 
@@ -153,23 +156,23 @@ def print_graphs_intrinsic_density(directory, model, nsite, AT, M, nslice, nm, Q
                 ax = fig.gca(projection='3d')
                 ax.plot(np.ones(len(Zplot)) * 0, Zplot, EFFDENplot, c='g', label=r'$\hat{\rho}$ (\AA$^{-3}$)')
 
-		for qm in QM:
+		if not recon: 
+			file_name_den = '{}_{}_{}_{}_{}_{}'.format(model.lower(), nslice, qm, n0, int(1/phi + 0.5), nframe)
+			figure_name_den = '{}_{}_{}_{}'.format(model.lower(), nslice, qm, nframe)
+		else: 
+			file_name_den = '{}_{}_{}_{}_{}_{}_R'.format(model.lower(), nslice, qm, n0, int(1/phi + 0.5), nframe)
+			figure_name_den = '{}_{}_{}_{}_R'.format(model.lower(), nslice, qm, nframe)
 
-			if not recon: 
-				file_name_den = '{}_{}_{}_{}_{}_{}_{}'.format(model.lower(), nslice, nm, qm, n0, int(1/phi + 0.5), nframe)
-				figure_name_den = '{}_{}_{}_{}_{}'.format(model.lower(), nslice, nm, qm, nframe)
-			else: 
-				file_name_den = '{}_{}_{}_{}_{}_{}_{}_R'.format(model.lower(), nslice, nm, qm, n0, int(1/phi + 0.5), nframe)
-				figure_name_den = '{}_{}_{}_{}_{}_R'.format(model.lower(), nslice, nm, qm, nframe)
+		with file('{}/INTDEN/{}_MOL_DEN.npy'.format(directory, file_name_den), 'r') as infile:
+			mol_int_den = np.load(infile)
+		with file('{}/INTDEN/{}_EFF_DEN.npy'.format(directory, file_name_den), 'r') as infile:
+			mol_eff_den = np.load(infile)
+		with file('{}/INTDEN/{}_MOL_DEN_CORR.npy'.format(directory, file_name_den), 'r') as infile:
+                        mol_int_den_corr = np.load(infile)
 
-			with file('{}/INTDEN/{}_MOL_DEN.npy'.format(directory, file_name_den), 'r') as infile:
-				mol_int_den = np.load(infile)
-			with file('{}/INTDEN/{}_EFF_DEN.npy'.format(directory, file_name_den), 'r') as infile:
-				mol_eff_den = np.load(infile)
-			with file('{}/INTDEN/{}_MOL_DEN_CORR.npy'.format(directory, file_name_den), 'r') as infile:
-                                mol_int_den_corr = np.load(infile)
+		for j, qm in enumerate(QM):
 
-			mass_int_den = mol_int_den * np.sum(M) / con.N_A * 1E24
+			mass_int_den = mol_int_den[j] * np.sum(M) / con.N_A * 1E24
 
 			m_size = 40
 
@@ -178,7 +181,7 @@ def print_graphs_intrinsic_density(directory, model, nsite, AT, M, nslice, nm, Q
 				stop = int((DIM[2]/2+15) / DIM[2] * nslice)
 
 				Zplot = list(Z2[start:stop])
-				INTDENplot = list(mol_int_den[start:stop])
+				INTDENplot = list(mol_int_den[j][start:stop])
 
 				fig = plt.figure(4, figsize=(fig_x+5,fig_y+5))
 				ax = fig.gca(projection='3d')
@@ -188,7 +191,7 @@ def print_graphs_intrinsic_density(directory, model, nsite, AT, M, nslice, nm, Q
 				stop = int((DIM[2]/2+pos+15) / DIM[2] * nslice)
 
 				Zplot = list(Z3[start:stop])
-				EFFDENplot = list(mol_eff_den[start:stop])
+				EFFDENplot = list(mol_eff_den[j][start:stop])
 
 				fig = plt.figure(5, figsize=(fig_x+5,fig_y+5))
 				ax = fig.gca(projection='3d')
@@ -267,8 +270,8 @@ def print_graphs_intrinsic_density(directory, model, nsite, AT, M, nslice, nm, Q
 		
 			"""
 
-		if not recon: figure_name_den = '{}_{}_{}_{}'.format(model.lower(), nslice, nm, nframe)
-		else: figure_name_den = '{}_{}_{}_{}_R'.format(model.lower(), nslice, nm, nframe)
+		if not recon: figure_name_den = '{}_{}_{}_{}'.format(model.lower(), nslice, qm, nframe)
+		else: figure_name_den = '{}_{}_{}_{}_R'.format(model.lower(), nslice, qm, nframe)
 
 		fig = plt.figure(4, figsize=(fig_x+5,fig_y+5))   
 		ax = fig.gca(projection='3d')
@@ -276,12 +279,18 @@ def print_graphs_intrinsic_density(directory, model, nsite, AT, M, nslice, nm, Q
 		#poly.set_alpha(0.25)
 		#ax.add_collection3d(poly, zs=qm_z, zdir='x')
 
-		ax.set_ylabel(r'$z$ (\AA)')
+		ax.set_ylabel(r'$z$ (\AA)', labelpad=lnsp)
 		ax.set_ylim3d(-10, 15)
-		ax.set_zlabel(r'$\rho(z)$ (\AA$^{-3}$)')
+		ax.set_zlabel(r'$\rho(z)$ (\AA$^{-3}$)', labelpad=lnsp)
 		ax.set_zlim3d(0, n0/(DIM[0]*DIM[1]))
-		ax.set_xlabel(r'$q_m$')
-		ax.set_xlim3d(0, nm)
+		ax.set_xlabel(r'$q_m$', labelpad=lnsp)
+		ax.set_xlim3d(0, qm)
+
+		ax.xaxis._axinfo['label']['space_factor'] = lnsp
+		ax.yaxis._axinfo['label']['space_factor'] = lnsp
+		ax.zaxis._axinfo['label']['space_factor'] = lnsp
+
+		fig.tight_layout()
 
 		plt.savefig('{}/{}_int_mol_density.png'.format(groot, figure_name_den))
 		plt.savefig('{}/{}_int_mol_density.pdf'.format(groot, figure_name_den))
@@ -289,22 +298,26 @@ def print_graphs_intrinsic_density(directory, model, nsite, AT, M, nslice, nm, Q
 		fig = plt.figure(5, figsize=(fig_x+5,fig_y+5))
                 ax = fig.gca(projection='3d')
 
-                ax.set_ylabel(r'$z$ (\AA)')
+                ax.set_ylabel(r'$z$ (\AA)', labelpad=lnsp)
                 ax.set_ylim3d(-10, 15)
-                ax.set_zlabel(r'$\rho(z)$ (\AA$^{-3}$)')
+                ax.set_zlabel(r'$\rho(z)$ (\AA$^{-3}$)', labelpad=lnsp)
                 ax.set_zlim3d(0, np.max(mol_eff_den) * 2)
-                ax.set_xlabel(r'$q_m$')
-                ax.set_xlim3d(0, nm)
+                ax.set_xlabel(r'$q_m$', labelpad=lnsp)
+                ax.set_xlim3d(0, qm)
+		ax.xaxis._axinfo['label']['space_factor'] = lnsp
+		ax.yaxis._axinfo['label']['space_factor'] = lnsp
+		ax.zaxis._axinfo['label']['space_factor'] = lnsp
+
+		fig.tight_layout()
 
                 plt.savefig('{}/{}_eff_mol_density.png'.format(groot, figure_name_den))
                 plt.savefig('{}/{}_eff_mol_density.pdf'.format(groot, figure_name_den))
-                plt.show()
                 plt.close('all')
 
 
 def print_graphs_orientational(directory, model, nsite, AT, nslice, a_type, cutoff, csize, folder, suffix, nframe, DIM):
 
-	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}".format(model.upper(), csize, cutoff)
+	groot = "{}/Figures/EULER".format(directory)
 	if not os.path.exists(groot): os.mkdir(groot)
 
 	atom_types = list(set(AT))
@@ -349,9 +362,9 @@ def print_graphs_orientational(directory, model, nsite, AT, nslice, a_type, cuto
 	plt.close('all')
 
 
-def print_graphs_intrinsic_orientational(directory, model, nsite, AT, nslice, nm, QM, n0, phi, a_type, cutoff, csize, folder, suffix, nframe, DIM, pos_1, pos_2):
+def print_graphs_intrinsic_orientational(directory, model, nsite, AT, nslice, qm, QM, n0, phi, a_type, cutoff, csize, folder, suffix, nframe, DIM, pos_1, pos_2):
 
-	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}/ORIENT".format(model.upper(), csize, cutoff)
+	groot = "{}/Figures/INTEULER".format(directory)
 	if not os.path.exists(groot): os.mkdir(groot)
 
 	atom_types = list(set(AT))
@@ -362,12 +375,12 @@ def print_graphs_intrinsic_orientational(directory, model, nsite, AT, nslice, nm
 
 	start = int((DIM[2]/2-10) / DIM[2] * nslice)
         stop = int((DIM[2]/2+15) / DIM[2] * nslice)
-	skip = (nm-1) / 4
+	skip = (qm-1) / 4
 
 	m_size = 40
 
-	a = ut.get_polar_constants(model, a_type)
-	av_a = np.mean(a)
+	eig_val, eig_vec = ut.get_polar_constants(model, a_type)
+	av_a = np.mean(eig_val)
 	d_a = 0.04
 
 	for r, recon in enumerate([False, True]):
@@ -377,9 +390,9 @@ def print_graphs_intrinsic_orientational(directory, model, nsite, AT, nslice, nm
 		Z3 = np.linspace(-DIM[2]/2-pos, DIM[2]/2-pos, nslice)
 		Z4 = np.linspace(-DIM[2]-pos, -pos, nslice)
 
-		with file('{}/DATA/DEN/{}_{}_{}_PAR.npy'.format(directory, model.lower(), nslice, nframe), 'r') as infile:
+		with file('{}/DEN/{}_{}_{}_PAR.npy'.format(directory, model.lower(), nslice, nframe), 'r') as infile:
                 	param = np.load(infile)
-        	with file('{}/DATA/EULER/{}_{}_{}_{}_EUL.npy'.format(directory, model.lower(), a_type, nslice, nframe), 'r') as infile:
+        	with file('{}/EULER/{}_{}_{}_{}_EUL.npy'.format(directory, model.lower(), a_type, nslice, nframe), 'r') as infile:
                 	axx, azz, av_theta, av_phi, _, P1, P2 = np.load(infile)
 		
 		Z4 = np.linspace(-DIM[2]/2+param[3], DIM[2]/2+param[3], nslice)
@@ -398,16 +411,17 @@ def print_graphs_intrinsic_orientational(directory, model, nsite, AT, nslice, nm
 
 		start = int((DIM[2]/2-10) / DIM[2] * nslice)
         	stop = int((DIM[2]/2+15) / DIM[2] * nslice)
-		for qm in QM:
-			if not recon: 
-				file_name_eul = '{}_{}_{}_{}_{}_{}_{}_{}'.format(model.lower(), a_type, nslice, nm, qm, n0, int(1/phi + 0.5), nframe)
-				figure_name_eul = '{}_{}_{}_{}_{}'.format(model.lower(), nslice, nm, qm, nframe)
-			else: 
-				file_name_eul = '{}_{}_{}_{}_{}_{}_{}_{}_R'.format(model.lower(), a_type, nslice, nm, qm, n0, int(1/phi + 0.5), nframe)
-				figure_name_eul = '{}_{}_{}_{}_{}_R'.format(model.lower(), nslice, nm, qm, nframe)
 
-			with file('{}/DATA/INTEULER/{}_INT_EUL.npy'.format(directory, file_name_eul), 'r') as infile:
-				int_axx, int_azz, int_av_theta, int_av_phi, int_P1, int_P2 = np.load(infile)
+		file_name_eul = '{}_{}_{}_{}_{}_{}_{}'.format(model.lower(), a_type, nslice, qm, n0, int(1/phi + 0.5), nframe)
+		figure_name_eul = '{}_{}_{}_{}'.format(model.lower(), nslice, qm, nframe)
+		if recon: 
+			file_name_eul += '_R'
+			figure_name_eul += '_R'
+
+		with file('{}/INTEULER/{}_INT_EUL.npy'.format(directory, file_name_eul), 'r') as infile:
+			int_axx, int_azz, int_av_theta, int_av_phi, int_P1, int_P2 = np.load(infile)
+
+		for qu in QM:
 
 			"""
 			plt.figure(12, figsize=(fig_x,fig_y))
@@ -450,14 +464,14 @@ def print_graphs_intrinsic_orientational(directory, model, nsite, AT, nslice, nm
 			"""
 
 			Zplot = list(Z2[start:stop])
-		        AXXplot =list(int_axx[start:stop])
-			AZZplot =list(int_azz[start:stop])
+		        AXXplot =list(int_axx[qu][start:stop])
+			AZZplot =list(int_azz[qu][start:stop])
 
 			fig = plt.figure(15, figsize=(fig_x+5,fig_y+5))
 			ax = fig.gca(projection='3d')
-		        if qm % 3 == 0: 
-				ax.scatter(np.ones(len(Zplot)) * qm, Zplot, AXXplot, c='red', lw=0, s=m_size, alpha = 1)
-		        	ax.scatter(np.ones(len(Zplot)) * qm, Zplot, AZZplot, c='blue', lw=0, s=m_size, alpha = 1)
+		        if qu % 3 == 0: 
+				ax.scatter(np.ones(len(Zplot)) * qu, Zplot, AXXplot, c='red', lw=0, s=m_size, alpha = 1)
+		        	ax.scatter(np.ones(len(Zplot)) * qu, Zplot, AZZplot, c='blue', lw=0, s=m_size, alpha = 1)
 				#ax.scatter(Zplot, np.ones(len(Zplot)) * qm, AXXplot, c='red', label=r'$\alpha_\parallel$', lw=0, s=m_size, alpha = 1)
 		        	#ax.scatter(Zplot, np.ones(len(Zplot)) * qm, AZZplot, c='blue', label=r'$\alpha_\perp$', lw=0, s=m_size, alpha = 1)
 			"""
@@ -485,24 +499,24 @@ def print_graphs_intrinsic_orientational(directory, model, nsite, AT, nslice, nm
 			plt.close(16)
 			"""
 
-		if not recon: figure_name_eul = '{}_{}_{}_{}'.format(model.lower(), nslice, nm, nframe)
-		else: figure_name_eul = '{}_{}_{}_{}_R'.format(model.lower(), nslice, nm, nframe)
+		if not recon: figure_name_eul = '{}_{}_{}_{}'.format(model.lower(), nslice, qm, nframe)
+		else: figure_name_eul = '{}_{}_{}_{}_R'.format(model.lower(), nslice, qm, nframe)
 
 		plt.figure(15, figsize=(fig_x,fig_y))
 		ax = fig.gca(projection='3d')
 		point  = np.array([0, 0, av_a+d_a])
 		normal = np.array([1, 0, 1])
 		d = -point.dot(normal)
-		X, Y = np.meshgrid(np.linspace(0, 2*d_a, 10), np.linspace(0, nm, 10))
+		X, Y = np.meshgrid(np.linspace(0, 2*d_a, 10), np.linspace(0, qm, 10))
 		Z = (-normal[0] * X - normal[1] * Y - d) * 1. / normal[2]
 		ax.plot_surface(Y, X, Z, alpha=0.1, color='black')
-		ax.plot([0, nm], [0, 0], [av_a, av_a], color='black', linestyle='dashed')
-		ax.set_ylabel(r'$z$ (\AA)')
+		ax.plot([0, qm], [0, 0], [av_a, av_a], color='black', linestyle='dashed')
+		ax.set_ylabel(r'$z$ (\AA)', labelpad=lnsp)
 		ax.set_ylim3d(-10, 15)
-		ax.set_zlabel(r'$\alpha(z)$ (\AA$^{3}$)')
+		ax.set_zlabel(r'$\alpha(z)$ (\AA$^{3}$)', labelpad=lnsp)
 		ax.set_zlim3d(av_a - d_a, av_a + d_a)
-		ax.set_xlabel(r'$q_m$')
-		ax.set_xlim3d(0, nm)
+		ax.set_xlabel(r'$q_u$', labelpad=lnsp)
+		ax.set_xlim3d(0, qm)
 		#plt.legend(loc=4)
 		plt.savefig('{}/{}_int_polarisability.png'.format(groot, figure_name_eul))
 		plt.savefig('{}/{}_int_polarisability.pdf'.format(groot, figure_name_eul))
@@ -510,7 +524,7 @@ def print_graphs_intrinsic_orientational(directory, model, nsite, AT, nslice, nm
 
 def print_graphs_dielectric(directory, model, nsite, AT, nslice, a_type, cutoff, csize, folder, suffix, nframe, DIM):
 
-	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}".format(model.upper(), csize, cutoff)
+	groot = "{}/Figures/DIELEC".format(directory)
 	if not os.path.exists(groot): os.mkdir(groot)
 
 	atom_types = list(set(AT))
@@ -539,9 +553,9 @@ def print_graphs_dielectric(directory, model, nsite, AT, nslice, a_type, cutoff,
 	plt.close('all')
 
 
-def print_graphs_intrinsic_dielectric(directory, model, nsite, AT, nslice, nm, QM, n0, phi, a_type, cutoff, csize, folder, suffix, nframe, DIM, pos_1, pos_2):
+def print_graphs_intrinsic_dielectric(directory, model, nsite, AT, nslice, qm, QM, n0, phi, a_type, cutoff, csize, folder, suffix, nframe, DIM, pos_1, pos_2):
 
-	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}/DIELECTRIC".format(model.upper(), csize, cutoff)
+	groot = "{}/Figures/INTDIELEC".format(directory)
 	if not os.path.exists(groot): os.mkdir(groot)
 
 	atom_types = list(set(AT))
@@ -550,14 +564,14 @@ def print_graphs_intrinsic_dielectric(directory, model, nsite, AT, nslice, nm, Q
 	Z1 = np.linspace(0, DIM[2], nslice)
 	Z2 = np.linspace(-DIM[2]/2, DIM[2]/2, nslice)
 
-	with file('{}/DATA/DIELEC/{}_{}_{}_{}_DIE_SM.npy'.format(directory, model.lower(), a_type, nslice, nframe), 'r') as infile:
+	with file('{}/DIELEC/{}_{}_{}_{}_DIE_SM.npy'.format(directory, model.lower(), a_type, nslice, nframe), 'r') as infile:
                 exx, ezz = np.load(infile)
 	
-	skip = (nm-1) / 4
+	skip = (qm-1) / 4
 
 	m_size = 40
-	a = ut.get_polar_constants(model, a_type)
-        av_a = np.mean(a)
+	eig_val, eig_vec = ut.get_polar_constants(model, a_type)
+        av_a = np.mean(eig_val)
 	top_e_int = 4.0#(1 + 8 * np.pi / 3. * n0/(DIM[0]*DIM[1]) * av_a) / (1 - 4 * np.pi / 3. * n0/(DIM[0]*DIM[1]) * av_a) 
 	top_e_eff = 2.5
 
@@ -601,30 +615,34 @@ def print_graphs_intrinsic_dielectric(directory, model, nsite, AT, nslice, nm, Q
                         ax.plot(np.ones(len(Zplot)) * 0, Zplot, NOplot, c='purple', label=r'$\hat{n}_o$', alpha = 1)
                         ax.plot(np.ones(len(Zplot)) * 0, Zplot, NEplot, c='violet', label=r'$\hat{n}_e$',  alpha = 1, linestyle='dashed')
 
-		for qm in QM:
+		file_name_die = '{}_{}_{}_{}_{}_{}_{}'.format(model.lower(), a_type, nslice, qm, n0, int(1/phi + 0.5), nframe)
+		figure_name_die = '{}_{}_{}_{}'.format(model.lower(), nslice, qm, nframe)
 
-			if not recon: 
-				file_name_die = '{}_{}_{}_{}_{}_{}_{}_{}'.format(model.lower(), a_type, nslice, nm, qm, n0, int(1/phi + 0.5), nframe)
-				figure_name_die = '{}_{}_{}_{}_{}'.format(model.lower(), nslice, nm, qm, nframe)
-			else: 
-				file_name_die = '{}_{}_{}_{}_{}_{}_{}_{}_R'.format(model.lower(), a_type, nslice, nm, qm, n0, int(1/phi + 0.5), nframe)
-				figure_name_die = '{}_{}_{}_{}_{}_R'.format(model.lower(), nslice, nm, qm, nframe)
+		if recon:
+			file_name_die += '_R'
+			figure_name_die += '_R'
 
-			with file('{}/DATA/INTDIELEC/{}_DIE.npy'.format(directory, file_name_die), 'r') as infile:
-				int_exx, int_ezz = np.load(infile)
-			with file('{}/DATA/INTDIELEC/{}_CWDIE.npy'.format(directory, file_name_die), 'r') as infile:
-				e_arrays = np.load(infile)
+		with file('{}/INTDIELEC/{}_DIE.npy'.format(directory, file_name_die), 'r') as infile:
+			int_die = np.load(infile)
+		with file('{}/INTDIELEC/{}_CWDIE.npy'.format(directory, file_name_die), 'r') as infile:
+			e_arrays = np.load(infile)
+
+		for qu in QM:
+
+			int_exx = int_die[qu][0]
+			int_ezz = int_die[qu][1]
 
 			start = int((DIM[2]/2-10) / DIM[2] * nslice)
        			stop = int((DIM[2]/2+15) / DIM[2] * nslice)
 			Zplot = list(Z2[start:stop])
+
 			if not np.isnan(np.sqrt(int_exx)).any():
 				fig = plt.figure(0, figsize=(fig_x+5,fig_y+5))
 				ax = fig.gca(projection='3d')
 				EXXplot =list(int_exx[start:stop])
 				EZZplot =list(int_ezz[start:stop])
-				ax.plot(np.ones(len(Zplot)) * qm, Zplot, EXXplot, c='orange')
-				ax.plot(np.ones(len(Zplot)) * qm, Zplot, EZZplot, c='brown', linestyle='dashed')
+				ax.plot(np.ones(len(Zplot)) * qu, Zplot, EXXplot, c='orange')
+				ax.plot(np.ones(len(Zplot)) * qu, Zplot, EZZplot, c='brown', linestyle='dashed')
 
                                 fig = plt.figure(1, figsize=(fig_x+5,fig_y+5))
                                 ax = fig.gca(projection='3d')
@@ -632,45 +650,45 @@ def print_graphs_intrinsic_dielectric(directory, model, nsite, AT, nslice, nm, Q
 				anis = np.array([1 - (int_ezz[n] - int_exx[n]) * np.sin(theta)**2 / int_ezz[n] for n in range(nslice)])
                 		NEplot = np.array([np.sqrt(int_exx[n] / anis[n]) for n in range(nslice)])[start:stop]				
 
-                                ax.plot(np.ones(len(Zplot)) * qm, Zplot, NOplot, c='purple')
-                                ax.plot(np.ones(len(Zplot)) * qm, Zplot, NEplot, c='violet', linestyle='dashed')
+                                ax.plot(np.ones(len(Zplot)) * qu, Zplot, NOplot, c='purple')
+                                ax.plot(np.ones(len(Zplot)) * qu, Zplot, NEplot, c='violet', linestyle='dashed')
 
 			start = int((DIM[2]/2+pos-10) / DIM[2] * nslice)
 			stop = int((DIM[2]/2+pos+15) / DIM[2] * nslice)
 			Zplot = list(Z3[start:stop])
-			EXXplot =list(e_arrays[2][start:stop])
-			EZZplot =list(e_arrays[3][start:stop])
-			NOplot =np.sqrt(e_arrays[2])[start:stop]
-                        anis = np.array([1 - (e_arrays[3][n] - e_arrays[2][n]) * np.sin(theta)**2 / e_arrays[3][n] for n in range(nslice)])
-                        NEplot = np.array([np.sqrt(e_arrays[2][n] / anis[n]) for n in range(nslice)])[start:stop]
+			EXXplot =list(e_arrays[qu][2][start:stop])
+			EZZplot =list(e_arrays[qu][3][start:stop])
+			NOplot =np.sqrt(e_arrays[qu][2])[start:stop]
+                        anis = np.array([1 - (e_arrays[qu][3][n] - e_arrays[qu][2][n]) * np.sin(theta)**2 / e_arrays[qu][3][n] for n in range(nslice)])
+                        NEplot = np.array([np.sqrt(e_arrays[qu][2][n] / anis[n]) for n in range(nslice)])[start:stop]
 
 			fig = plt.figure(15, figsize=(fig_x+5,fig_y+5))
                         ax = fig.gca(projection='3d')
-			ax.plot(np.ones(len(Zplot)) * qm, Zplot, EXXplot, c='orange')
-			ax.plot(np.ones(len(Zplot)) * qm, Zplot, EZZplot, c='brown', linestyle='dashed')
+			ax.plot(np.ones(len(Zplot)) * qu, Zplot, EXXplot, c='orange')
+			ax.plot(np.ones(len(Zplot)) * qu, Zplot, EZZplot, c='brown', linestyle='dashed')
 
 			fig = plt.figure(25, figsize=(fig_x+5,fig_y+5))
                         ax = fig.gca(projection='3d')
-                        ax.plot(np.ones(len(Zplot)) * qm, Zplot, NOplot, c='purple')
-                        ax.plot(np.ones(len(Zplot)) * qm, Zplot, NEplot, c='violet', linestyle='dashed')
+                        ax.plot(np.ones(len(Zplot)) * qu, Zplot, NOplot, c='purple')
+                        ax.plot(np.ones(len(Zplot)) * qu, Zplot, NEplot, c='violet', linestyle='dashed')
 
-			if not np.isnan(e_arrays[6]).any():
+			if not np.isnan(e_arrays[qu][6]).any():
 				for i in xrange(2):
-					EXXplot =list(e_arrays[4+i*2][start:stop])
-                        		EZZplot =list(e_arrays[5+i*2][start:stop])
-					NOplot =np.sqrt(e_arrays[4+i*2])[start:stop]
-                        		anis = np.array([1 - (e_arrays[5+i*2][n] - e_arrays[4+i*2][n]) * np.sin(theta)**2 / e_arrays[5+i*2][n] for n in range(nslice)])
-                        		NEplot = np.array([np.sqrt(e_arrays[4+i*2][n] / anis[n]) for n in range(nslice)])[start:stop]
+					EXXplot =list(e_arrays[qu][4+i*2][start:stop])
+                        		EZZplot =list(e_arrays[qu][5+i*2][start:stop])
+					NOplot =np.sqrt(e_arrays[qu][4+i*2])[start:stop]
+                        		anis = np.array([1 - (e_arrays[qu][5+i*2][n] - e_arrays[qu][4+i*2][n]) * np.sin(theta)**2 / e_arrays[qu][5+i*2][n] for n in range(nslice)])
+                        		NEplot = np.array([np.sqrt(e_arrays[qu][4+i*2][n] / anis[n]) for n in range(nslice)])[start:stop]
 
 					fig = plt.figure(16+i, figsize=(fig_x+5,fig_y+5))
                                         ax = fig.gca(projection='3d')
-                                	ax.plot(np.ones(len(Zplot)) * qm, Zplot, EXXplot, c='orange')
-                                	ax.plot(np.ones(len(Zplot)) * qm, Zplot, EZZplot, c='brown', linestyle='dashed')
+                                	ax.plot(np.ones(len(Zplot)) * qu, Zplot, EXXplot, c='orange')
+                                	ax.plot(np.ones(len(Zplot)) * qu, Zplot, EZZplot, c='brown', linestyle='dashed')
 
 					fig = plt.figure(26+i, figsize=(fig_x+5,fig_y+5))
 					ax = fig.gca(projection='3d')
-					ax.plot(np.ones(len(Zplot)) * qm, Zplot, NOplot, c='purple')
-					ax.plot(np.ones(len(Zplot)) * qm, Zplot, NEplot, c='violet', linestyle='dashed')
+					ax.plot(np.ones(len(Zplot)) * qu, Zplot, NOplot, c='purple')
+					ax.plot(np.ones(len(Zplot)) * qu, Zplot, NEplot, c='violet', linestyle='dashed')
 							
 
                         """
@@ -718,30 +736,30 @@ def print_graphs_intrinsic_dielectric(directory, model, nsite, AT, nslice, nm, Q
 		                plt.savefig('{}/{}_{}_eff_ref_index.pdf'.format(groot, figure_name_die, i))
 		                plt.close('all')
 			"""
-		if not recon: figure_name_die = '{}_{}_{}_{}'.format(model.lower(), nslice, nm, nframe)
-                else: figure_name_die = '{}_{}_{}_{}_R'.format(model.lower(), nslice, nm, nframe)
+		if not recon: figure_name_die = '{}_{}_{}_{}'.format(model.lower(), nslice, qm, nframe)
+                else: figure_name_die = '{}_{}_{}_{}_R'.format(model.lower(), nslice, qm, nframe)
 
 
 		fig = plt.figure(0, figsize=(fig_x,fig_y))
 		ax = fig.gca(projection='3d')
-		ax.set_ylabel(r'$z$ (\AA)')
+		ax.set_ylabel(r'$z$ (\AA)', labelpad=lnsp)
 		ax.set_ylim3d(-10, 15)
-		ax.set_zlabel(r'$\epsilon$')
+		ax.set_zlabel(r'$\epsilon$', labelpad=lnsp)
 		ax.set_zlim3d(1.0, top_e_int)
-		ax.set_xlabel(r'$q_m$')
-		ax.set_xlim3d(0, nm)
+		ax.set_xlabel(r'$q_u$', labelpad=lnsp)
+		ax.set_xlim3d(0, qm)
 		plt.legend(loc=4)
 		plt.savefig('{}/{}_int_dielectric.png'.format(groot, figure_name_die))
 		plt.savefig('{}/{}_int_dielectric.pdf'.format(groot, figure_name_die))
 
 		fig = plt.figure(1, figsize=(fig_x,fig_y))
                 ax = fig.gca(projection='3d')
-                ax.set_ylabel(r'$z$ (\AA)')
+                ax.set_ylabel(r'$z$ (\AA)', labelpad=lnsp)
                 ax.set_ylim3d(-10, 15)
-                ax.set_zlabel(r'$n$')
+                ax.set_zlabel(r'$n$', labelpad=lnsp)
                 ax.set_zlim3d(1.0, np.sqrt(top_e_int))
-                ax.set_xlabel(r'$q_m$')
-                ax.set_xlim3d(0, nm)
+                ax.set_xlabel(r'$q_u$', labelpad=lnsp)
+                ax.set_xlim3d(0, qm)
                 plt.legend(loc=4)
                 plt.savefig('{}/{}_int_ref_index.png'.format(groot, figure_name_die))
                 plt.savefig('{}/{}_int_ref_index.pdf'.format(groot, figure_name_die))
@@ -749,12 +767,12 @@ def print_graphs_intrinsic_dielectric(directory, model, nsite, AT, nslice, nm, Q
 		for i in xrange(3):
 			fig = plt.figure(15+i, figsize=(fig_x,fig_y))
 			ax = fig.gca(projection='3d')
-			ax.set_ylabel(r'$z$ (\AA)')
+			ax.set_ylabel(r'$z$ (\AA)', labelpad=lnsp)
 			ax.set_ylim3d(-10, 15)
-			ax.set_zlabel(r'$\epsilon$')
+			ax.set_zlabel(r'$\epsilon$', labelpad=lnsp)
 			ax.set_zlim3d(1.0, top_e_eff)
-			ax.set_xlabel(r'$q_m$')
-			ax.set_xlim3d(0, nm)
+			ax.set_xlabel(r'$q_u$', labelpad=lnsp)
+			ax.set_xlim3d(0, qm)
 			plt.legend(loc=4)
 			plt.savefig('{}/{}_eff_dielectric_{}.png'.format(groot, figure_name_die, i+1))
 			plt.savefig('{}/{}_eff_dielectric_{}.pdf'.format(groot, figure_name_die, i+1))
@@ -762,12 +780,12 @@ def print_graphs_intrinsic_dielectric(directory, model, nsite, AT, nslice, nm, Q
 
 			fig = plt.figure(25+i, figsize=(fig_x,fig_y))
                         ax = fig.gca(projection='3d')
-                        ax.set_ylabel(r'$z$ (\AA)')
+                        ax.set_ylabel(r'$z$ (\AA)', labelpad=lnsp)
                         ax.set_ylim3d(-10, 15)
-                        ax.set_zlabel(r'$n$')
+                        ax.set_zlabel(r'$n$', labelpad=lnsp)
                         ax.set_zlim3d(1.0, np.sqrt(top_e_eff))
-                        ax.set_xlabel(r'$q_m$')
-                        ax.set_xlim3d(0, nm)
+                        ax.set_xlabel(r'$q_u$', labelpad=lnsp)
+                        ax.set_xlim3d(0, qm)
                         plt.legend(loc=4)
                         plt.savefig('{}/{}_eff_ref_index_{}.png'.format(groot, figure_name_die, i+1))
                         plt.savefig('{}/{}_eff_ref_index_{}.pdf'.format(groot, figure_name_die, i+1))
@@ -799,10 +817,8 @@ def plot_graphs_thermo(ENERGY, ENERGY_ERR, TENSION, TENSION_ERR, VAR_TENSION, N_
 	plt.errorbar(np.array(AN_RANGE), TENSION, color=col, linestyle='none', yerr=np.array(TENSION_ERR))
 
 
-def print_average_graphs_thermo(model, cutoff, csize, red_units, TOT_ZA_RANGE, y_data_za, an_range, ydata):
+def print_average_graphs_thermo(groot, model, cutoff, csize, red_units, TOT_ZA_RANGE, y_data_za, an_range, ydata):
 
-	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}".format(model.upper(), csize, cutoff)
-	if not os.path.exists(groot): os.mkdir(groot)	
 
 	plt.figure(0, figsize=(fig_x,fig_y))
 	if red_units:
@@ -837,7 +853,7 @@ def print_average_graphs_thermo(model, cutoff, csize, red_units, TOT_ZA_RANGE, y
 	else: 
 		plt.xlabel(r'\LARGE{$\sqrt{L_l/A}$ (m$^{-\frac{1}{2}}$)}')
 		plt.ylabel(r'\LARGE{$\gamma$ (mJ m$^{-2}$)}')
-		if model.upper() == 'ARGON': axis = np.array([6000, 22000, 15.0, 17.0])
+		if model.upper() == 'ARGON': axis = np.array([4000, 16000, 15.0, 17.0])
 		if model.upper() == 'TIP4P2005': axis = np.array([10000, 17000, 65, 70.5])
 		if model.upper() == 'SPCE': axis = np.array([11000, 18000, 59, 65])
 		if model.upper() == 'TIP3P': axis = np.array([14000, 22000, 50, 53])
@@ -861,7 +877,7 @@ def print_average_graphs_thermo(model, cutoff, csize, red_units, TOT_ZA_RANGE, y
 	else:
 		plt.xlabel(r'\LARGE{$\sqrt{L_l/A}$ (m$^{-\frac{1}{2}}$)}') 
 		plt.ylabel(r'\LARGE{$\sqrt{\mathrm{Var}[\gamma]}$ (mJ m$^{-2}$)}')
-		if model.upper() == 'ARGON': axis = np.array([6000, 22000, 5, 20])
+		if model.upper() == 'ARGON': axis = np.array([4000, 16000, 5, 20])
 		elif model.upper() == 'TIP4P2005': axis = np.array([10000, 17000, 80, 135])
 		elif model.upper() == 'SPCE': axis = np.array([11000, 18000, 82, 140])
 		elif model.upper() == 'TIP3P': axis = np.array([14000, 22000, 68, 108])

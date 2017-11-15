@@ -130,6 +130,9 @@ def get_thermo(directory, model, csize, suffix, nslice, nframe, DIM, nmol, rc, s
 	with file('{}/DATA/DEN/{}_{}_{}_DEN.npy'.format(directory, model.lower(), nslice, nframe), 'r') as infile:
 		av_density = np.load(infile)
 
+	#plt.plot(av_density[-1])
+	#plt.show()
+
 	if corr_meth.upper() == 'C':
 		popt, pcov = curve_fit(ut.den_func, np.linspace(0, DIM[2], nslice), av_density[-1], [1., 0., DIM[2]/2., DIM[2]/4., 2.])
 		corr_e = E_chapela(DIM, popt[0], popt[1], popt[3], popt[4], float(rc), 200, sigma, epsilon) #total energy correction in kJ mol-1
@@ -226,10 +229,11 @@ def std_X(Lz, A, pl, rc, omega, std_gamma): return std_gamma / np.sqrt(NI_func(L
 
 def get_block_error_thermo(E, POT, KIN, ST, directory, model, csize, ntraj, ntb, ow_ntb):
 
-	if os.path.exists('{}/DATA/THERMO{}_{}_{}_PT.txt'.format(directory, model.lower(), ntraj, ntb)) and not ow_ntb:
+	if os.path.exists('{}/DATA/THERMO/{}_{}_{}_PT.txt'.format(directory, model.lower(), ntraj, ntb)): ut.convert_txt_npy('{}/DATA/THERMO/{}_{}_{}_PT'.format(directory, model.lower(), ntraj, ntb))
+	if os.path.exists('{}/DATA/THERMO/{}_{}_{}_PT.npy'.format(directory, model.lower(), ntraj, ntb)) and not ow_ntb:
 		try:
-			with file('{}/DATA/THERMO/{}_{}_{}_PT.txt'.format(directory, model.lower(), ntraj, ntb), 'r') as infile:
-				pt_e, pt_pot, pt_kin, pt_st = np.loadtxt(infile)
+			with file('{}/DATA/THERMO/{}_{}_{}_PT.npy'.format(directory, model.lower(), ntraj, ntb), 'r') as infile:
+				pt_e, pt_pot, pt_kin, pt_st = np.load(infile)
 		except: ow_ntb = True
 	else: ow_ntb = True
 
@@ -239,15 +243,15 @@ def get_block_error_thermo(E, POT, KIN, ST, directory, model, csize, ntraj, ntb,
 		if old_ntb == 0 or ow_ntb: 
 			pt_e, pt_pot, pt_kin, pt_st = ut.block_error((E, POT, KIN, ST), ntb)
 		elif old_ntb > ntb:
-			with file('{}/DATA/THERMO/{}_{}_{}_PT.txt'.format(directory, model.lower(), ntraj, old_ntb), 'r') as infile:
-                        	pt_e, pt_pot, pt_kin, pt_st = np.loadtxt(infile)
+			with file('{}/DATA/THERMO/{}_{}_{}_PT.npy'.format(directory, model.lower(), ntraj, old_ntb), 'r') as infile:
+                        	pt_e, pt_pot, pt_kin, pt_st = np.load(infile)
 			pt_e = pt_e[:ntb]
 			pt_pot = pt_pot[:ntb]
 			pt_kin = pt_kin[:ntb]
 			pt_st = pt_st[:ntb]
 		elif old_ntb < ntb:
-			with file('{}/DATA/THERMO/{}_{}_{}_PT.txt'.format(directory, model.lower(), ntraj, old_ntb), 'r') as infile:
-                        	pt_e, pt_pot, pt_kin, pt_st = np.loadtxt(infile)
+			with file('{}/DATA/THERMO/{}_{}_{}_PT.npy'.format(directory, model.lower(), ntraj, old_ntb), 'r') as infile:
+                        	pt_e, pt_pot, pt_kin, pt_st = np.load(infile)
 
 			old_pt_e, old_pt_pot, old_pt_kin, old_pt_st = ut.block_error((E, POT, KIN, ST), ntb)
 
@@ -256,8 +260,8 @@ def get_block_error_thermo(E, POT, KIN, ST, directory, model, csize, ntraj, ntb,
 			pt_kin = np.concatenate(pt_e_kin, old_pt_kin)
 			pt_st = np.concatenate(pt_st, old_pt_st)
 		
-		with file('{}/DATA/THERMO/{}_{}_{}_PT.txt'.format(directory, model.lower(), ntraj, ntb), 'w') as outfile:
-        		np.savetxt(outfile, (pt_e, pt_pot, pt_kin, pt_st))
+		with file('{}/DATA/THERMO/{}_{}_{}_PT.npy'.format(directory, model.lower(), ntraj, ntb), 'w') as outfile:
+        		np.save(outfile, (pt_e, pt_pot, pt_kin, pt_st))
 
         M = len(E)
 

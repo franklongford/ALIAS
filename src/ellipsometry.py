@@ -183,7 +183,8 @@ def load_experimental(wkdir):
 	with file("{}/datasheets/ethanol_ellipsometry_data_delta.csv".format(wkdir), 'r') as infile:
 		delta_e = np.loadtxt(infile)
  	"""
-	theta_e = np.arange(52.5, 54.51, 0.1)	psi_e = [1.927, 1.772, 1.645, 1.495, 1.359, 1.221, 1.072, 0.934, 0.792, 0.625, 0.481, 0.334, 0.187, 0.074, 0.145, 0.269, 0.419, 0.558, 0.673, 0.824, 0.964 ]
+	theta_e = np.arange(52.5, 54.51, 0.1)
+	psi_e = [1.927, 1.772, 1.645, 1.495, 1.359, 1.221, 1.072, 0.934, 0.792, 0.625, 0.481, 0.334, 0.187, 0.074, 0.145, 0.269, 0.419, 0.558, 0.673, 0.824, 0.964 ]
 	delta_e = [178.082, 177.911, 177.928, 178.004, 177.563, 177.192, 177.246, 176.199, 175.123, 174.095, 172.755, 171.083, 160.932, 126.738, 28.259, 12.762, 7.436, 5.611, 4.541, 4.125, 3.157]
 
 	with file("datasheets/ethanol_ellipsometry_data_theta.csv", 'w') as outfile:
@@ -288,80 +289,83 @@ def load_theoretical(directory, model, nslice, a_type, DIM, nframe, angles):
 	return no_array, ne_array
 
 
-def load_theoretical_ism(directory, model, nslice, a_type, DIM, nm, qm, n0, phi, nframe, angles, var, mean_auv):
+def load_theoretical_ism(directory, model, nslice, a_type, DIM, qm, n0, phi, nframe, angles, mean_auv):
 
-	file_name_die = '{}_{}_{}_{}_{}_{}_{}_{}_R'.format(model.lower(), a_type, nslice, nm, qm, n0, int(1/phi + 0.5), nframe)
+	file_name_die = '{}_{}_{}_{}_{}_{}_{}_R'.format(model.lower(), a_type, nslice, qm, n0, int(1/phi + 0.5), nframe)
 
-	with file('{}/INTDIELEC/{}_DIE.npy'.format(directory, file_name_die), 'r') as infile:
-		int_exx, int_ezz = np.load(infile)
-	with file('{}/INTDIELEC/{}_CWDIE.npy'.format(directory, file_name_die), 'r') as infile:
-		cw_exx_A, cw_ezz_A, cw_exx_B, cw_ezz_B, cw_exx_C, cw_ezz_C, cw_exx_D, cw_ezz_D = np.load(infile)
-	with file('{}/ELLIP/{}_ELLIP_NO.npy'.format(directory, file_name_die), 'r') as infile:
-		cw_no_A, cw_no_B, cw_no_C, cw_no_D = np.load(infile)
+	int_die = np.load('{}/INTDIELEC/{}_DIE.npy'.format(directory, file_name_die), mmap_mode='r')
+	cw_die = np.load('{}/INTDIELEC/{}_CWDIE.npy'.format(directory, file_name_die), mmap_mode='r')
+	ellip_no = np.load('{}/ELLIP/{}_ELLIP_NO.npy'.format(directory, file_name_die), mmap_mode='r')
+
+	int_exx, int_ezz = np.moveaxis(int_die, 0, 1)
+	cw_exx_A, cw_ezz_A, cw_exx_B, cw_ezz_B, cw_exx_C, cw_ezz_C, cw_exx_D, cw_ezz_D = np.moveaxis(cw_die, 0, 1)
+	cw_no_A, cw_no_B, cw_no_C, cw_no_D = np.moveaxis(ellip_no, 0, 1)
 
 	nangle = len(angles)
 
 	shift = int(mean_auv / DIM[2] * nslice)
 
-	int_exx = np.roll(int_exx, shift)
-	int_ezz = np.roll(int_ezz, shift)
+	int_exx = np.delete(np.roll(int_exx, shift, axis=1), np.s_[nslice/2:], axis=1)
+	int_ezz = np.delete(np.roll(int_ezz, shift, axis=1), np.s_[nslice/2:], axis=1)
+
+	cw_no_B = np.delete(cw_no_B, np.s_[nslice/2:], axis=1)
+	cw_no_C = np.delete(cw_no_C, np.s_[nslice/2:], axis=1)
+	cw_no_D = np.delete(cw_no_D, np.s_[nslice/2:], axis=1)
+
+	cw_exx_B = np.delete(cw_exx_B, np.s_[nslice/2:], axis=1)
+	cw_exx_C = np.delete(cw_exx_C, np.s_[nslice/2:], axis=1)
+	cw_exx_D = np.delete(cw_exx_D, np.s_[nslice/2:], axis=1)
+
+	cw_ezz_B = np.delete(cw_ezz_B, np.s_[nslice/2:], axis=1)
+	cw_ezz_C = np.delete(cw_ezz_C, np.s_[nslice/2:], axis=1)
+	cw_ezz_D = np.delete(cw_ezz_D, np.s_[nslice/2:], axis=1)
 
 	int_no = np.sqrt(int_exx)
 
-	cw_ne_B = np.zeros((nangle, nslice/2))
-	cw_ne_C = np.zeros((nangle, nslice/2))
-	cw_ne_D = np.zeros((nangle, nslice/2))
-	int_ne = np.zeros((nangle, nslice/2))
+	cw_ne_B = np.zeros((qm+1, nangle, nslice/2))
+	cw_ne_C = np.zeros((qm+1, nangle, nslice/2))
+	cw_ne_D = np.zeros((qm+1, nangle, nslice/2))
+	int_ne = np.zeros((qm+1, nangle, nslice/2))
 
-	for i, theta in enumerate(angles):
+	for qu in xrange(qm + 1):
 
-		anis = np.array([1 - (cw_ezz_B[n] - cw_exx_B[n]) * np.sin(theta)**2 / cw_ezz_B[n] for n in range(nslice/2)])
-		cw_ne_B[i] += np.array([np.sqrt(cw_exx_B[n] / anis[n]) for n in range(nslice/2)])
+		temp_file_name_die = '{}_{}_{}_{}_{}_{}_{}_{}_R'.format(model.lower(), a_type, nslice, qm, qu, n0, int(1/phi + 0.5), nframe)
+		try:
+			os.remove('{}/INTDIELEC/{}_DIE.npy'.format(directory, temp_file_name_die))
+			os.remove('{}/INTDIELEC/{}_CWDIE.npy'.format(directory, temp_file_name_die))
+			os.remove('{}/INTDIELEC/{}_ELLIP_NO.npy'.format(directory, temp_file_name_die))
+		except: pass		
 
-		anis = np.array([1 - (cw_ezz_C[n] - cw_exx_C[n]) * np.sin(theta)**2 / cw_ezz_C[n] for n in range(nslice/2)])
-		cw_ne_C[i] += np.array([np.sqrt(cw_exx_C[n] / anis[n]) for n in range(nslice/2)])
+		for i, theta in enumerate(angles):
 
-		anis = np.array([1 - (cw_ezz_D[n] - cw_exx_D[n]) * np.sin(theta)**2 / cw_ezz_D[n] for n in range(nslice/2)])
-                cw_ne_D[i] += np.array([np.sqrt(cw_exx_D[n] / anis[n]) for n in range(nslice/2)])
+			anis = 1 - (cw_ezz_B[qu] - cw_exx_B[qu]) * np.sin(theta)**2 / cw_ezz_B[qu]
+			cw_ne_B[qu][i] += np.sqrt(cw_exx_B[qu] / anis)
 
-		anis = np.array([1 - (int_ezz[n] - int_exx[n]) * np.sin(theta)**2 / int_ezz[n] for n in range(nslice/2)])
-		int_ne[i] += np.array([np.sqrt(int_exx[n] / anis[n]) for n in range(nslice/2)])
+			anis = 1 - (cw_ezz_C[qu] - cw_exx_C[qu]) * np.sin(theta)**2 / cw_ezz_C[qu]
+			cw_ne_C[qu][i] += np.sqrt(cw_exx_C[qu]/ anis)
+
+			anis = 1 - (cw_ezz_D[qu] - cw_exx_D[qu]) * np.sin(theta)**2 / cw_ezz_D[qu]
+			cw_ne_D[qu][i] += np.sqrt(cw_exx_D[qu] / anis)
+
+			anis = 1 - (int_ezz[qu] - int_exx[qu]) * np.sin(theta)**2 / int_ezz[qu]
+			int_ne[qu][i] += np.sqrt(int_exx[qu] / anis)
+
+	no_array = np.array((int_no, cw_no_B, cw_no_C, cw_no_D))
+	ne_array = np.array((int_ne, cw_ne_B, cw_ne_C, cw_ne_D))
+
+	exx_array = np.array((int_exx, cw_exx_B, cw_exx_C, cw_exx_D))
+	ezz_array = np.array((int_ezz, cw_ezz_B, cw_ezz_C, cw_ezz_D))	
+
 	
-
-	int_no = int_no[:nslice/2]
-	#cw_no_A = cw_no_A[:nslice/2]
-	cw_no_B = cw_no_B[:nslice/2]
-	cw_no_C = cw_no_C[:nslice/2]
-	cw_no_D = cw_no_D[:nslice/2]
-
-	int_exx = int_exx[:nslice/2]
-	cw_exx_B = cw_exx_B[:nslice/2]
-        cw_exx_C = cw_exx_C[:nslice/2]
-        cw_exx_D = cw_exx_D[:nslice/2]
-
-	int_ezz = int_ezz[:nslice/2]
-	cw_ezz_B = cw_ezz_B[:nslice/2]
-        cw_ezz_C = cw_ezz_C[:nslice/2]
-        cw_ezz_D = cw_ezz_D[:nslice/2]
-
-	no_array = (int_no, cw_no_B, cw_no_C, cw_no_D)
-	ne_array = (int_ne, cw_ne_B, cw_ne_C, cw_ne_D)
-
-	#no_array = (cw_no_B, cw_no_C, cw_no_D)
-        #ne_array = (cw_ne_B, cw_ne_C, cw_ne_D)
-
-	exx_array = (int_exx, cw_exx_B, cw_exx_C, cw_exx_D)
-        ezz_array = (int_ezz, cw_ezz_B, cw_ezz_C, cw_ezz_D)
-
 	return no_array, ne_array, exx_array, ezz_array
 
 
-def ellip_capillary(auv_2, nm, qm, DIM):
+def ellip_capillary(auv_2, qm, qu, DIM):
 
 	qxi2 = 0
-	for u in xrange(-qm, qm+1):
-                for v in xrange(-qm, qm+1):
-                        j = (2 * nm + 1) * (u + nm) + (v + nm)
+	for u in xrange(-qu, qu+1):
+                for v in xrange(-qu, qu+1):
+                        j = (2 * qm + 1) * (u + qm) + (v + qm)
                         dot_prod = np.pi**2  * (u**2/DIM[0]**2 + v**2/DIM[1]**2)
 
 			if abs(u) + abs(v) > 0:
@@ -370,12 +374,12 @@ def ellip_capillary(auv_2, nm, qm, DIM):
 
 	return qxi2
 
-def transfer_matrix(directory, model, csize, AT, sigma, mol_sigma, nslice, nframe, a_type, nm, QM, n0, phi, DIM, cutoff, scan_type=0):
+def transfer_matrix(directory, model, csize, AT, sigma, mol_sigma, nslice, nframe, a_type, qm, QM, n0, phi, DIM, cutoff, scan_type=0):
 
 	"INPUT DATA"
 
-	wkdir = '/data/fl7g13/alias'
-	groot = "/home/fl7g13/Documents/Thesis/Figures/{}_{}_{}/ELLIP".format(model.upper(),csize,cutoff)
+	wkdir = '/home/fl7g13/alias'
+	groot = "{}/Figures/ELLIP".format(directory)
 	if not os.path.exists(groot): os.mkdir(groot)
 
 	EXPERIMENT = load_experimental(wkdir)
@@ -390,6 +394,7 @@ def transfer_matrix(directory, model, csize, AT, sigma, mol_sigma, nslice, nfram
 	plt.rc('axes', labelsize='25.0')
 	plt.rc('xtick', labelsize='25.0')
 	plt.rc('ytick', labelsize='25.0')
+	lnsp = 25.0
 
 	degree = np.pi/180.
 
@@ -428,15 +433,14 @@ def transfer_matrix(directory, model, csize, AT, sigma, mol_sigma, nslice, nfram
 	mean_auv1 = np.zeros(nframe)
 	mean_auv2 = np.zeros(nframe)
 
-	av_auv1_2 = np.zeros((2*nm+1)**2)
-	av_auv2_2 = np.zeros((2*nm+1)**2)
+	av_auv1_2 = np.zeros((2*qm+1)**2)
+	av_auv2_2 = np.zeros((2*qm+1)**2)
 
 	for frame in xrange(nframe):
 		sys.stdout.write("LOADING SURFACE VARIANCE {} out of {} images\r".format(frame, nframe))
 		sys.stdout.flush()
 
-		with file('{}/ACOEFF/{}_{}_{}_{}_{}_R_INTCOEFF.npy'.format(directory, model.lower(), nm, n0, int(1./phi + 0.5), frame), 'r') as infile:
-			auv1, auv2 = np.load(infile)
+		auv1, auv2 = np.load('{}/ACOEFF/{}_{}_{}_{}_{}_R_INTCOEFF.npy'.format(directory, model.lower(), qm, n0, int(1./phi + 0.5), frame), mmap_mode='r')
 
 		av_auv1_2 += auv1**2 / nframe
 		av_auv2_2 += auv2**2 / nframe
@@ -475,6 +479,8 @@ def transfer_matrix(directory, model, csize, AT, sigma, mol_sigma, nslice, nfram
 
 	ellipicity = np.zeros(len(no_array))
 
+	ow_ellip = bool(raw_input("OVERWRITE ELLIPSOMETRY RESULTS? (Y/N): ").upper() == 'Y')
+
         for i, no in enumerate(no_array):
 		signal = []
 		for t, theta in enumerate(ellip_angles):
@@ -501,8 +507,6 @@ def transfer_matrix(directory, model, csize, AT, sigma, mol_sigma, nslice, nfram
 		plt.plot(ellip_angles / degree, Delta)
 
 		ellipicity[i] = np.imag(signal[np.array(Psi).argmin()])*1E4 
-
-	ow_ellip = bool(raw_input("OVERWRITE ELLIPSOMETRY RESULTS? (Y/N): ").upper() == 'Y')
 
 	print "\n{:10s} | {:10s} | {:10s} | {:10s} | {:10s} | {:10s} | {:10s} | {:10s} ".format("qm", "lambda", "lambda (nm)", "var", "int_ep", "eff_ep1", "eff_ep2", "eff_ep3")
         print "-" * 14 * 9
@@ -541,11 +545,10 @@ def transfer_matrix(directory, model, csize, AT, sigma, mol_sigma, nslice, nfram
 	plt.savefig('{}/{}_{}_{}_delta.png'.format(groot, model.lower(), nslice, nframe))
 	plt.savefig('{}/{}_{}_{}_delta.pdf'.format(groot, model.lower(), nslice, nframe))
 
-	plt.show()
         plt.close('all')
 
-	qu = 2 * np.pi / mol_sigma
-        ql = 2 * np.pi / np.sqrt(DIM[0] * DIM[1])
+	q_max = 2 * np.pi / mol_sigma
+	q_min = 2 * np.pi / np.sqrt(DIM[0] * DIM[1])
 
 	COLOUR = ['b', 'g', 'r', 'cyan']
         LEGEND = [r'$\tilde{n}(z)$', r'$\hat{n}_1(z)$', r'$\hat{n}_2(z)$', r'$\hat{n}_3(z)$', r'$\hat{n}_4(z)$']
@@ -555,34 +558,37 @@ def transfer_matrix(directory, model, csize, AT, sigma, mol_sigma, nslice, nfram
 	fixed_surf_index = int(2 * (DIM[2]/2+surf_pos) / DIM[2] * nlayers + 0.5)
 
 	rho_qm = np.zeros((len(QM), 4))
-	lambda_m = qu / (ql * np.array(QM)) 
+	lambda_m = q_max / (q_min * np.array(QM)) 
 
 	if not os.path.exists('{}/ELLIPSOMETRY'.format(directory)): os.mkdir('{}/ELLIPSOMETRY'.format(directory))
 
-	for j, qm in enumerate(QM):
+	no_array, ne_array, exx_array, ezz_array = load_theoretical_ism(directory, model, nslice, a_type, DIM, qm, n0, phi, nframe, ellip_angles, surf_pos)
 
-		file_name_ellip = '{}_{}_{}_{}_{}_{}_{}_R'.format(model.lower(), nslice, a_type, nm, qm, int(1/phi+0.5), n_angle)
+	n_model = len(no_array)
 
-		Delta1 = (ut.sum_auv_2(av_auv1_2, nm, qm) - np.mean(mean_auv1)**2)
-                Delta2 = (ut.sum_auv_2(av_auv2_2, nm, qm) - np.mean(mean_auv2)**2)
+	for j, qu in enumerate(QM):
+
+		file_name_ellip = '{}_{}_{}_{}_{}_{}_{}_R'.format(model.lower(), nslice, a_type, qm, qu, int(1/phi+0.5), n_angle)
+
+		Delta1 = (ut.sum_auv_2(av_auv1_2, qm, qu) - np.mean(mean_auv1)**2)
+                Delta2 = (ut.sum_auv_2(av_auv2_2, qm, qu) - np.mean(mean_auv2)**2)
 
                 cap_var = np.mean([Delta1, Delta2])
 
-                no_array, ne_array, exx_array, ezz_array = load_theoretical_ism(directory, model, nslice, a_type, DIM, nm, qm, n0, phi, nframe, ellip_angles, cap_var, surf_pos)
-
 		surf_index = fixed_surf_index
                 searching = True
+
                 while searching:
-                        if no_array[0][surf_index+1] > no_array[0][surf_index]: surf_index += 1
+                        if no_array[0][qu][surf_index+1] > no_array[0][qu][surf_index]: surf_index += 1
                         else: searching = False
 
 		B_angle = []
 
-		ellipicity = np.zeros(len(no_array))
-                drude_ellip = np.zeros(len(no_array))
-                rough_ellip = np.zeros(len(no_array))
+		ellipicity = np.zeros(n_model)
+                drude_ellip = np.zeros(n_model)
+                rough_ellip = np.zeros(n_model)
 
-                qxi2_sum = ellip_capillary((av_auv1_2 + av_auv2_2)/2, nm, qm, DIM)
+                qxi2_sum = ellip_capillary((av_auv1_2 + av_auv2_2)/2, qm, qu, DIM)
 
 		if os.path.exists('{}/ELLIPSOMETRY/{}_PSI.npy'.format(directory, file_name_ellip)) and not ow_ellip:
 			with open('{}/ELLIPSOMETRY/{}_PSI.npy'.format(directory, file_name_ellip), 'r') as infile:
@@ -594,20 +600,21 @@ def transfer_matrix(directory, model, csize, AT, sigma, mol_sigma, nslice, nfram
 			#sys.stdout.write("RUNNING ELLIPSOMETRY EXPERIMENT nm = {} qm = {} slices\r".format(nm, qm))
                 	#sys.stdout.flush()
 			
-			psi_spec = np.zeros((len(no_array), n_angle))
-			delta_spec = np.zeros((len(no_array), n_angle))
-			rho_spec = np.zeros((len(no_array), n_angle))
+			psi_spec = np.zeros((n_model, n_angle))
+			delta_spec = np.zeros((n_model, n_angle))
+			rho_spec = np.zeros((n_model, n_angle))
 
-			VAR = [cap_var] * len(no_array)
+			VAR = [cap_var] * n_model
 
-			for i, no in enumerate(no_array):
+			for i in xrange(n_model):
+				no = no_array[i][qu]
 				signal = []
 				for t, theta in enumerate(ellip_angles):
 					r_ps = []
 
 					for p, pol in enumerate(POL):
 						if pol == 's': n = no
-						else: n = ne_array[i][t]			
+						else: n = ne_array[i][qu][t]			
 						r, t = ellips(n, theta, lam_vac, d_list, nlayers, pol, cap_var)
 						r_ps.append(r)
 
@@ -625,42 +632,44 @@ def transfer_matrix(directory, model, csize, AT, sigma, mol_sigma, nslice, nfram
                         with open('{}/ELLIPSOMETRY/{}_DELTA.npy'.format(directory, file_name_ellip), 'w') as outfile:
                                 np.save(outfile, delta_spec)
 
-		for i, no in enumerate(no_array):
+		for i in xrange(n_model):
 
 			B_angle.append(np.array(psi_spec[i]).argmin())
 
-			plt.figure(0, figsize=(fig_x,fig_y))
-			plt.plot(Z, no, label=LEGEND[i], c=COLOUR[i])
-			#plt.plot(Z, ne_array[i][B_angle[i]], label=LEGEND[i], c=COLOUR[i], linestyle='dashed')
+			#plt.figure(0, figsize=(fig_x,fig_y))
+			#plt.plot(Z, no_array[i][qu], label=LEGEND[i], c=COLOUR[i])
+			#plt.plot(Z, ne_array[i][qu][B_angle[i]], label=LEGEND[i], c=COLOUR[i], linestyle='dashed')
 			#plt.plot([Z[surf_index], Z[surf_index]], [0, 2], c='black', linestyle='dashed')
 
-			plt.figure(1, figsize=(fig_x,fig_y))
-			plt.plot(ellip_angles / degree, psi_spec[i], label=LEGEND[i])
+			#plt.figure(1, figsize=(fig_x,fig_y))
+			#plt.plot(ellip_angles / degree, psi_spec[i], label=LEGEND[i])
 
-			plt.figure(2, figsize=(fig_x,fig_y))
-			plt.plot(ellip_angles / degree, delta_spec[i], label=LEGEND[i])
+			#plt.figure(2, figsize=(fig_x,fig_y))
+			#plt.plot(ellip_angles / degree, delta_spec[i], label=LEGEND[i])
+
+			#plt.show()
 			#plt.savefig('{}/DATA/ellipsometry_{}_delta.png'.format(directory, model.lower()))
 
 			ellipicity[i] = np.tan(psi_spec[i][B_angle[i]] * degree) * np.sin(delta_spec[i][B_angle[i]] * degree) * 1E4
-			drude_ellip[i] = 1E4 * np.pi / lam_vac * np.sqrt(exx_array[i][0]+exx_array[i][-1])/(exx_array[i][0]-exx_array[i][-1]) * lslice * np.sum([exx_array[i][l] + exx_array[i][0]*exx_array[i][-1] / ezz_array[i][l] - exx_array[i][0] - exx_array[i][-1] for l in range(nlayers)])
-			rough_ellip[i] = - 1E4 * 3./2 * np.pi / lam_vac * (exx_array[i][0]-exx_array[i][-1])**2/(exx_array[i][0]+exx_array[i][-1]) * qxi2_sum
+			drude_ellip[i] = 1E4 * np.pi / lam_vac * np.sqrt(exx_array[i][qu][0]+exx_array[i][qu][-1])/(exx_array[i][qu][0]-exx_array[i][qu][-1]) * lslice * np.sum([exx_array[i][qu][l] + exx_array[i][qu][0]*exx_array[i][qu][-1] / ezz_array[i][qu][l] - exx_array[i][qu][0] - exx_array[i][qu][-1] for l in range(nlayers)])
+			rough_ellip[i] = - 1E4 * 3./2 * np.pi / lam_vac * (exx_array[i][qu][0]-exx_array[i][qu][-1])**2/(exx_array[i][qu][0]+exx_array[i][qu][-1]) * qxi2_sum
 
-			if qm % 1 == 0:
+			if qu % 1 == 0:
 				if i == 1 or not np.isnan(ellipicity[0]):
                                 	fig = plt.figure(10+i, figsize=(fig_x+5,fig_y+5))
                                 	ax = fig.gca(projection='3d')
-                                	ax.plot(ellip_angles / degree, np.ones(n_angle) * qm, delta_spec[i], c='b')
+                                	ax.plot(ellip_angles / degree, np.ones(n_angle) * qu, delta_spec[i], c='b')
 
                                 	fig = plt.figure(20+i, figsize=(fig_x+5,fig_y+5))
                                 	ax = fig.gca(projection='3d')
-                                	ax.plot(ellip_angles / degree, np.ones(n_angle) * qm, psi_spec[i], c='r')
+                                	ax.plot(ellip_angles / degree, np.ones(n_angle) * qu, psi_spec[i], c='r')
 
 			#print "surface n = {:.5f}   bulk n = {:.5f}   dn = {:.5f} ({:.2%})".format(no[surf_index], no[-1], no[surf_index]- n[-1], (no[surf_index] - no[-1]) / no[-1])
 			#print "Ellipsometry direction = {}  Ellipicity = {}\n".format(np.sign(Delta[-1] - Delta[0]), np.imag(signal[B_angle[i]]))
 		rho_qm[j] += ellipicity
-		if not np.isnan(ellipicity).any(): print "{:10d} & {:10.3f} & {:10.3f} & {:10.3f} & {:10.2f} & {:10.2f} & {:10.2f} & {:10.2f} \\\\".format(qm, qu / (ql * qm), qu / (10 * ql * qm) * mol_sigma, cap_var, ellipicity[0], ellipicity[1], ellipicity[2], ellipicity[3])
-		else: print "{:10d} & {:10.3f} & {:10.3f} & {:10.3f} & {:10s} & {:10.2f} & {:10s} & {:10s} \\\\".format(qm, qu / (ql * qm), qu / (10 * ql * qm) * mol_sigma, cap_var, '', ellipicity[1], '', '')
-		surf_ep1[j] += np.array([no_array[0][surf_index]**2, no_array[0][-1]**2])
+		if not np.isnan(ellipicity).any(): print "{:10d} & {:10.3f} & {:10.3f} & {:10.3f} & {:10.2f} & {:10.2f} & {:10.2f} & {:10.2f} \\\\".format(qm, q_max / (q_min * qu), q_max / (10 * q_min * qu) * mol_sigma, cap_var, ellipicity[0], ellipicity[1], ellipicity[2], ellipicity[3])
+		else: print "{:10d} & {:10.3f} & {:10.3f} & {:10.3f} & {:10s} & {:10.2f} & {:10s} & {:10s} \\\\".format(qm, q_max / (q_min * qu), q_max / (10 * q_min * qu) * mol_sigma, cap_var, '', ellipicity[1], '', '')
+		surf_ep1[j] += np.array([no_array[0][qu][surf_index]**2, no_array[0][qu][-1]**2])
 		"""
 		"THEORETICAL ELLIPICITY"
 
@@ -676,6 +685,7 @@ def transfer_matrix(directory, model, csize, AT, sigma, mol_sigma, nslice, nfram
 			print np.sum(ellip) * lslice
 		#"""
 
+		"""
 		plt.figure(0, figsize=(fig_x,fig_y))
 		plt.xlabel(r'z Coordinate (\AA)')
 		plt.ylabel(r'n (a.u.)')
@@ -710,22 +720,15 @@ def transfer_matrix(directory, model, csize, AT, sigma, mol_sigma, nslice, nfram
 		plt.savefig('{}/{}_{}_{}_{}_{}_{}_delta.png'.format(groot, model.lower(), nslice, nm, qm, int(1/phi+0.5), nframe))
 		plt.savefig('{}/{}_{}_{}_{}_{}_{}_delta.pdf'.format(groot, model.lower(), nslice, nm, qm, int(1/phi+0.5), nframe))
 		plt.close(2)
+		"""
 
         print "{:10s} | {:10s} | {:10s} | {:10s} | {:10s} | {:10s}".format("qm", "lambda", "var", "diff surf no1", "diff surf ep1", "percentage")
         print "-" * 14 * 5
 
-	figure_name = '{}_{}_{}_{}_{}'.format(model.lower(), nm, qm, int(1/phi+0.5), nframe)
+	figure_name = '{}_{}_{}_{}'.format(model.lower(), qm, int(1/phi+0.5), nframe)
 
 	rho_qm = np.transpose(rho_qm)
 	var_xi = np.zeros(len(QM))
-        for j, qm in enumerate(QM):
-		Delta1 = (ut.sum_auv_2(av_auv1_2, nm, qm) - np.mean(mean_auv1)**2)
-                Delta2 = (ut.sum_auv_2(av_auv2_2, nm, qm) - np.mean(mean_auv2)**2)
-
-                cap_var = np.mean([Delta1, Delta2])
-		var_xi[j] = cap_var
-
-		print "{:10d} & {:10.3f} & {:10.3f} & {:10.3f} & {:10.3f} & {:10.1%}".format(qm, qu / (ql * qm), cap_var, np.sqrt(surf_ep1[j][0]) - np.sqrt(surf_ep1[j][1]), surf_ep1[j][0] - surf_ep1[j][1], (np.sqrt(surf_ep1[j][0])-np.sqrt(surf_ep1[j][1]))/np.sqrt(surf_ep1[j][1]))
 
 	index = np.min(np.argwhere(np.isnan(rho_qm[0])))
 
@@ -740,7 +743,7 @@ def transfer_matrix(directory, model, csize, AT, sigma, mol_sigma, nslice, nfram
 	plt.plot([0, lambda_m[0]], np.zeros(2), c='black', lw=1.0)
 	plt.plot([0, lambda_m[0]], exp_mean, c='black', linestyle='dashed', label='Experimental', lw=2.0)
 	plt.fill_between([0, lambda_m[0]], exp_mean-exp_std, exp_mean+exp_std, alpha=0.15, edgecolor='black', facecolor='black')
-	plt.axis([1, nm/2, -50, 50])
+	plt.axis([1, qm/2, -50, 50])
 	plt.xlabel(r'$\lambda_m$ ($\sigma_m^{-1}$)')
 	plt.ylabel(r'$\bar{\rho}$')
 	plt.legend(loc=4)
@@ -772,28 +775,28 @@ def transfer_matrix(directory, model, csize, AT, sigma, mol_sigma, nslice, nfram
         plt.savefig('{}/{}_rho_var.png'.format(groot, figure_name))
         plt.savefig('{}/{}_rho_var.pdf'.format(groot, figure_name))
 
-	for i, no in enumerate(no_array):
+	for i in xrange(len(no_array)):
 		fig = plt.figure(10+i, figsize=(fig_x+5,fig_y+5))
 		ax = fig.gca(projection='3d')
-		for j in xrange(len(experiment[3])): ax.plot(experiment[3][j], np.ones(len(experiment[3][j])) * (nm+1), experiment[5][j], c='black', marker='x', linestyle='dotted')
-		ax.set_xlabel(r'$\theta_i$ (\AA)')
+		for j in xrange(len(experiment[3])): ax.plot(experiment[3][j], np.ones(len(experiment[3][j])) * (qm+1), experiment[5][j], c='black', marker='x', linestyle='dotted')
+		ax.set_xlabel(r'$\theta_i$ (\AA)', labelpad=lnsp)
 		ax.set_xlim3d(start_angle, end_angle)
-		ax.set_zlabel(r'$\Delta$ ($^\circ$)')
+		ax.set_zlabel(r'$\Delta$ ($^\circ$)', labelpad=lnsp)
 		ax.set_zlim3d(0, 360)
-		ax.set_ylabel(r'$q_u$')
-		ax.set_ylim3d(1, nm+1)
+		ax.set_ylabel(r'$q_u$', labelpad=lnsp)
+		ax.set_ylim3d(1, qm+1)
 		plt.savefig('{}/{}_delta_spec_{}.png'.format(groot, figure_name, i))
 		plt.savefig('{}/{}_delta_spec_{}.pdf'.format(groot, figure_name, i))
 
 		fig = plt.figure(20+i, figsize=(fig_x+5,fig_y+5))
                 ax = fig.gca(projection='3d')
-                for j in xrange(len(experiment[3])): ax.plot(experiment[3][j], np.ones(len(experiment[3][j])) * (nm+1), experiment[4][j], c='black', marker='x', linestyle='dotted')
-                ax.set_xlabel(r'$\theta_i$ (\AA)')
+                for j in xrange(len(experiment[3])): ax.plot(experiment[3][j], np.ones(len(experiment[3][j])) * (qm+1), experiment[4][j], c='black', marker='x', linestyle='dotted')
+                ax.set_xlabel(r'$\theta_i$ (\AA)', labelpad=lnsp)
                 ax.set_xlim3d(start_angle, end_angle)
-                ax.set_zlabel(r'$\Psi$ ($^\circ$)')
+                ax.set_zlabel(r'$\Psi$ ($^\circ$)', labelpad=lnsp)
                 ax.set_zlim3d(0, 2.0)
-                ax.set_ylabel(r'$q_u$')
-                ax.set_ylim3d(0, nm+1)
+                ax.set_ylabel(r'$q_u$', labelpad=lnsp)
+                ax.set_ylim3d(0, qm+1)
                 plt.savefig('{}/{}_psi_spec_{}.png'.format(groot, figure_name, i))
                 plt.savefig('{}/{}_psi_spec_{}.pdf'.format(groot, figure_name, i))
 	plt.close('all')	

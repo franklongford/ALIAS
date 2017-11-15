@@ -14,6 +14,7 @@ import matplotlib
 #matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy as sp
 import scipy.constants as con
 from scipy import stats
 from scipy.optimize import curve_fit
@@ -54,7 +55,7 @@ T = int(raw_input("Temperature: (K) "))
 rc = int(raw_input("Cutoff: (A) "))
 func = raw_input("Function:\nThermodynamics or Ellipsometry? (T, E): ")
 
-if model.upper() in['ARGON', 'METHANOL', 'ETHANOL', 'DMSO']: root = '/data/fl7g13/AMBER/{}/T_{}_K/CUT_{}_A'.format(model.upper(), T, rc)
+if model.upper() in ['ARGON', 'METHANOL', 'ETHANOL', 'DMSO']: root = '/data/fl7g13/AMBER/{}/T_{}_K/CUT_{}_A'.format(model.upper(), T, rc)
 else: root = '/data/fl7g13/AMBER/WATER/{}/T_{}_K/CUT_{}_A'.format(model.upper(), T, rc)
 
 if func.upper() == 'T':
@@ -62,7 +63,6 @@ if func.upper() == 'T':
 	import thermodynamics as thermo
 	import graphs
 
-	#TYPE = raw_input("Width (W), Area (A) or Cubic (C) variation: ")
 	force = raw_input("VDW Force corrections? (Y/N): ")
 
 	if force.upper() == 'Y': folder = 'SURFACE_2'
@@ -130,6 +130,7 @@ if func.upper() == 'T':
 
 		ow_den =  bool(raw_input("OVERWRITE ALL DENSITY? (Y/N): ").upper() == 'Y')
 		ow_thermo =  bool(raw_input("OVERWRITE ALL THERMODYNAMICS? (Y/N): ").upper() == 'Y')
+		ow_pos = bool(raw_input("OVERWRITE AT MOL POSITIONS? (Y/N): ").upper() == 'Y')
 
 		sigma = np.max(LJ[1])
 		epsilon = np.max(LJ[0])
@@ -158,7 +159,7 @@ if func.upper() == 'T':
 
 			if not os.path.exists("{}/DATA".format(directory)): os.mkdir("{}/DATA".format(directory))
 
-			natom, nmol, ntraj, DIM, COM = ut.get_sim_param(root_, directory, data_dir, model, nsite, suffix, csize, M, com, False, False)
+			natom, nmol, ntraj, DIM = ut.get_sim_param(root_, directory, data_dir, model, nsite, suffix, csize, M, com, ow_pos, False)
 
 			nslice = int(DIM[2] / lslice)
 			nframe = ntraj
@@ -178,8 +179,8 @@ if func.upper() == 'T':
 				print "FILE FOUND  {}/DATA/DEN/{}_{}_{}_DEN.npy".format(directory, model.lower(), nslice, nframe)
 				#if bool(raw_input("OVERWRITE? (Y/N): ").upper() == 'Y'):
 				#	ow_count = bool(raw_input("OVERWRITE COUNT? (Y/N): ").upper() == 'Y')
-				#	den.density_profile(directory, model, csize, suffix, nframe, natom, nmol, nsite, AT, M, COM, DIM, nslice, ow_count)	
-			else: den.density_profile(data_dir, model, csize, suffix, nframe, natom, nmol, nsite, AT, M, COM, DIM, nslice, ow_den)
+				#	den.density_profile(data_dir, model, csize, suffix, ntraj, nframe, natom, nmol, nsite, AT, M, com, DIM, nslice, ow_count)	
+			else: den.density_profile(data_dir, model, csize, suffix, ntraj, nframe, natom, nmol, nsite, AT, M, com, DIM, nslice, ow_count)
 
 			with file('{}/DATA/DEN/{}_{}_{}_PAR.npy'.format(directory, model.lower(), nslice, nframe), 'r') as infile:
 				param = np.load(infile)
@@ -200,8 +201,8 @@ if func.upper() == 'T':
 				print 'FILE FOUND  {}/DATA/THERMO/{}_{}_E_ST.npy'.format(directory, model.lower(), nframe)
 				#if bool(raw_input("OVERWRITE? (Y/N): ").upper() == 'Y'):
 				#	ow_ntb = bool(raw_input("OVERWRITE BLOCK ERRORS? (Y/N): ").upper() == 'Y')
-				#	thermo.get_thermo(directory, model, csize, suffix, nslice, nframe, DIM, nmol, rc, sigma, epsilon, ow_ntb)
-			else: thermo.get_thermo(directory, model, csize, suffix, nslice, nframe, DIM, nmol, rc, sigma, epsilon, ow_thermo, 'J')
+				#	thermo.get_thermo(directory, model, csize, suffix, nslice, nframe, DIM, nmol, rc, sigma, epsilon, ow_ntb, 'J')
+			else: thermo.get_thermo(directory, model, csize, suffix, nslice, nframe, DIM, nmol, rc, sigma, epsilon, ow_ntb, 'J')
 			
 			with file('{}/DATA/THERMO/{}_{}_E_ST.npy'.format(directory, model.lower(), nframe), 'r') as infile:
 				ENERGY[n], ENERGY_ERR[n], _, _, _, _, TEMP[n], TEMP_ERR[n], TENSION[n], TENSION_ERR[n] = np.load(infile)
@@ -282,8 +283,8 @@ if func.upper() == 'T':
 		print "Average var_X = {}".format(np.mean(VAR_X))
 		print "Average density = {}".format(np.mean(TOT_DEN_RANGE))
 	else: 
-		print "Average var_X = {} kJ^2 mol^-2".format(np.mean(VAR_X) * 1E-12 * con.N_A**2)#conv_mJ_kcalmol**2)
-		print "Average std_X = {} kJ mol^-1".format(np.sqrt(np.mean(VAR_X)) * 1E-6 * con.N_A)#conv_mJ_kcalmol**2)
+		print "Average var_X = {} ({}) kJ^2 mol^-2".format(np.mean(VAR_X) * 1E-12 * con.N_A**2, sp.stats.sem(VAR_X) * 1E-12 * con.N_A**2)#conv_mJ_kcalmol**2)
+		print "Average std_X = {} ({}) kJ mol^-1".format(np.sqrt(np.mean(VAR_X)) * 1E-6 * con.N_A, np.sqrt(sp.stats.sem(VAR_X))* 1E-6 * con.N_A)#conv_mJ_kcalmol**2)
 		print "Average density = {} g cm^-3".format(np.mean(TOT_DEN_RANGE) * np.sum(M) / con.N_A * 1E-6)
 
 
@@ -306,7 +307,10 @@ if func.upper() == 'T':
 	print "Surface ENTROPY {} = {} ({})".format(model.upper(), (m - av_gamma) / np.mean(TOT_TEMP), error_Ss )
 	print "INTERCEPT: {} ({})  CUBIC ENERGY: {} ".format(c, np.sqrt(pcov[1][1]), c_energy)
 
-	graphs.print_average_graphs_thermo(model, rc, csize, red_units, TOT_ZA_RANGE, y_data_za, an_range, ydata)
+	groot = '{}/Figures'.format(root)
+	if not os.path.exists(groot): os.mkdir(groot)	
+
+	graphs.print_average_graphs_thermo(groot, model, rc, csize, red_units, TOT_ZA_RANGE, y_data_za, an_range, ydata)
 
 	plt.show()
 
@@ -389,6 +393,8 @@ elif func.upper() == 'E':
 	
 	directory = '{}/{}'.format(root, folder.upper())
 	data_dir = '{}/DATA'.format(directory)
+	groot = "{}/Figures".format(data_dir)
+	if not os.path.exists(groot): os.mkdir(groot)
 
 	if not os.path.exists(data_dir): os.mkdir(data_dir)
 
@@ -396,7 +402,7 @@ elif func.upper() == 'E':
 
 	ow_pos = bool(raw_input("OVERWRITE AT MOL POSITIONS? (Y/N): ").upper() == 'Y')
 
-	natom, nmol, ntraj, DIM, COM = ut.get_sim_param(root, directory, data_dir, model, nsite, suffix, csize, M, com, ow_pos, False)
+	natom, nmol, ntraj, DIM = ut.get_sim_param(root, directory, data_dir, model, nsite, suffix, csize, M, com, ow_pos, False)
 
 	lslice = 0.05 * sigma
 	nslice = int(DIM[2] / lslice)
@@ -408,10 +414,9 @@ elif func.upper() == 'E':
 	mol_sigma, ns = ut.get_ism_constants(model, sigma)
 	npi = 50
 
-	if model.upper() == 'METHANOL': nframe = 3500
-	elif model.upper() == 'TIP4P2005': nframe = 3500
-	elif model.upper() == 'ARGON': nframe = 100
-	else: nframe = ntraj
+	nframe = ntraj
+	if model.upper() == 'METHANOL': nframe = 200
+	if model.upper() == 'TIP4P2005': nframe = 3000
 
 	print "natom = {}, nmol = {}, nframe = {}\nDIM = {}, lslice = {}, nslice = {}\nmol mass = {}\n".format(natom, nmol, nframe, DIM, lslice, nslice, np.sum(M))
 
@@ -427,11 +432,12 @@ elif func.upper() == 'E':
 		print "FILE FOUND '{}/DEN/{}_DEN.npy".format(data_dir, file_name_den)
 		if bool(raw_input("OVERWRITE? (Y/N): ").upper() == 'Y'):
 			ow_count = bool(raw_input("OVERWRITE COUNT? (Y/N): ").upper() == 'Y')
-			den.density_profile(data_dir, model, csize, suffix, nframe, natom, nmol, nsite, AT, M, COM, DIM, nslice, ow_count)	
-	else: den.density_profile(data_dir, model, csize, suffix, nframe, natom, nmol, nsite, AT, M, COM, DIM, nslice, ow_all)
+			den.density_profile(data_dir, model, csize, suffix, nframe, ntraj, natom, nmol, nsite, AT, M, com, DIM, nslice, ow_count)	
+	else: den.density_profile(data_dir, model, csize, suffix, nframe, ntraj, natom, nmol, nsite, AT, M, com, DIM, nslice, ow_all)
 	#graphs.print_graphs_density(directory, model, nsite, AT, M, nslice, rc, csize, folder, suffix, nframe, DIM)
 
 	ow_all = False
+	ow_local = False
 	ow_angle = False
 	ow_polar = False
 
@@ -444,11 +450,12 @@ elif func.upper() == 'E':
 		file_name_euler = '{}_{}_{}_{}'.format(model.lower(), a_type, nslice, nframe)
 		if os.path.exists('{}/EULER/{}_EUL.npy'.format(data_dir, file_name_euler)) and not ow_all:
 			print 'FILE FOUND {}/EULER/{}_EUL.npy'.format(data_dir, file_name_euler)
-			if bool(raw_input("OVERWRITE? (Y/N): ").upper() == 'Y'):  
+			if bool(raw_input("OVERWRITE? (Y/N): ").upper() == 'Y'): 
+				ow_local = bool(raw_input("OVERWRITE LOCAL FRAMES? (Y/N): ").upper() == 'Y')
 				ow_angle = bool(raw_input("OVERWRITE ANGLES? (Y/N): ").upper() == 'Y')
 				ow_polar = bool(raw_input("OVERWRITE POLARISABILITY? (Y/N): ").upper() == 'Y') 
-				ori.euler_profile(data_dir, nframe, nslice, nmol, model, csize, suffix, AT, Q, M, LJ, COM, DIM, nsite, a_type, npi, ow_angle, ow_polar)
-		else: ori.euler_profile(data_dir, nframe, nslice, nmol, model, csize, suffix, AT, Q, M, LJ, COM, DIM, nsite, a_type, npi, ow_all, ow_all)
+				ori.euler_profile(data_dir, nframe, ntraj, nslice, nmol, model, csize, suffix, AT, Q, M, LJ, com, DIM, nsite, a_type, npi, ow_local, ow_angle, ow_polar)
+		else: ori.euler_profile(data_dir, nframe, ntraj, nslice, nmol, model, csize, suffix, AT, Q, M, LJ, com, DIM, nsite, a_type, npi, ow_local, ow_all, ow_all)
 		#graphs.print_graphs_orientational(directory, model, nsite, AT, nslice, a_type, rc, csize, folder, suffix, nframe, DIM)
 
 	ow_all = False
@@ -467,14 +474,14 @@ elif func.upper() == 'E':
 			die.dielectric_refractive_index(data_dir, model, csize, AT, sigma, mol_sigma, nslice, nframe, a_type, DIM)
 	else: die.dielectric_refractive_index(data_dir, model, csize, AT, sigma, mol_sigma, nslice, nframe, a_type, DIM)
 	#graphs.print_graphs_dielectric(directory, model, nsite, AT, nslice, a_type, rc, csize, folder, suffix, nframe, DIM)
-	
+
 	print "\n------STARTING INTRINSIC SAMPLING METHODS-------\n"
 
-	qu = 2 * np.pi / mol_sigma
-	ql = 2 * np.pi / np.sqrt(DIM[0] * DIM[1])
-	nm = int(qu / ql)
+	q_max = 2 * np.pi / mol_sigma
+	q_min = 2 * np.pi / np.sqrt(DIM[0] * DIM[1])
+	qm = int(q_max / q_min)
 
-	if bool(raw_input("PERFORM NS OPTIMISATION? (Y/N): ").upper() == 'Y'): ns = ism.optimise_ns(directory, model.lower(), csize, nmol, nsite, nm, phi, vlim, ncube, DIM, COM, M, mol_sigma, ns-0.20, ns + 0.25)
+	if bool(raw_input("PERFORM NS OPTIMISATION? (Y/N): ").upper() == 'Y'): ns = ism.optimise_ns(directory, model.lower(), csize, nmol, nsite, qm, phi, vlim, ncube, DIM, COM, M, mol_sigma, ns-0.20, ns + 0.25)
 
         #n0 = int(ns * mol_sigma**2 + 0.5)
         #Np = int(DIM[0] * DIM[1] * n0)
@@ -486,11 +493,11 @@ elif func.upper() == 'E':
 	ow_angle = False
 	ow_polar = False
 
-	QM = range(1, nm+1)
+	QM = range(1, qm+1)
 	print QM
-	print "{:12s} | {:12s} | {:12s} | {:12s} | {:12s} | {:12s}".format('nm', 'ns', 'n0', 'phi', "lambda", "lambda (nm)")
+	print "{:12s} | {:12s} | {:12s} | {:12s} | {:12s} | {:12s}".format('qm', 'ns', 'n0', 'phi', "lambda", "lambda (nm)")
 	print "-" * 14 * 5 
-	for qm in QM: print "{:12d} | {:12.4f} | {:12d} | {:12.8f} | {:12.4f} | {:12.4f}".format(qm, ns, n0, phi, qu / (qm*ql), mol_sigma * qu / (10*qm*ql))
+	for qu in QM: print "{:12d} | {:12.4f} | {:12d} | {:12.8f} | {:12.4f} | {:12.4f}".format(qu, ns, n0, phi, q_max / (qu*q_min), mol_sigma * q_max / (10*qu*q_min))
 	print ""
 
 	if not os.path.exists("{}/INTDEN".format(data_dir)): os.mkdir("{}/INTDEN".format(data_dir))
@@ -504,21 +511,24 @@ elif func.upper() == 'E':
 	ow_coeff = bool(raw_input("OVERWRITE ACOEFF? (Y/N): ").upper() == 'Y')
 	ow_recon = bool(raw_input("OVERWRITE RECON ACOEFF? (Y/N): ").upper() == 'Y')
 	ow_pos = bool(raw_input("OVERWRITE POSITIONS? (Y/N): ").upper() == 'Y')
-	ow_dxdyz = bool(raw_input("OVERWRITE DERIVATIVES? (Y/N): ").upper() == 'Y')
+	ow_local = bool(raw_input("OVERWRITE LOCAL FRAMES? (Y/N): ").upper() == 'Y')
 	ow_profile = bool(raw_input("OVERWRITE INTRINSIC PROFILES? (Y/N): ").upper() == 'Y')
 	if ow_profile:
 		ow_dist = bool(raw_input("OVERWRITE INTRINSIC DISTRIBUTIONS? (Y/N): ").upper() == 'Y')
 		ow_count = bool(raw_input("OVERWRITE INTRINSIC COUNT? (Y/N): ").upper() == 'Y')
 		if model.upper() != 'ARGON':
-			ow_angle = bool(raw_input("OVERWRITE INTRINSIC ANGLES? (Y/N): ").upper() == 'Y')
+			#ow_angle = bool(raw_input("OVERWRITE INTRINSIC ANGLES? (Y/N): ").upper() == 'Y')
 			ow_polar = bool(raw_input("OVERWRITE INTRINSIC POLARISABILITY? (Y/N): ").upper() == 'Y') 	
-	pos_1, pos_2 = ism.intrinsic_profile(data_dir, model, csize, nframe, natom, nmol, nsite, AT, M, a_type, mol_sigma, COM, DIM, nslice, ncube, nm, QM, n0, phi, npi, vlim, ow_profile, ow_coeff, ow_recon, ow_pos, ow_dxdyz, ow_dist, ow_count, ow_angle, ow_polar)
+	pos_1, pos_2 = ism.intrinsic_profile(data_dir, model, csize, ntraj, nframe, natom, nmol, nsite, AT, M, a_type, mol_sigma, com, DIM, nslice, ncube, qm, QM, n0, phi, npi, vlim, ow_profile, ow_coeff, ow_recon, ow_pos, ow_local, ow_dist, ow_count, ow_angle, ow_polar)
 
-	graphs.print_graphs_intrinsic_density(data_dir, model, nsite, AT, M, nslice, nm, QM, n0, phi, rc, csize, folder, suffix, nframe, DIM, pos_1, pos_2)
-	if model.upper() != 'ARGON': graphs.print_graphs_intrinsic_orientational(directory, model, nsite, AT, nslice, nm, QM, n0, phi, a_type, rc, csize, folder, suffix, nframe, DIM, pos_1, pos_2)
-	graphs.print_graphs_intrinsic_dielectric(directory, model, nsite, AT, nslice, nm, QM, n0, phi, a_type, rc, csize, folder, suffix, nframe, DIM, pos_1, pos_2)
+	if bool(raw_input("PLOT GRAPHS? (Y/N): ").upper() == 'Y'):
+		graphs.print_graphs_intrinsic_density(data_dir, model, nsite, AT, M, nslice, qm, QM, n0, phi, rc, csize, folder, suffix, nframe, DIM, pos_1, pos_2)
+
+
+		if model.upper() != 'ARGON': graphs.print_graphs_intrinsic_orientational(data_dir, model, nsite, AT, nslice, qm, QM, n0, phi, a_type, rc, csize, folder, suffix, nframe, DIM, pos_1, pos_2)
+		graphs.print_graphs_intrinsic_dielectric(data_dir, model, nsite, AT, nslice, qm, QM, n0, phi, a_type, rc, csize, folder, suffix, nframe, DIM, pos_1, pos_2)
 
 	print "\n-------STARTING ELLIPSOMETRY PREDICTIONS--------\n"
 
-	ellips.transfer_matrix(data_dir, model, csize, AT, sigma, mol_sigma, nslice, nframe, a_type, nm, QM, n0, phi, DIM, rc)
+	ellips.transfer_matrix(data_dir, model, csize, AT, sigma, mol_sigma, nslice, nframe, a_type, qm, QM, n0, phi, DIM, rc)
 

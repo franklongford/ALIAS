@@ -24,58 +24,36 @@ from scipy import constants as con
 from scipy.optimize import curve_fit
 
 import utilities as ut
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
-def count(directory, model, csize, nslice, nsite, natom, AT, M, DIM, COM, frame, ow_count):
+def count(directory, zat, zmol, model, nslice, nsite, AT, M, DIM, ow_count):
 	
-	file_name = '{}_{}_{}'.format(model.lower(), nslice, frame)
+	natom = len(zat)
+	nmol = len(zmol)
 
-	if os.path.exists('{}/DEN/{}_COUNT.txt'.format(directory, file_name)): ut.convert_txt_npy('{}/DEN/{}_COUNT'.format(directory, file_name))
-	if os.path.exists('{}/DEN/{}_COUNT.npy'.format(directory, file_name)) and not ow_count:
-		try:
-			with file('{}/DEN/{}_{}_{}_COUNT.npy'.format(directory, model.lower(), nslice, frame)) as infile:
-				count_array = np.load(infile)
-		except IndexError: ow_count = True
-	else: ow_count = True
+	atom_types = list(set(AT))
+	n_atom_types = len(atom_types)
 
-	if ow_count:
-
-		atom_types = list(set(AT))
-		n_atom_types = len(atom_types)
+	count_array = np.zeros((2 + n_atom_types, nslice))
+	at_index = np.array([atom_types.index(at) for at in AT] * nmol)
 	
-		count_array = [np.zeros(nslice) for n in range(2 + n_atom_types)]
+	z = zat + DIM[2]/2.
+	index_z = np.array(z * nslice / DIM[2], dtype=int) % nslice
 
-		xat, yat, zat = ut.read_atom_positions(directory, model, csize, frame)
-		xmol, ymol, zmol = ut.read_mol_positions(directory, model, csize, frame)
-		xR, yR, zR = COM[frame]
+	for i in xrange(n_atom_types):
+		count_array[i+1] += np.histogram(index_z[at_index == i], bins=nslice, range=(0, nslice))[0]
+		count_array[0] += count_array[i+1] * M[AT.index(atom_types[i])]
 
-		for n in xrange(natom):
-			m = n % nsite
-			at_type = AT[m]
+	z = zmol + DIM[2]/2.
+	index_z = np.array(z * nslice / DIM[2], dtype=int) % nslice
+	count_array[-1] += np.histogram(index_z, bins=nslice, range=(0, nslice))[0]
 
-			try:
-				z = (zat[n] - zR + 0.5 * DIM[2])
-			except:
-				print n, natom, len(zat) 
-				sys.exit()
-			index_at = int(z * nslice / DIM[2]) % nslice
-
-			count_array[0][index_at] += M[m]
-			count_array[1 + atom_types.index(at_type)][index_at] += 1
-
-			if m == 0:
-				z = (zmol[n/nsite] - zR + 0.5 * DIM[2])
-				index_mol = int(z * nslice / DIM[2]) % nslice
-				count_array[-1][index_mol] += 1
-
-		with file('{}/DEN/{}_{}_{}_COUNT.npy'.format(directory, model.lower(), nslice, frame), 'w') as outfile:
-			np.save(outfile, (count_array))		
+	assert np.sum(count_array[-1]) == nmol
 
 	return count_array
 
 
-
-def density_profile(directory, model, csize, suffix, nframe, natom, nmol, nsite, AT, M, COM, DIM, nslice, ow_count):
+def density_profile(directory, model, csize, suffix, nframe, ntraj, natom, nmol, nsite, AT, M, com, DIM, nslice, ow_count):
 	"Saves atom, mol and mass profiles as well as parameters for a tanh mol density function, fitted to ntraj number of trajectory snapshots" 
 
 	print "\nCALCULATING DENSITY {}".format(directory)
@@ -83,12 +61,7 @@ def density_profile(directory, model, csize, suffix, nframe, natom, nmol, nsite,
 	atom_types = list(set(AT))
 	n_atom_types = len(atom_types)
 
-	av_density_array = [np.zeros(nslice) for n in range(2 + n_atom_types)]
-
-	avpl = []
-	avpv = []
-	avden = []
-	avz0 = []
+	#print AT, M, atom_types
 	
 	Z1 = np.linspace(0, DIM[2], nslice)
 	Z2 = np.linspace(-1/2.*DIM[2], 1/2.*DIM[2], nslice)
@@ -96,29 +69,66 @@ def density_profile(directory, model, csize, suffix, nframe, natom, nmol, nsite,
 	vslice = DIM[0] * DIM[1] * DIM[2] / nslice
 	Acm = 1E-8
 
-	for frame in xrange(nframe):
-		sys.stdout.write("PROCESSING {} out of {} FRAMES\r".format(frame, nframe) )
-		sys.stdout.flush()
-		
-		count_array = count(directory, model, csize, nslice, nsite, natom, AT, M, DIM, COM, frame, ow_count)
-		
-		for i in xrange(2 + n_atom_types): av_density_array[i] += count_array[i] / (nframe * vslice)
+	file_name_den = '{}_{}_{}'.format(model.lower(), nslice, nframe)
 
-	print "\n"
+	if not ow_count:
+		try:
+			with file('{}/DEN/{}_COUNT.npy'.format(directory, file_name_den)) as infile:
+				tot_count_array = np.load(infile)
+		except: ow_count = True
 
+	if ow_count: 
+
+		xat, yat, zat = ut.read_atom_positions(directory, model, csize, ntraj, nframe, com)
+		xmol, ymol, zmol = ut.read_mol_positions(directory, model, csize, ntraj, nframe, com)
+		COM = ut.read_com_positions(directory, model, csize, ntraj, nframe, com)
+		tot_count_array = np.zeros((nframe, 2 + n_atom_types, nslice))  
+
+		for frame in xrange(nframe):
+			sys.stdout.write("PROCESSING {} out of {} FRAMES\r".format(frame, nframe) )
+			sys.stdout.flush()
+
+			file_name_count = '{}_{}_{}'.format(model.lower(), nslice, frame)
+
+			if os.path.exists('{}/DEN/{}_COUNT.txt'.format(directory, file_name_count)): ut.convert_txt_npy('{}/DEN/{}_COUNT'.format(directory, file_name_count))
+			if os.path.exists('{}/DEN/{}_COUNT.npy'.format(directory, file_name_count)):
+				try:
+					with file('{}/DEN/{}_COUNT.npy'.format(directory, file_name_count)) as infile:
+						count_array = np.load(infile)
+					os.remove('{}/DEN/{}_COUNT.npy'.format(directory, file_name_count))
+				except IndexError: ow_count = True
+
+			if ow_count: count_array = count(directory, zat[frame]-COM[frame][2], zmol[frame]-COM[frame][2], model, nslice, nsite, AT, M, DIM, ow_count)
+		
+			tot_count_array[frame] += count_array
+
+
+		with file('{}/DEN/{}_COUNT.npy'.format(directory, file_name_den), 'w') as outfile:
+			np.save(outfile, (tot_count_array))
+
+	av_density_array = np.sum(tot_count_array, axis=0) / (nframe * vslice)
 	av_density_array[0] = av_density_array[0] / (con.N_A * Acm**3)
 
-	param, _ = curve_fit(ut.den_func, Z1, av_density_array[0], [1., 0., DIM[2]/2., DIM[2]/4., 2.])
-	param = np.absolute(param)
+	popt, perr = curve_fit(ut.den_func, Z1, av_density_array[0], [1., 0., DIM[2]/2., DIM[2]/4., 2.])
+	popt = np.absolute(popt)
 
-	print "WRITING TO FILE..."
+	"""
+	plt.plot(Z1, av_density_array[-1])
+	#plt.plot(Z1, [ut.den_func(z, popt[0], popt[1], popt[2], popt[3], popt[4]) for z in Z1])
+	plt.show()
+	plt.close('all')
+	#"""
 
-	file_name = '{}_{}_{}'.format(model.lower(), nslice, nframe)
+	print "\nWRITING TO FILE..."
 
-	with file('{}/DEN/{}_DEN.npy'.format(directory, file_name), 'w') as outfile:
+	if os.path.exists('{}/DEN/{}_DEN.txt'.format(directory, file_name_den)):
+		os.remove('{}/DEN/{}_DEN.txt'.format(directory, file_name_den))
+		os.remove('{}/DEN/{}_PAR.txt'.format(directory, file_name_den))
+
+	with file('{}/DEN/{}_DEN.npy'.format(directory, file_name_den), 'w') as outfile:
 		np.save(outfile, (av_density_array))
-	with file('{}/DEN/{}_PAR.npy'.format(directory, file_name), 'w') as outfile:
-		np.save(outfile, param)
+	with file('{}/DEN/{}_PAR.npy'.format(directory, file_name_den), 'w') as outfile:
+		np.save(outfile, popt)
 
 	print "{} {} {} COMPLETE\n".format(directory, model.upper(), csize)
 
