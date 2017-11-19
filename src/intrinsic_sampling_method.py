@@ -30,6 +30,7 @@ from matplotlib.ticker import MaxNLocator
 import utilities as ut
 
 sqrt_2 = np.sqrt(2.)
+vcheck = np.vectorize(ut.check_uv)
 
 def combine_intrinsic_surface():
 
@@ -133,6 +134,15 @@ def intrinsic_surface(directory, xmol, ymol, zmol, model, nsite, nmol, ncube, DI
 	return auv1, auv2, auv1_recon, auv2_recon, np.array(piv_n1, dtype=int), np.array(piv_n2, dtype=int)
 
 
+def numpy_remove(list1, list2):
+
+	option1 = [i for i in list1 if i not in list2]
+	option2 = np.delete(list1, np.where(np.isin(list1, list2)))
+
+	assert np.sum(option1 - option2) == 0
+
+	return np.delete(list1, np.where(np.isin(list1, list2)))
+
 def build_surface(xmol, ymol, zmol, DIM, nmol, ncube, mol_sigma, qm, n0, phi, vlim, tau, max_r):
 	"Create coefficients auv1 and aiv2 for Fourier sum representing intrinsic surface"
 
@@ -186,10 +196,9 @@ def build_surface(xmol, ymol, zmol, DIM, nmol, ncube, mol_sigma, qm, n0, phi, vl
 		else: vapour_list.append(n)
 
 	"Update molecular and pivot lists"
-
-	mol_list = [i for i in mol_list if i not in vapour_list]
-	mol_list = [i for i in mol_list if i not in piv_n1]
-	mol_list = np.array([i for i in mol_list if i not in piv_n2])
+	mol_list = numpy_remove(mol_list, vapour_list)#[i for i in mol_list if i not in vapour_list]
+	mol_list = numpy_remove(mol_list, piv_n1)#[i for i in mol_list if i not in piv_n1]
+	mol_list = numpy_remove(mol_list, piv_n2)#np.array([i for i in mol_list if i not in piv_n2])
 
 	new_piv1 = piv_n1
 	new_piv2 = piv_n2
@@ -198,8 +207,9 @@ def build_surface(xmol, ymol, zmol, DIM, nmol, ncube, mol_sigma, qm, n0, phi, vl
 	assert np.sum(np.isin(piv_n1, mol_list)) == 0
 	assert np.sum(np.isin(piv_n2, mol_list)) == 0
 
-	print piv_n1, piv_n2
+	print 'Initial {} pivots selected: {:10.3f} s'.format(ncube**2, time.time() - start)
 
+	"Split molecular position lists into two volumes for each surface"
 	mol_list1 = mol_list[zmol[mol_list] < 0]
 	mol_list2 = mol_list[zmol[mol_list] >= 0]
 
@@ -208,20 +218,14 @@ def build_surface(xmol, ymol, zmol, DIM, nmol, ncube, mol_sigma, qm, n0, phi, vl
 
 	n_waves = 2*qm+1
 
-	print 'Initial {} pivots selected: {:10.3f} s'.format(ncube**2, time.time() - start)
-
 	"Form the diagonal xi^2 terms"
-	diag = np.zeros(n_waves**2)
-	
-	for j in xrange(n_waves**2): 
-		u = int(j/n_waves)-qm
-		v = int(j%n_waves)-qm
-		diag[j] += ut.check_uv(u, v) * (u**2 * DIM[1] / DIM[0] + v**2 * DIM[0] / DIM[1])
-	diag = np.diagflat(diag)
+	u = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
+        v = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
 
-	diag *= 4 * np.pi**2 * phi
-              
-	"Create A matrix and b vector for linear algebra equation Ax = b"
+	diag = vcheck(u, v) * (u**2 * DIM[1] / DIM[0] + v**2 * DIM[0] / DIM[1])
+	diag = 4 * np.pi**2 * phi * np.diagflat(diag)
+
+	"Create empty A matrix and b vector for linear algebra equation Ax = b"
 	A = np.zeros((2, n_waves**2, n_waves**2))
 	b = np.zeros((2, n_waves**2))
 
@@ -250,6 +254,7 @@ def build_surface(xmol, ymol, zmol, DIM, nmol, ncube, mol_sigma, qm, n0, phi, vl
 
 		end2 = time.time()
 
+		"Check whether more pivots are needed"
 		if len(piv_n1) == n0: 
 			build_surf1 = False
 			new_piv1 = []
@@ -257,23 +262,27 @@ def build_surface(xmol, ymol, zmol, DIM, nmol, ncube, mol_sigma, qm, n0, phi, vl
 			build_surf2 = False
 			new_piv2 = []
 
+		if build_surf1 or build_surf2:
+                        finding_pivots = True
+                        piv_search1 = True
+                        piv_search2 = True
+                else:
+                        finding_pivots = False
+                        building_surface = False
+                        print "ENDING SEARCH"
+
+		"Calculate distance between molecular z positions and intrinsic surface"
 		if build_surf1: zeta_list1 = zeta_list(xmol, ymol, mol_list1, auv1, qm, DIM)
 		if build_surf2: zeta_list2 = zeta_list(xmol, ymol, mol_list2, auv2, qm, DIM)
 
-		if build_surf1 or build_surf2:
-			finding_pivots = True
-			piv_search1 = True
-			piv_search2 = True
-		else:
-			finding_pivots = False
-			building_surface = False
-			print "ENDING SEARCH"
-
+		"Search for more molecular pivot sites"
                 while finding_pivots:
 
+			"Perform pivot selectrion"
 			if piv_search1 and build_surf1: mol_list1, new_piv1, piv_n1 = pivot_selection(zmol, mol_sigma, n0, mol_list1, zeta_list1, piv_n1, tau1)
 			if piv_search2 and build_surf2: mol_list2, new_piv2, piv_n2 = pivot_selection(zmol, mol_sigma, n0, mol_list2, zeta_list2, piv_n2, tau2)
 
+			"Check whether threshold distance tau needs to be increased"
                         if len(new_piv1) == 0 and len(piv_n1) < n0: tau1 += 0.1 * tau 
 			else: piv_search1 = False
 
@@ -285,6 +294,7 @@ def build_surface(xmol, ymol, zmol, DIM, nmol, ncube, mol_sigma, qm, n0, phi, vl
 
 		end = time.time()
 	
+		"Calculate surface areas excess"
 		area1 = slice_area(auv1**2, qm, qm, DIM)
 		area2 = slice_area(auv2**2, qm, qm, DIM)
 
@@ -296,6 +306,7 @@ def build_surface(xmol, ymol, zmol, DIM, nmol, ncube, mol_sigma, qm, n0, phi, vl
 
 
 def zeta_list(xmol, ymol, mol_list, auv, qm, DIM):
+	"Calculate dz (zeta) between molecular sites an intrinsic surface for highest resolution"
 
 	zeta_list = xi(xmol[mol_list], ymol[mol_list], qm, qm, auv, DIM)
    
@@ -303,20 +314,27 @@ def zeta_list(xmol, ymol, mol_list, auv, qm, DIM):
 
 
 def pivot_selection(zmol, mol_sigma, n0, mol_list, zeta_list, piv_n, tau):
+	"Search through zeta_list for values within tau threshold and add to pivot list"
 
-	zeta = np.abs(zmol[mol_list] - zeta_list)
+	"Find new pivots based on zeta <= tau"
+	zeta = np.abs(zmol[mol_list] - zeta_list)	
 	new_piv = mol_list[zeta <= tau]
 	dz_new_piv = zeta[zeta <= tau]
 
+	"Order pivots by zeta (shortest to longest)"
 	ut.bubblesort(new_piv, dz_new_piv)
 
+	"Add new pivots to pivoy list and check whether max n0 pivots are selected"
 	piv_n = np.append(piv_n, new_piv)
 	if len(piv_n) > n0: 
 		new_piv = new_piv[:len(piv_n)-n0]
 		piv_n = piv_n[:n0] 
 	
-	mol_list = np.array([i for i in mol_list if i not in new_piv])
-
+	"Remove pivots form molecular search list"
+	far_piv = mol_list[zeta > 6.0*tau]
+	mol_list = numpy_remove(mol_list, np.append(new_piv, far_piv))#np.array([i for i in mol_list if i not in new_piv])
+	#mol_list = numpy_remove(mol_list, new_piv)
+	
 	assert np.sum(np.isin(new_piv, mol_list)) == 0
 
 	return mol_list, new_piv, piv_n
@@ -366,26 +384,30 @@ def surface_reconstruction(xmol, ymol, zmol, qm, n0, phi, psi, auv1, auv2, piv_n
 
 	"Form the diagonal xi^2 terms"
 
-	fuv1 = np.array([function(xmol[piv_n1], int(j/n_waves)-qm, DIM[0]) * function(ymol[piv_n1], int(j%n_waves)-qm, DIM[1]) for j in xrange(n_waves**2)])
-        b1 = np.array([np.sum(zmol[piv_n1] * fuv1[k]) for k in xrange(n_waves**2)])
-        
-	fuv2 = np.array([function(xmol[piv_n2], int(j/n_waves)-qm, DIM[0]) * function(ymol[piv_n2], int(j%n_waves)-qm, DIM[1]) for j in xrange(n_waves**2)])
-	b2 = np.array([np.sum(zmol[piv_n2] * fuv2[k]) for k in xrange(n_waves**2)])
+	fuv1 = np.zeros((n_waves**2, n0))
+        fuv2 = np.zeros((n_waves**2, n0))
+	b = np.zeros((2, n_waves**2))
 
-	diag = np.zeros(n_waves**2)
-	coeff = np.zeros((n_waves**2, n_waves**2))
+        for j in xrange(n_waves**2):
+                fuv1[j] = function(xmol[piv_n1], int(j/n_waves)-qm, DIM[0]) * function(ymol[piv_n1], int(j%n_waves)-qm, DIM[1])
+                b[0][j] += np.sum(zmol[piv_n1] * fuv1[j])
+                fuv2[j] = function(xmol[piv_n2], int(j/n_waves)-qm, DIM[0]) * function(ymol[piv_n2], int(j%n_waves)-qm, DIM[1])
+                b[1][j] += np.sum(zmol[piv_n2] * fuv2[j])
 
-	for j in xrange(n_waves**2):
-		u1 = int(j/n_waves)-qm
-		v1 = int(j%n_waves)-qm
-		diag[j] += ut.check_uv(u1, v1) * (phi * (u1**2 * DIM[1] / DIM[0] + v1**2 * DIM[0] / DIM[1]))
-		for k in xrange(j+1):
-			u2 = int(k/n_waves)-qm
-			v2 = int(k%n_waves)-qm
-			coeff[j][k] += 16 * np.pi**4 * (u1**2 * u2**2 / DIM[0]**4 + v1**2 * v2**2 / DIM[1]**4 + (u1**2 * v2**2 + u2**2 * v1**2) / (DIM[0]**2 * DIM[1]**2))
-			coeff[k][j] = coeff[j][k]
+	u1 = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
+	v1 = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
 
-	diag = 4 * np.pi**2 * np.diagflat(diag) 
+	diag = vcheck(u1, v1) * (phi * (u1**2 * DIM[1] / DIM[0] + v1**2 * DIM[0] / DIM[1]))
+	diag = 4 * np.pi**2 * np.diagflat(diag)
+
+	u1_tile = np.tile(u1, (n_waves**2, 1))
+	v1_tile = np.tile(v1, (n_waves**2, 1))
+
+	u2_tile = np.transpose(u1_tile)
+	v2_tile = np.transpose(v1_tile)
+
+	coeff = 16 * np.pi**4 * (u1_tile**2 * u2_tile**2 / DIM[0]**4 + v1_tile**2 * v2_tile**2 / DIM[1]**4 + (u1_tile**2 * v2_tile**2 + u2_tile**2 * v1_tile**2) / (DIM[0]**2 * DIM[1]**2))
+
 	ffuv1 = np.dot(fuv1, np.transpose(fuv1))
 	ffuv2 = np.dot(fuv2, np.transpose(fuv2))
 
@@ -424,8 +446,8 @@ def surface_reconstruction(xmol, ymol, zmol, qm, n0, phi, psi, auv1, auv2, piv_n
 		end1 = time.time()
 
 		"Perform LU decomosition to solve Ax = b"
-		if recon_1: auv1_recon = LU_decomposition(A1 + diag, b1)
-		if recon_2: auv2_recon = LU_decomposition(A2 + diag, b2)
+		if recon_1: auv1_recon = LU_decomposition(A1 + diag, b[0])
+		if recon_2: auv2_recon = LU_decomposition(A2 + diag, b[1])
 
 		end2 = time.time()
 
@@ -1085,14 +1107,14 @@ def intrinsic_z_den_corr(directory, zmol, model, qm, n0, phi, psi, frame, nslice
 				index1_nz = np.array(normal1 * nnz, dtype=int) % nnz
 				index2_nz = np.array(normal2 * nnz, dtype=int) % nnz
 
-				temp_count_corr_array += np.histogram2d(index1_mol, normal1, bins=[nslice, nnz], range=[[0, nslice], [0, nnz]])[0]
-				temp_count_corr_array += np.histogram2d(index2_mol, normal2, bins=[nslice, nnz], range=[[0, nslice], [0, nnz]])[0]
+				temp_count_corr_array += np.histogram2d(index1_mol, index1_nz, bins=[nslice, nnz], range=[[0, nslice], [0, nnz]])[0]
+				temp_count_corr_array += np.histogram2d(index2_mol, index2_nz, bins=[nslice, nnz], range=[[0, nslice], [0, nnz]])[0]
 
 				index1_mol = np.array(abs(int_z1 - auv1[len(auv1)/2]) * 2 * nz / (nz*lslice), dtype=int) % nz
 				index2_mol = np.array(abs(int_z2 - auv2[len(auv2)/2]) * 2 * nz / (nz*lslice), dtype=int) % nz
 
-				temp_z_nz_array += np.histogram2d(index1_mol, normal1, bins=[nz, nnz], range=[[0, nz], [0, nnz]])[0]
-				temp_z_nz_array += np.histogram2d(index2_mol, normal2, bins=[nz, nnz], range=[[0, nz], [0, nnz]])[0]
+				temp_z_nz_array += np.histogram2d(index1_mol, index1_nz, bins=[nz, nnz], range=[[0, nz], [0, nnz]])[0]
+				temp_z_nz_array += np.histogram2d(index2_mol, index2_nz, bins=[nz, nnz], range=[[0, nz], [0, nnz]])[0]
 
 			count_corr_array[qu] += temp_count_corr_array
 			z_nz_array[qu] += temp_z_nz_array

@@ -416,7 +416,7 @@ elif func.upper() == 'E':
 
 	nframe = ntraj
 	if model.upper() == 'METHANOL': nframe = 200
-	if model.upper() == 'TIP4P2005': nframe = 3000
+	if model.upper() == 'TIP4P2005': nframe = 10
 
 	print "natom = {}, nmol = {}, nframe = {}\nDIM = {}, lslice = {}, nslice = {}\nmol mass = {}\n".format(natom, nmol, nframe, DIM, lslice, nslice, np.sum(M))
 
