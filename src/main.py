@@ -125,7 +125,7 @@ try:
 		mol_sigma = checkfile['mol_sigma']
 	else: raise Exception
 except: 
-	mol_sigma = float(raw_input("Enter molecular radius in Angstroms: "))
+	mol_sigma = float(raw_input("Enter molecular radius: (Angstroms) "))
 	checkfile = ut.update_checkfile(checkfile_name, 'mol_sigma', mol_sigma)
 
 
