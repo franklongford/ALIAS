@@ -13,7 +13,7 @@ Last modified 29/11/2016 by Frank Longford
 """
 
 import numpy as np
-import subprocess, os, sys
+import subprocess, os, sys, pickle, tables
 
 from scipy import stats
 import scipy.constants as con
@@ -26,72 +26,132 @@ SQRT2 = np.sqrt(2.)
 SQRTPI = np.sqrt(np.pi)
 
 
-def make_at_mol_com(traj, directory, model, csize, nsite, M, com):
+def make_checkfile(checkfile_name):
+
+	checkfile = {}
+	with file('{}.pkl'.format(checkfile_name), 'wb') as outfile:
+		pickle.dump(checkfile, outfile, pickle.HIGHEST_PROTOCOL)
+
+def read_checkfile(checkfile_name):
+
+	with file('{}.pkl'.format(checkfile_name), 'rb') as infile:
+        	return pickle.load(infile)
+
+def update_checkfile(checkfile_name, symb, obj):
+
+	with file('{}.pkl'.format(checkfile_name), 'rb') as infile:
+        	checkfile = pickle.load(infile)
+	checkfile[symb] = obj
+	with file('{}.pkl'.format(checkfile_name), 'wb') as outfile:
+        	pickle.dump(checkfile, outfile, pickle.HIGHEST_PROTOCOL)
+	return checkfile
+
+
+def get_sim_param(traj_dir, top_dir, traj_file, top_file):
+	"""
+	Returns selected parameters of input trajectory and topology file using mdtraj
+	
+	Keyword arguments:
+	top_dir -- Directory of topology file
+	traj_dir -- Directory of trajectory file
+	traj_file -- Trajectory file name
+	top_file -- Topology file name
+
+	Output:
+	traj -- mdtraj trajectory object
+	MOL -- List of residue types in simulation cell
+	nframe -- Number of frames sampled in traj_file
+	dim -- Simulation cell dimensions (angstroms)
+	"""
+
+	traj = md.load('{}/{}'.format(traj_dir, traj_file), top='{}/{}'.format(top_dir, top_file))
+	MOL = list(set([molecule.name for molecule in traj.topology.residues]))
+	nframe = int(traj.n_frames)
+	dim = np.array(traj.unitcell_lengths[0]) * 10
+
+	return traj, MOL, nframe, dim
+
+
+def molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com):
+	"RETURNS X Y Z ARRAYS OF MOLECULAR POSITIONS" 
+	
+	if mol_com == 'COM':
+		"USE CENTRE OF MASS AS MOLECULAR POSITION"
+		xmol = np.sum(np.reshape(xat * mol_M, (nmol, nsite)), axis=1) 
+		ymol = np.sum(np.reshape(yat * mol_M, (nmol, nsite)), axis=1)
+		zmol = np.sum(np.reshape(zat * mol_M, (nmol, nsite)), axis=1)
+	
+	else:
+		"USE SINGLE ATOM AS MOLECULAR POSITION"
+		mol_list = np.arange(nmol) * nsite + int(mol_com)
+		xmol = xat[mol_list]
+		ymol = yat[mol_list]
+		zmol = zat[mol_list]
+
+	return xmol, ymol, zmol
+
+
+def make_at_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol, mol_com):
+	
 
 	print "\n-----------CREATING POSITIONAL FILES------------\n"
-
-	natom = int(traj.n_atoms)
-	nmol = int(traj.n_residues)
-	nframe = int(traj.n_frames)
-	DIM = np.array(traj.unitcell_lengths[0]) * 10
-
-	with file('{}/parameters.npy'.format(directory), 'w') as outfile:
-		np.save(outfile, np.array([natom, nmol, nframe, DIM[0], DIM[1], DIM[2]]))
 
 	if not os.path.exists("{}/POS".format(directory)): os.mkdir("{}/POS".format(directory))
 
 	XAT = np.zeros((nframe, natom))
 	YAT = np.zeros((nframe, natom))
 	ZAT = np.zeros((nframe, natom))
-	XMOL = np.zeros((nframe, nmol))
-	YMOL = np.zeros((nframe, nmol))
-	ZMOL = np.zeros((nframe, nmol))
 	COM = np.zeros((nframe, 3))
+
+	if nsite > 1:
+		XMOL = np.zeros((nframe, nmol))
+		YMOL = np.zeros((nframe, nmol))
+		ZMOL = np.zeros((nframe, nmol))
+
+	mol_M = np.array(M * nmol)
+	mol_M /= mol_M.sum()
+
+	XYZ = np.moveaxis(traj.xyz, 1, 2) * 10
 
 	for frame in xrange(nframe):
 		sys.stdout.write("PROCESSING {} out of {} IMAGES\r".format(frame, nframe) )
 		sys.stdout.flush()
 
-		XYZ = np.transpose(traj.xyz[frame])
-		XAT[frame] += XYZ[0] * 10
-		YAT[frame] += XYZ[1] * 10
-		ZAT[frame] += XYZ[2] * 10
+		COM[frame, :] = traj.xyz[frame].astype('float64').T.dot(mol_M) * 10
 
-		XMOL[frame], YMOL[frame], ZMOL[frame] = molecules(XAT[frame], YAT[frame], ZAT[frame], nsite, M, com=com)
-		COM[frame] = centre_mass(XAT[frame], YAT[frame], ZAT[frame], nsite, M)
+		XAT[frame] += XYZ[frame][0] 
+		YAT[frame] += XYZ[frame][1] 
+		ZAT[frame] += XYZ[frame][2]
 
-		if os.path.exists('{}/POS/{}_{}_{}_ZMOL.npy'.format(directory, model.lower(), csize, frame)): 
-			os.remove('{}/POS/{}_{}_{}_XAT.npy'.format(directory, model.lower(), csize, frame))
-			os.remove('{}/POS/{}_{}_{}_YAT.npy'.format(directory, model.lower(), csize, frame))
-			os.remove('{}/POS/{}_{}_{}_ZAT.npy'.format(directory, model.lower(), csize, frame))
-			os.remove('{}/POS/{}_{}_{}_XMOL.npy'.format(directory, model.lower(), csize, frame))
-			os.remove('{}/POS/{}_{}_{}_YMOL.npy'.format(directory, model.lower(), csize, frame))
-			os.remove('{}/POS/{}_{}_{}_ZMOL.npy'.format(directory, model.lower(), csize, frame))
+		xat = XAT[frame][at_index]
+		yat = YAT[frame][at_index]
+		zat = ZAT[frame][at_index]
 
-	file_name = '{}_{}_{}_{}'.format(model.lower(), csize, nframe, com)
+		if nsite > 1: XMOL[frame], YMOL[frame], ZMOL[frame] = molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com)
+
+	file_name_pos = file_name + '_{}'.format(nframe)
 
 	print '\nSAVING OUTPUT POSITION FILES\n'
-	with file('{}/POS/{}_XAT.npy'.format(directory, file_name), 'w') as outfile:
+	with file('{}/POS/{}_XAT.npy'.format(directory, file_name_pos), 'w') as outfile:
 		np.save(outfile, XAT)
-	with file('{}/POS/{}_YAT.npy'.format(directory, file_name), 'w') as outfile:
+	with file('{}/POS/{}_YAT.npy'.format(directory, file_name_pos), 'w') as outfile:
 		np.save(outfile, YAT)
-	with file('{}/POS/{}_ZAT.npy'.format(directory, file_name), 'w') as outfile:
+	with file('{}/POS/{}_ZAT.npy'.format(directory, file_name_pos), 'w') as outfile:
 		np.save(outfile, ZAT)
-	with file('{}/POS/{}_XMOL.npy'.format(directory, file_name), 'w') as outfile:
-		np.save(outfile, XMOL)
-	with file('{}/POS/{}_YMOL.npy'.format(directory, file_name), 'w') as outfile:
-		np.save(outfile, YMOL)
-	with file('{}/POS/{}_ZMOL.npy'.format(directory, file_name), 'w') as outfile:
-		np.save(outfile, ZMOL)
-	with file('{}/POS/{}_COM.npy'.format(directory, file_name), 'w') as outfile:
-		np.save(outfile, COM)
+	if nsite > 1:
+		with file('{}/POS/{}_XMOL.npy'.format(directory, file_name_pos), 'w') as outfile:
+			np.save(outfile, XMOL)
+		with file('{}/POS/{}_YMOL.npy'.format(directory, file_name_pos), 'w') as outfile:
+			np.save(outfile, YMOL)
+		with file('{}/POS/{}_ZMOL.npy'.format(directory, file_name_pos), 'w') as outfile:
+			np.save(outfile, ZMOL)
+		with file('{}/POS/{}_COM.npy'.format(directory, file_name_pos), 'w') as outfile:
+			np.save(outfile, COM)
 
-	return natom, nmol, nframe, DIM
 
+def read_atom_positions(directory, file_name, ntraj, nframe):
 
-def read_atom_positions(directory, model, csize, ntraj, nframe, com):
-
-	file_name = '{}_{}_{}_{}'.format(model.lower(), csize, ntraj, com)
+	file_name = '{}_{}'.format(file_name, ntraj)
 
 	xat = np.load('{}/POS/{}_XAT.npy'.format(directory, file_name), mmap_mode='r')[:nframe]
 	yat = np.load('{}/POS/{}_YAT.npy'.format(directory, file_name), mmap_mode='r')[:nframe]
@@ -99,9 +159,9 @@ def read_atom_positions(directory, model, csize, ntraj, nframe, com):
 
 	return xat, yat, zat
 
-def read_mol_positions(directory, model, csize, ntraj, nframe, com):
+def read_mol_positions(directory, file_name, ntraj, nframe):
 
-	file_name = '{}_{}_{}_{}'.format(model.lower(), csize, ntraj, com)
+	file_name = '{}_{}'.format(file_name, ntraj)
 
 	xmol = np.load('{}/POS/{}_XMOL.npy'.format(directory, file_name), mmap_mode='r')[:nframe]
 	ymol = np.load('{}/POS/{}_YMOL.npy'.format(directory, file_name), mmap_mode='r')[:nframe]
@@ -109,13 +169,70 @@ def read_mol_positions(directory, model, csize, ntraj, nframe, com):
 
 	return xmol, ymol, zmol
 
-def read_com_positions(directory, model, csize, ntraj, nframe, com):
+def read_com_positions(directory, file_name, ntraj, nframe):
 
-	file_name = '{}_{}_{}_{}'.format(model.lower(), csize, ntraj, com)
+	file_name = '{}_{}'.format(file_name, ntraj)
 
 	COM = np.load('{}/POS/{}_COM.npy'.format(directory, file_name), mmap_mode = 'r')[:nframe]
 
 	return COM
+
+
+def make_earray(file_name, arrays, atom, sizes):
+
+	with tables.open_file(file_name, 'w') as outfile:
+		for i, array in enumerate(arrays):
+			outfile.create_earray(outfile.root, array, atom, sizes[i])
+
+
+def radial_dist(root, directory, data_dir, traj_file, top_file, nsite, M, com, ow_pos):
+
+	traj_file = raw_input("Enter cube trajectory file: ")
+	file_end = max([0] + [pos for pos, char in enumerate(traj_file) if char == '/'])
+	directory = traj_file[:file_end]
+	traj_file = traj_file[file_end+1:]
+	data_dir = directory + '/DATA'
+
+	print directory, data_dir, traj_file
+
+	traj = md.load('{}/{}'.format(directory, traj_file), top='{}/{}'.format(root, top_file))
+	natom = int(traj.n_atoms)
+	nmol = int(traj.n_residues)
+	ntraj = int(traj.n_frames)
+	DIM = np.array(traj.unitcell_lengths[0]) * 10
+
+	lslice = 0.01
+	max_r = np.min(DIM) / 2.
+	nslice = int(max_r / lslice)
+
+	new_XYZ = np.zeros((ntraj, natom, 3))
+
+	XYZ = np.moveaxis(traj.xyz, 1, 2) * 10
+
+	file_name = '{}_{}_{}'.format(top_file.split('.')[0], ntraj, com)
+	if not os.path.exists('{}/POS/{}_ZMOL.npy'.format(data_dir, file_name)): make_at_mol_com(traj, traj_file, data_dir, '{}_{}_{}'.format(top_file.split('.')[0], ntraj, com), natom, nmol, ntraj, DIM, nsite, M, com)
+
+	xmol, ymol, zmol = read_mol_positions(data_dir, top_file.split('.')[0], ntraj, ntraj, com)
+
+	new_XYZ = np.stack((xmol, ymol, zmol), axis=2) / 10
+
+	new_XYZ = np.pad(new_XYZ, ((0, 0), (0, natom-nmol), (0, 0)), 'constant', constant_values=0)
+
+	traj.xyz = new_XYZ
+	
+	pairs = []
+	for i in xrange(nmol): 
+		for j in xrange(i): pairs.append([i, j])
+
+	r, g_r = md.compute_rdf(traj[:10], pairs = pairs, bin_width = lslice/10, r_range = (0, max_r/10))
+	plt.plot(r*10, g_r)
+
+	mol_sigma = 2**(1./6) * g_r.argmax() * lslice
+
+	print "r_max = {}    molecular sigma = {}".format(g_r.argmax()*lslice, mol_sigma)
+	plt.show()
+
+
 
 
 def convert_txt_npy(file_name):
@@ -125,7 +242,7 @@ def convert_txt_npy(file_name):
 	os.remove('{}.txt'.format(file_name))
 
 
-def read_velocities(fi, nsite):
+def amber_restart_velocities(fi, nsite):
 	"OPENS FILE AND RETURNS VELOCTIES OF ATOMS AS X Y Z ARRAYS"
 	FILE = open('{}'.format(fi), 'r')
 	lines = FILE.readlines()
@@ -180,61 +297,70 @@ def get_model_param(model):
 		Q = [-0.82, 0.41, 0.41]
 		M = [1.60000000E+01, 1.00800000E+00, 1.00800000E+00]
 		LJ = [0.1553, 3.166]
-		
+		mu = 2.27
 	elif model.upper() == 'SPCE':
 		nsite = 3
 		AT = ['O', 'H', 'H']
 		Q = [-0.8476, 0.4238, 0.4238]
 		M = [1.60000000E+01, 1.00800000E+00, 1.00800000E+00]
 		LJ = [0.1553, 3.166]
+		mu = 2.35
 	elif model.upper() == 'TIP3P':
 		nsite = 3
 		AT = ['O', 'H', 'H']
 		Q = [-0.834, 0.417, 0.417]
 		M = [1.60000000E+01, 1.00800000E+00, 1.00800000E+00]
 		LJ = [0.1521, 3.15061]
+		mu = 2.35
 	elif model.upper() == 'TIP4P':
 		nsite = 4
 		AT = ['O', 'H', 'H', 'lp']
 		Q = [0.00000000E+00, 0.520, 0.52, -1.04]
 		M = [1.60000000E+01, 1.00800000E+00, 1.00800000E+00, 0]
 		LJ = [0.1550, 3.15365]
+		mu = 2.18
 	elif model.upper() == 'TIP4P2005':
 		nsite = 4
 		AT = ['O', 'H', 'H', 'lp']
 		Q = [0.00000000E+00, 0.5564, 0.5564, -2*0.5564]
 		M = [1.60000000E+01, 1.00800000E+00, 1.00800000E+00, 0]
-		LJ = [0.16275, 3.1589]
+		LJ = [0.16275, 3.158]
+		mu = 2.305
 	elif model.upper() == 'TIP5P':
 		nsite = 5
 		AT = ['O', 'H', 'H', 'lp', 'lp']
 		Q = [0.00000000E+00,  0.2410,   0.2410, - 0.2410, - 0.2410]
 		M = [1.60000000E+01, 1.00800000E+00, 1.00800000E+00, 0, 0]
 		LJ = [0.1600, 3.12000]
+		mu = 2.29
 	elif model.upper() == 'ARGON':
 		nsite = 1
 		AT = ['Ar']
 		Q = [0]
 		M = [39.948]
 		LJ = [0.2375, 3.40]
+		mu = 0.0
 	elif model.upper() == 'LJ':
 		nsite = 1
 		AT = ['LJ']
 		Q = [0]
 		M = [1.]
 		LJ = [1., 1.]
+		mu = 0.0
 	elif model.upper() == 'NEON':
 		nsite = 1
 		AT = ['Ne']
 		Q = [0]
 		M = [20.180]
 		LJ = [(0.07112), (2.782)]
+		mu = 0.0
 	elif model.upper() == 'METHANOL':
 		nsite = 6
 		AT = ['H', 'C', 'H', 'H', 'O', 'H']
 		Q = [0.0372, 0.1166, 0.0372, 0.0372, -0.6497, 0.4215]
 		M = [1., 1.2E+01, 1., 1., 1.6E+01, 1.]
 		LJ = [(0.0150, 0.2104, 0.1094), (2.4535, 3.0665, 3.3997)]
+		mu = 2.179
 	elif model.upper() == 'ETHANOL':
 		nsite = 9
 		AT = ['H', 'C', 'H', 'H', 'C', 'H', 'H', 'O', 'H']
@@ -254,30 +380,20 @@ def get_model_param(model):
 		M = [1.60000000E+01, 1.00800000E+00, 1.00800000E+00]
 		LJ = [0.1553, 3.166]
 
-	return nsite, AT, Q, M, LJ
+	return nsite, AT, Q, M, LJ, mu
 
 
-def get_sim_param(root, directory, data_dir, model, nsite, suffix, csize, M, com, ow_pos, test):
+def model_mdtraj():
 
-	
-	if os.path.exists('{}/parameters.nc'.format(data_dir)) and not ow_pos:	
+	natom = int(traj.n_atoms)
+	nmol = int(traj.n_residues)
+	nsite = natom / nmol
 
-		print 'LOADING PARAMETER FILES'
-		traj = md.load('{}/parameters.nc'.format(data_dir), top='{}/{}_{}.prmtop'.format(root, model.lower(), csize))
-		natom = int(traj.n_atoms)
-		nmol = int(traj.n_residues)
-		if test: nframe = 6000
-		else: nframe = 4000
-		DIM = np.array(traj.unitcell_lengths[0]) * 10
+	AT = [atom.name for atom in traj.topology.atoms][:nsite]
+	M = [atom.mass for atom in traj.topology.atoms][:nsite] 
+	sigma_m = float(raw_input("Enter molecular radius (Angstroms): "))
 
-		if os.path.exists('{}/POS/{}_{}_{}_COM.txt'.format(data_dir, model.lower(), csize, nframe)): os.remove('{}/POS/{}_{}_{}_COM.txt'.format(data_dir, model.lower(), csize, nframe))
-
-	else:
-		traj = md.load('{}/{}_{}_{}.nc'.format(directory, model.lower(), csize, suffix), top='{}/{}_{}.prmtop'.format(root, model.lower(), csize))
-		traj[0].save('{}/parameters.nc'.format(data_dir))
-		natom, nmol, nframe, DIM = make_at_mol_com(traj, data_dir, model, csize, nsite, M, com)
-
-	return natom, nmol, nframe, DIM 
+	return nsite, AT, M, sigma_m
 
 
 def get_thermo_constants(red_units, LJ):
@@ -385,41 +501,6 @@ def den_profile(zat, DIM, nslice):
 	
 	return den
 
-
-def molecules(xat, yat, zat, nsite, M, com='0'):
-	"RETURNS X Y Z ARRAYS OF MOLECULAR POSITIONS" 
-	
-	nmol = len(xat) / nsite
-	xmol = []
-	ymol = []
-	zmol = []	
-	
-	if com == 'COM':
-		"USE CENTRE OF MASS AS MOLECULAR POSITION"
-		M_sum = np.sum(M)
-                for i in xrange(nmol):
-                        index = i * nsite
-                        xcom = 0.
-                        ycom = 0.
-                        zcom = 0.
-                        for j in xrange(nsite):
-                                xcom += M[j] * xat[index+j]
-                                ycom += M[j] * yat[index+j]
-                                zcom += M[j] * zat[index+j]
-                        xmol.append(xcom/(M_sum))
-                        ymol.append(ycom/(M_sum))
-                        zmol.append(zcom/(M_sum))	
-	
-	else:
-		"USE SINGLE ATOM AS MOLECULAR POSITION"
-		com = int(com)
-		for i in range(nmol):
-			index = i * nsite
-			xmol.append(xat[index])
-			ymol.append(yat[index])
-			zmol.append(zat[index])
-
-	return xmol, ymol, zmol
 
 
 def read_densities(root):
@@ -625,21 +706,12 @@ def read_energy_temp_tension(f):
 def centre_mass(xat, yat, zat, nsite, M):
 	"Returns the coordinates of the centre of mass"
 
-	xR = 0
-	yR = 0
-	zR = 0
-	
-	m = 0
+	nmol = len(xat) / nsite
+	mol_M = np.array(M * nmol)
 
-	for i in xrange(len(xat)):
-		xR += M[i % nsite] * xat[i]
-		yR += M[i % nsite] * yat[i]
-		zR += M[i % nsite] * zat[i]
-		m += M[i % nsite]
-	
-	xR = xR / m
-	yR = yR / m
-	zR = zR / m
+	xR = np.sum(xat * mol_M) / (nmol * np.sum(M))
+	yR = np.sum(yat * mol_M) / (nmol * np.sum(M))
+	zR = np.sum(zat * mol_M) / (nmol * np.sum(M))
 
 	return xR, yR, zR
 
@@ -823,7 +895,7 @@ def load_pt(directory, ntraj):
 	try: 
 		if os.path.exists(pt_files[k]):
 			with file(pt_files[k], 'r') as infile:
-				pt_st = np.loadtxt(infile)
+				pt_st = np.load(infile)
 
 	except IndexError: pass
 
@@ -874,7 +946,7 @@ def get_block_error_auv(auv2_1, auv2_2, directory, model, csize, ntraj, ntb, ow_
 
 	if os.path.exists('{}/DATA/ACOEFF/{}_{}_{}_{}_PT.npy'.format(directory, model.lower(), csize, ntraj, ntb)) and not ow_ntb:
 		with file('{}/DATA/ACOEFF/{}_{}_{}_{}_PT.npy'.format(directory, model.lower(), csize, ntraj, ntb), 'r') as infile:
-			pt_auv1, pt_auv2 = np.loadtxt(infile)
+			pt_auv1, pt_auv2 = np.load(infile)
 	else: 
 		old_pt_auv1, old_ntb = load_pt('{}/DATA/ACOEFF'.format(directory), ntraj)
 		if old_ntb == 0 or ow_ntb: 
@@ -882,12 +954,12 @@ def get_block_error_auv(auv2_1, auv2_2, directory, model, csize, ntraj, ntb, ow_
 			pt_auv2 = block_error(auv2_2, ntb)
 		elif old_ntb > ntb:
 			with file('{}/DATA/ACOEFF/{}_{}_{}_{}_PT.npy'.format(directory, model.lower(), csize, ntraj, old_ntb), 'r') as infile:
-                        	pt_auv1, pt_auv2 = np.loadtxt(infile)
+                        	pt_auv1, pt_auv2 = np.load(infile)
 			pt_auv1 = pt_auv1[:ntb]
 			pt_auv2 = pt_auv2[:ntb]
 		elif old_ntb < ntb:
 			with file('{}/DATA/ACOEFF/{}_{}_{}_{}_PT.npy'.format(directory, model.lower(), csize, ntraj, old_ntb), 'r') as infile:
-                        	pt_auv1, pt_auv2 = np.loadtxt(infile)
+                        	pt_auv1, pt_auv2 = np.load(infile)
 
 			pt_auv1 = np.concatenate((pt_auv1, block_error(auv2_1, ntb, old_ntb)))
                 	pt_auv2 = np.concatenate((pt_auv2, block_error(auv2_2, ntb, old_ntb)))	

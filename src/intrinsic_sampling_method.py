@@ -11,140 +11,78 @@ Created 24/11/16 by Frank Longford
 Last modified 22/08/17 by Frank Longford
 """
 
-import numpy as np
-import scipy as sp
-import subprocess, time, sys, os, math, copy, gc
-import matplotlib.pyplot as plt
-
-from scipy import stats
-from scipy import constants as con
-from scipy.optimize import curve_fit, leastsq
-import scipy.integrate as spin
-from scipy.interpolate import bisplrep, bisplev, splprep, splev
-
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.cm as cm
-from matplotlib.colors import BoundaryNorm
-from matplotlib.ticker import MaxNLocator
-
-import utilities as ut
-
 sqrt_2 = np.sqrt(2.)
 vcheck = np.vectorize(ut.check_uv)
-
-def combine_intrinsic_surface():
-
-	n_waves = 2 * qm + 1
-
-	tot_coeff = np.zeros((nframe, 2, n_waves**2))
-	tot_coeff_recon = np.zeros((nframe, 2, n_waves**2))
-	tot_piv = np.zeros((nframe, 2, n0), dtype=int)
-
-	for frame in xrange(nframe):
-
-		file_name = '{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1./phi + 0.5), frame)
-		file_name_recon = '{}_{}_{}_{}_{}_R'.format(model.lower(), qm, n0, int(1./phi + 0.5), frame)
-
-		with file('{}/ACOEFF/{}_INTCOEFF.npy'.format(directory, file_name), 'r') as infile: 
-			tot_coeff[frame][0], tot_coeff[frame][1] = np.load(infile)
-		with file('{}/ACOEFF/{}_INTCOEFF.npy'.format(directory, file_name_recon), 'r') as infile: 
-			tot_coeff_recon[frame][0], tot_coeff_recon[frame][1] = np.load(infile)
-		with file('{}/ACOEFF/{}_PIVOTS.npy'.format(directory, file_name), 'r') as infile:
-			tot_piv[frame][0], tot_piv[frame][1] = np.load(infile)
-
-	file_name = '{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1./phi + 0.5), nframe)
-	file_name_recon = '{}_{}_{}_{}_{}_R'.format(model.lower(), qm, n0, int(1./phi + 0.5), nframe)
-
-	with file('{}/ACOEFF/{}_INTCOEFF.npy'.format(directory, file_name), 'w') as outfile: 
-		np.save(outfile, tot_coeff)
-	with file('{}/ACOEFF/{}_INTCOEFF.npy'.format(directory, file_name_recon), 'w') as outfile: 
-		np.save(outfile, tot_coeff_recon)
-	with file('{}/ACOEFF/{}_PIVOTS.npy'.format(directory, file_name), 'w') as outfile:
-		np.save(outfile, tot_piv)
-
-	for frame in xrange(nframe):
-		file_name = '{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1./phi + 0.5), frame)
-		file_name_recon = '{}_{}_{}_{}_{}_R'.format(model.lower(), qm, n0, int(1./phi + 0.5), frame)
-
-		os.remove('{}/ACOEFF/{}_INTCOEFF.npy'.format(directory, file_name))
-		os.remove('{}/ACOEFF/{}_INTCOEFF.npy'.format(directory, file_name_recon))
-		os.remove('{}/ACOEFF/{}_PIVOTS.npy'.format(directory, file_name))
-
-
-def intrinsic_surface(directory, xmol, ymol, zmol, model, nsite, nmol, ncube, DIM, qm, n0, phi, psi, vlim, mol_sigma, M, frame, nframe, ow_auv, ow_recon, ow_pos):
+		
+def intrinsic_surface(directory, file_name, xmol, ymol, zmol, dim, nmol, ncube, qm, n0, phi, psi, vlim, mol_sigma, frame, nframe, recon, ow_auv, ow_recon):
 	"Creates intrinsic surface of frame." 
 
+	n_waves = 2*qm+1
+	write_auv = np.zeros((1, n_waves**2))
+	write_piv_n = np.zeros((1, n0))
 	max_r = 1.5 * mol_sigma
 	tau = 0.5 * mol_sigma
 
-	file_name = '{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1./phi + 0.5), frame)
-	file_name_recon = '{}_{}_{}_{}_{}_R'.format(model.lower(), qm, n0, int(1./phi + 0.5), frame)
+	with tables.open_file('{}/SURFACE/{}_ACOEFF.hdf5'.format(directory, file_name), 'r') as infile:
+		max_frame = infile.root.tot_coeff1.shape[0]
 
-	if not os.path.exists("{}/ACOEFF".format(directory)): os.mkdir("{}/ACOEFF".format(directory))
-	if not os.path.exists("{}/INTPOS".format(directory)): os.mkdir("{}/INTPOS".format(directory))
+	sys.stdout.write("PROCESSING INTRINSIC SURFACE PROFILES {} out of {} frames\r".format(frame, nframe) )
+	sys.stdout.flush()
 
-	if os.path.exists('{}/ACOEFF/{}_INTCOEFF.txt'.format(directory, file_name)): ut.convert_txt_npy('{}/ACOEFF/{}_INTCOEFF'.format(directory, file_name))
-	if os.path.exists('{}/ACOEFF/{}_INTCOEFF.txt'.format(directory, file_name_recon)): ut.convert_txt_npy('{}/ACOEFF/{}_INTCOEFF'.format(directory, file_name_recon))
-	if os.path.exists('{}/ACOEFF/{}_PIVOTS.txt'.format(directory, file_name)): ut.convert_txt_npy('{}/ACOEFF/{}_PIVOTS'.format(directory, file_name))
+	if max_frame <= frame or ow_auv:
 
-	if not os.path.exists('{}/ACOEFF/{}_INTCOEFF.npy'.format(directory, file_name)) or ow_auv:
+		auv1, auv2, piv_n1, piv_n2 = build_surface(xmol, ymol, zmol, dim, nmol, ncube, mol_sigma, qm, n0, phi, vlim, tau, max_r)
 
-		sys.stdout.write("PROCESSING {} INTRINSIC SURFACE {}\n".format(directory, frame) )
-		sys.stdout.flush()
+		with tables.open_file('{}/SURFACE/{}_ACOEFF.hdf5'.format(directory, file_name), 'a') as outfile:
+			write_auv[0] = auv1
+			outfile.root.tot_coeff1.append(write_auv)
+			write_auv[0] = auv2
+			outfile.root.tot_coeff2.append(write_auv)
+		with tables.open_file('{}/SURFACE/{}_PIVOTS.hdf5'.format(directory, file_name), 'a') as outfile:
+			write_piv_n[0] = piv_n1
+			outfile.root.tot_piv_n1.append(write_piv_n)
+			write_piv_n[0] = piv_n2
+			outfile.root.tot_piv_n2.append(write_piv_n)
+	else:
+		with tables.open_file('{}/SURFACE/{}_ACOEFF.hdf5'.format(directory, file_name), 'r') as infile:
+			auv1 = infile.root.tot_coeff1[frame]
+			auv2 = infile.root.tot_coeff2[frame]
+		with tables.open_file('{}/SURFACE/{}_PIVOTS.hdf5'.format(directory, file_name), 'r') as infile:
+			piv_n1 = infile.root.tot_piv_n1[frame]
+			piv_n2 = infile.root.tot_piv_n2[frame]
 
-		auv1, auv2, piv_n1, piv_n2 = build_surface(xmol, ymol, zmol, DIM, nmol, ncube, mol_sigma, qm, n0, phi, vlim, tau, max_r)
+	if recon:
+		with tables.open_file('{}/SURFACE/{}_R_ACOEFF.hdf5'.format(directory, file_name), 'r') as infile:
+			max_frame_R = infile.root.tot_coeff1.shape[0]
 
-		with file('{}/ACOEFF/{}_INTCOEFF.npy'.format(directory, file_name), 'w') as outfile:
-			np.save(outfile, (auv1, auv2))
-		with file('{}/ACOEFF/{}_PIVOTS.npy'.format(directory, file_name), 'w') as outfile:
-			np.save(outfile, (piv_n1, piv_n2))
+		if max_frame_R <= frame or ow_recon:
+			sys.stdout.write("PROCESSING {}\nINTRINSIC SURFACE RECONSTRUCTION {}\n".format(directory, frame) )
+			sys.stdout.flush()
 
-		sys.stdout.write("PROCESSING {}\nINTRINSIC SURFACE RECONSTRUCTION {}\n".format(directory, frame) )
-		sys.stdout.flush()
-
-		auv1_recon, auv2_recon = surface_reconstruction(xmol, ymol, zmol, qm, n0, phi, psi, auv1, auv2, piv_n1, piv_n2, DIM)
-
-		with file('{}/ACOEFF/{}_INTCOEFF.npy'.format(directory, file_name_recon), 'w') as outfile:
-			np.save(outfile, (auv1_recon, auv2_recon))
+			auv1_recon, auv2_recon = surface_reconstruction(xmol, ymol, zmol, qm, n0, phi, psi, auv1, auv2, np.array(piv_n1, dtype=int), np.array(piv_n2, dtype=int), dim)
 		
-	elif not os.path.exists('{}/ACOEFF/{}_INTCOEFF.npy'.format(directory, file_name_recon)) or ow_recon:
+			with tables.open_file('{}/SURFACE/{}_R_ACOEFF.hdf5'.format(directory, file_name), 'a') as outfile:
+				write_auv[0] = auv1_recon
+				outfile.root.tot_coeff1.append(write_auv)
+				write_auv[0] = auv2_recon
+				outfile.root.tot_coeff2.append(write_auv)
+		else: 
+			with tables.open_file('{}/SURFACE/{}_R_ACOEFF.hdf5'.format(directory, file_name), 'r') as infile:
+				auv1_recon = infile.root.tot_coeff1[frame]
+				auv2_recon = infile.root.tot_coeff2[frame]
 
-		sys.stdout.write("PROCESSING {}\nINTRINSIC SURFACE RECONSTRUCTION {}\n".format(directory, frame) )
-		sys.stdout.flush()
+		return auv1, auv2, auv1_recon, auv2_recon, np.array(piv_n1, dtype=int), np.array(piv_n2, dtype=int)
 
-		auv1, auv2 = np.load('{}/ACOEFF/{}_INTCOEFF.npy'.format(directory, file_name), mmap_mode = 'r')
-		piv_n1, piv_n2 = np.load('{}/ACOEFF/{}_PIVOTS.npy'.format(directory, file_name), mmap_mode = 'r')
-
-		auv1_recon, auv2_recon = surface_reconstruction(xmol, ymol, zmol, qm, n0, phi, psi, auv1, auv2, np.array(piv_n1, dtype=int), np.array(piv_n2, dtype=int), DIM)
-
-		with file('{}/ACOEFF/{}_INTCOEFF.npy'.format(directory, file_name_recon), 'w') as outfile:
-			np.save(outfile, (auv1_recon, auv2_recon))
+	else: return auv1, auv2, np.array(piv_n1, dtype=int), np.array(piv_n2, dtype=int)
+	
 		
-	else: 
-
-		auv1, auv2 = np.load('{}/ACOEFF/{}_INTCOEFF.npy'.format(directory, file_name), mmap_mode = 'r')
-		auv1_recon, auv2_recon = np.load('{}/ACOEFF/{}_INTCOEFF.npy'.format(directory, file_name_recon), mmap_mode = 'r')
-		piv_n1, piv_n2 = np.load('{}/ACOEFF/{}_PIVOTS.npy'.format(directory, file_name), mmap_mode = 'r')
-
-	if ow_auv or ow_pos:
-		for i, recon in enumerate([False, True]):
-			intrinsic_positions_dxdyz(directory, xmol, ymol, zmol, model, frame, nsite, qm, n0, phi, psi, DIM, recon, True)
-
-
-	return auv1, auv2, auv1_recon, auv2_recon, np.array(piv_n1, dtype=int), np.array(piv_n2, dtype=int)
-
-
 def numpy_remove(list1, list2):
-
-	option1 = [i for i in list1 if i not in list2]
-	option2 = np.delete(list1, np.where(np.isin(list1, list2)))
-
-	assert np.sum(option1 - option2) == 0
 
 	return np.delete(list1, np.where(np.isin(list1, list2)))
 
+
 def build_surface(xmol, ymol, zmol, DIM, nmol, ncube, mol_sigma, qm, n0, phi, vlim, tau, max_r):
-	"Create coefficients auv1 and aiv2 for Fourier sum representing intrinsic surface"
+	"Create coefficients auv1 and auv2 for Fourier sum representing intrinsic surface"
 
 	print "\n ------------- BUILDING INTRINSIC SURFACE --------------"
 
@@ -152,16 +90,15 @@ def build_surface(xmol, ymol, zmol, DIM, nmol, ncube, mol_sigma, qm, n0, phi, vl
 	xmol, ymol, zmol = x, y, z positions of molecules
 	mol_list = index list of molecules eligible to be used as 'pivots' for the fitting routine  
 	piv_n = index of pivot molecules
-	piv_z = z position of pivot molecules
 	new_pivots = list of pivots to be added to piv_n and piv_z
 	"""
 	tau1 = tau
 	tau2 = tau
 	mol_list = np.arange(nmol)
 	piv_n1 = np.arange(ncube**2)
-	piv_z1 = np.zeros(ncube**2)
 	piv_n2 = np.arange(ncube**2)
-	piv_z2 = np.zeros(ncube**2)
+	piv_z1 = np.zeros(ncube**2)
+        piv_z2 = np.zeros(ncube**2)
 	vapour_list = []
 	new_piv1 = []
 	new_piv2 = []
@@ -172,7 +109,7 @@ def build_surface(xmol, ymol, zmol, DIM, nmol, ncube, mol_sigma, qm, n0, phi, vl
 	mat_ymol = np.tile(ymol, (nmol, 1))
 	mat_zmol = np.tile(zmol, (nmol, 1))
 
-	dr2 = (mat_xmol - np.transpose(mat_xmol))**2 + (mat_ymol - np.transpose(mat_ymol))**2 + (mat_zmol - np.transpose(mat_zmol))**2
+	dr2 = np.array((mat_xmol - np.transpose(mat_xmol))**2 + (mat_ymol - np.transpose(mat_ymol))**2 + (mat_zmol - np.transpose(mat_zmol))**2, dtype=float)
 	
 	"Remove molecules from vapour phase ans assign an initial grid of pivots furthest away from centre of mass"
 	print 'Lx = {:5.3f}   Ly = {:5.3f}   qm = {:5d}\nphi = {}   n_piv = {:5d}   vlim = {:5d}   max_r = {:5.3f}'.format(DIM[0], DIM[1], qm, phi, n0, vlim, max_r) 
@@ -185,11 +122,10 @@ def build_surface(xmol, ymol, zmol, DIM, nmol, ncube, mol_sigma, qm, n0, phi, vl
 			indexx = int(xmol[n] * ncube / DIM[0]) % ncube
                         indexy = int(ymol[n] * ncube / DIM[1]) % ncube
 
-			if zmol[n] < piv_z1[ncube*indexx + indexy]:
+			if zmol[n] < piv_z1[ncube*indexx + indexy]: 
 				piv_n1[ncube*indexx + indexy] = n
 				piv_z1[ncube*indexx + indexy] = zmol[n]
-
-			elif zmol[n] > piv_z2[ncube*indexx + indexy]:
+			elif zmol[n] > piv_z2[ncube*indexx + indexy]: 
 				piv_n2[ncube*indexx + indexy] = n
 				piv_z2[ncube*indexx + indexy] = zmol[n]
 
@@ -243,6 +179,7 @@ def build_surface(xmol, ymol, zmol, DIM, nmol, ncube, mol_sigma, qm, n0, phi, vl
 
 		"Update A matrix and b vector"
 		temp_A, temp_b = update_A_b(xmol, ymol, zmol, qm, n_waves, new_piv1, new_piv2, DIM)
+
 		A += temp_A
 		b += temp_b
 
@@ -332,7 +269,7 @@ def pivot_selection(zmol, mol_sigma, n0, mol_list, zeta_list, piv_n, tau):
 	
 	"Remove pivots form molecular search list"
 	far_piv = mol_list[zeta > 6.0*tau]
-	mol_list = numpy_remove(mol_list, np.append(new_piv, far_piv))#np.array([i for i in mol_list if i not in new_piv])
+	if len(new_piv) > 0: mol_list = numpy_remove(mol_list, np.append(new_piv, far_piv))#np.array([i for i in mol_list if i not in new_piv])
 	#mol_list = numpy_remove(mol_list, new_piv)
 	
 	assert np.sum(np.isin(new_piv, mol_list)) == 0
@@ -341,12 +278,14 @@ def pivot_selection(zmol, mol_sigma, n0, mol_list, zeta_list, piv_n, tau):
 
 
 def LU_decomposition(A, b):
+	"Perform lower-upper decomposition to solve equation Ax = b"
 	lu, piv  = sp.linalg.lu_factor(A)
 	auv = sp.linalg.lu_solve((lu, piv), b)
 	return auv
 
 
 def update_A_b(xmol, ymol, zmol, qm, n_waves, new_piv1, new_piv2, DIM):
+	"Update A matrix and b vector for new pivot selection"
 
 	A = np.zeros((2, n_waves**2, n_waves**2))
 	b = np.zeros((2, n_waves**2))
@@ -532,7 +471,6 @@ def dxyi(x, y, qm, qu, auv, DIM):
 
 def ddxyi(x, y, qm, qu, auv, DIM):
 
-
 	ddzx = 0
 	ddzy = 0
 	for u in xrange(-qu, qu+1):
@@ -553,52 +491,73 @@ def mean_curve_est(x, y, qm, qu, auv, DIM):
 	return H
 
 
-def optimise_ns(directory, model, csize, nmol, nsite, qm, phi, vlim, ncube, DIM, COM, M, mol_sigma, start_ns, end_ns):
-
-	if not os.path.exists('{}/ACOEFF'.format(directory)): os.mkdir('{}/DATA/ACOEFF'.format(directory))
+def optimise_ns(directory, file_name, nmol, nsite, nframe, qm, phi, vlim, ncube, dim, mol_sigma, start_ns, step_ns):
 
 	mol_ex_1 = []
 	mol_ex_2 = []
+	NS = []
 
-	nframe = 20
+	n_waves = 2 * qm + 1
+	max_r = 1.5 * mol_sigma
+	tau = 0.5 * mol_sigma
 
-	NS = np.arange(start_ns, end_ns, 0.05)
-	
-	print NS
+	if not os.path.exists("{}/SURFACE".format(directory)): os.mkdir("{}/SURFACE".format(directory))
 
-	for ns in NS:
+	nframe_ns = 20
 
-		n0 = int(DIM[0] * DIM[1] * ns / mol_sigma**2)
+	xmol, ymol, zmol = ut.read_mol_positions(directory, file_name, nframe, nframe_ns)
+	COM = ut.read_com_positions(directory, file_name, nframe, nframe_ns)
 
-		tot_piv_n1 = np.zeros((nframe, n0))
-		tot_piv_n2 = np.zeros((nframe, n0))
+	ns = start_ns
+	optimising = True
 
-		for frame in xrange(nframe):
-			xmol, ymol, zmol = ut.read_mol_positions(directory, model, csize, frame)
-			xR, yR, zR = COM[frame]
-			auv1, auv2, piv_n1, piv_n2 = intrinsic_surface(directory, model, csize, nsite, nmol, ncube, DIM, COM, qm, n0, phi, vlim, mol_sigma, M, frame, nframe,False, True)
+	while optimising:
 
+		NS.append(ns)
+		n0 = int(dim[0] * dim[1] * ns / mol_sigma**2)
+
+		tot_piv_n1 = np.zeros((nframe_ns, n0))
+		tot_piv_n2 = np.zeros((nframe_ns, n0))
+
+		file_name_auv = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
+
+		if not os.path.exists('{}/SURFACE/{}_ACOEFF.hdf5'.format(directory, file_name_auv)):
+			ut.make_earray('{}/SURFACE/{}_ACOEFF.hdf5'.format(directory, file_name_auv), 
+				['tot_coeff1', 'tot_coeff2'], tables.Float64Atom(), [(0, n_waves**2), (0, n_waves**2)])
+			ut.make_earray('{}/SURFACE/{}_PIVOTS.hdf5'.format(directory, file_name_auv), 
+				['tot_piv_n1', 'tot_piv_n2'], tables.Float64Atom(), [(0, n0), (0, n0)])
+
+		for frame in xrange(nframe_ns):
+			auv1, auv2, piv_n1, piv_n2 = intrinsic_surface(directory, file_name_auv, xmol[frame], ymol[frame], zmol[frame]-COM[frame][2], dim, nmol, ncube, qm, n0, phi, 0, vlim, mol_sigma, frame, nframe, False, False, False)
 			tot_piv_n1[frame] += piv_n1
-			tot_piv_n2[frame] += piv_n2 
+			tot_piv_n2[frame] += piv_n2
 
-		ex_1, ex_2 = mol_exchange(tot_piv_n1, tot_piv_n2, nframe, n0)
+		ex_1, ex_2 = mol_exchange(tot_piv_n1, tot_piv_n2, nframe_ns, n0)
 
 		mol_ex_1.append(ex_1)
 		mol_ex_2.append(ex_2)
 
-		print ns, n0, ex_1, ex_2
+		if len(mol_ex_1) > 1:
+			check = np.argmin((np.array(mol_ex_1) + np.array(mol_ex_2)) / 2.) == (len(NS) - 1)
+			if not check: optimising = False
+			else: 
+				ns += step_ns
+				print "Optimal surface density not found.\nContinuing search using pivot number = {}".format(int(dim[0] * dim[1] * ns / mol_sigma**2))
+		else: ns += step_ns
 
-	print NS[np.argmin((np.array(mol_ex_1) + np.array(mol_ex_2)) / 2.)], np.min((np.array(mol_ex_1) + np.array(mol_ex_2)) / 2.)
+	opt_ns = NS[np.argmin((np.array(mol_ex_1) + np.array(mol_ex_2)) / 2.)]
+	opt_n0 = int(dim[0] * dim[1] * opt_ns / mol_sigma**2)
 
-	#"""
-	plt.scatter(NS, (np.array(mol_ex_1) + np.array(mol_ex_2)) / 2.)
-	plt.scatter(NS, mol_ex_1, c='g')
-	plt.scatter(NS, mol_ex_2, c='r')
-	plt.axis([np.min(NS), np.max(NS), 0, np.max(mol_ex_1)])
-	plt.show()
-	#"""
+	print "Optimal pivot density found = {}".format(opt_n0)
 
-	return NS[np.argmin((np.array(mol_ex_1) + np.array(mol_ex_2)) / 2.)]
+	for ns in NS:
+		if ns != opt_ns:
+			n0 = int(dim[0] * dim[1] * ns / mol_sigma**2)
+			file_name_auv = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
+			os.remove('{}/SURFACE/{}_ACOEFF.hdf5'.format(directory, file_name_auv))
+			os.remove('{}/SURFACE/{}_PIVOTS.hdf5'.format(directory, file_name_auv))
+
+	return opt_ns, opt_n0
 
 
 def mol_exchange(piv_1, piv_2, nframe, n0):
@@ -859,29 +818,27 @@ def gamma_q_f(f_2, qm, qu, DIM, T, q2_set):
 	return np.array(gamma_list) * coeff, gamma_hist * coeff
 
 
-def intrinsic_positions_dxdyz(directory, xmol, ymol, zmol, model, frame, nsite, qm, n0, phi, psi, DIM, recon, ow_all):
+def intrinsic_positions_dxdyz(directory, file_name, xmol, ymol, zmol, auv1, auv2, frame, nframe, nsite, qm, n0, phi, psi, dim, recon, ow_pos):
 
-	file_name_pos = '{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1/phi + 0.5), frame)
-	file_name_auv = '{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1./phi + 0.5), frame)
-	if recon: 
-		file_name_pos = '{}_R'.format(file_name_pos)
-		file_name_auv = '{}_R'.format(file_name_auv)
+	file_name_pos = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
+	if recon: file_name_pos = '{}_R'.format(file_name_pos)
 
-	"""
-	if os.path.exists('{}/INTPOS/{}_INTDDXDDY_MOL.npy'.format(directory, file_name_pos)) and not ow_all:
-		try:
-			with file('{}/INTPOS/{}_INTZ_MOL.npy'.format(directory, file_name_pos), 'r') as infile:
-				int_z_mol = np.load(infile)
-			with file('{}/INTPOS/{}_INTDXDY_MOL.npy'.format(directory, file_name_pos), 'r') as infile:
-				dxdyz_mol = np.load(infile)
-			with file('{}/INTPOS/{}_INTDDXDDY_MOL.npy'.format(directory, file_name_pos), 'r') as infile:
-				ddxddyz_mol = np.load(infile)
-		except:	ow_all = True
-	"""
+	try:
+		with tables.open_file('{}/INTPOS/{}_INTZ_MOL.hdf5'.format(directory, file_name_pos), 'r') as infile:
+			int_z_mol = infile.root.int_z_mol[frame]
+		with tables.open_file('{}/INTPOS/{}_INTDXDY_MOL.hdf5'.format(directory, file_name_pos), 'r') as infile:
+			dxdyz_mol = infile.root.dxdyz_mol[frame]
+		with tables.open_file('{}/INTPOS/{}_INTDDXDDY_MOL.hdf5'.format(directory, file_name_pos), 'r') as infile:
+			ddxddyz_mol = infile.root.ddxddyz_mol[frame]
+        except: ow_pos = True
 
-	if not os.path.exists('{}/INTPOS/{}_INTDDXDDY_MOL.npy'.format(directory, file_name_pos)) or ow_all:
+	if ow_pos:
 
 		nmol = len(xmol)
+
+		write_int_z_mol = np.zeros((1, qm+1, 2, nmol))
+		write_dxdyz_mol = np.zeros((1, qm+1, 4, nmol)) 
+		write_ddxddyz_mol = np.zeros((1, qm+1, 4, nmol))
 
 		int_z_mol = np.zeros((qm+1, 2, nmol))
 		dxdyz_mol = np.zeros((qm+1, 4, nmol)) 
@@ -891,512 +848,163 @@ def intrinsic_positions_dxdyz(directory, xmol, ymol, zmol, model, frame, nsite, 
 		temp_dxdyz_mol = np.zeros((4, nmol)) 
 		temp_ddxddyz_mol = np.zeros((4, nmol))
 
-		auv1, auv2 = np.load('{}/ACOEFF/{}_INTCOEFF.npy'.format(directory, file_name_auv), mmap_mode='r')
-
 		for qu in xrange(qm+1):
 			sys.stdout.write("PROCESSING {} INTRINSIC POSITIONS AND DXDY {}: qm = {} qu = {}\r".format(directory, frame, qm, qu))
 			sys.stdout.flush()
 
-			temp_file_name_pos = '{}_{}_{}_{}_{}_{}'.format(model.lower(), qm, qu, n0, int(1/phi + 0.5), frame)
-			if recon: temp_file_name_pos = '{}_R'.format(temp_file_name_pos)
+			if qu == 0:
+				j = (2 * qm + 1) * qm + qm
+				f_x = function(xmol, 0, dim[0])
+				f_y = function(ymol, 0, dim[1])
 
-			if os.path.exists('{}/INTPOS/{}_INTZ_AT.txt'.format(directory, temp_file_name_pos)): os.remove('{}/INTPOS/{}_INTZ_AT.txt'.format(directory, temp_file_name_pos))
-			if os.path.exists('{}/INTPOS/{}_INTZ_MOL.txt'.format(directory, temp_file_name_pos)): ut.convert_txt_npy('{}/INTPOS/{}_INTZ_MOL'.format(directory, temp_file_name_pos))
-			if os.path.exists('{}/INTPOS/{}_INTDXDY_MOL.txt'.format(directory, temp_file_name_pos)): ut.convert_txt_npy('{}/INTPOS/{}_INTDXDY_MOL'.format(directory, temp_file_name_pos))
-			if os.path.exists('{}/INTPOS/{}_INTDDXDDY_MOL.txt'.format(directory, temp_file_name_pos)): ut.convert_txt_npy('{}/INTPOS/{}_INTDDXDDY_MOL'.format(directory, temp_file_name_pos))
+				temp_int_z_mol[0] += f_x * f_y * auv1[j]
+				temp_int_z_mol[1] += f_x * f_y * auv2[j]
 
-			try:
-				with file('{}/INTPOS/{}_INTZ_MOL.npy'.format(directory, temp_file_name_pos), 'r') as infile:
-					temp_int_z_mol += np.load(infile)
-				with file('{}/INTPOS/{}_INTDXDY_MOL.npy'.format(directory, temp_file_name_pos), 'r') as infile:
-					temp_dxdyz_mol += np.load(infile)
-				with file('{}/INTPOS/{}_INTDDXDDY_MOL.npy'.format(directory, temp_file_name_pos), 'r') as infile:
-					temp_ddxddyz_mol += np.load(infile)
+			else:
+				for u in [-qu, qu]:
+					for v in xrange(-qu, qu+1):
+						j = (2 * qm + 1) * (u + qm) + (v + qm)
 
-				os.remove('{}/INTPOS/{}_INTZ_MOL.npy'.format(directory, temp_file_name_pos))
-				os.remove('{}/INTPOS/{}_INTDXDY_MOL.npy'.format(directory, temp_file_name_pos))
-				os.remove('{}/INTPOS/{}_INTDDXDDY_MOL.npy'.format(directory, temp_file_name_pos))
+						f_x = function(xmol, u, dim[0])
+						f_y = function(ymol, v, dim[1])
+						df_dx = dfunction(xmol, u, dim[0])
+						df_dy = dfunction(ymol, v, dim[1])
+						ddf_ddx = ddfunction(xmol, u, dim[0])
+						ddf_ddy = ddfunction(ymol, v, dim[1])
 
-			except: 
-				if qu == 0:
-					j = (2 * qm + 1) * qm + qm
+						temp_int_z_mol[0] += f_x * f_y * auv1[j]
+						temp_int_z_mol[1] += f_x * f_y * auv2[j]
+						temp_dxdyz_mol[0] += df_dx * f_y * auv1[j]
+						temp_dxdyz_mol[1] += f_x * df_dy * auv1[j]
+						temp_dxdyz_mol[2] += df_dx * f_y * auv2[j]
+						temp_dxdyz_mol[3] += f_x * df_dy * auv2[j]
+						temp_ddxddyz_mol[0] += ddf_ddx * f_y * auv1[j]
+						temp_ddxddyz_mol[1] += f_x * ddf_ddy * auv1[j]
+						temp_ddxddyz_mol[2] += ddf_ddx * f_y * auv2[j]
+						temp_ddxddyz_mol[3] += f_x * ddf_ddy * auv2[j]
 
-					f_x = function(xmol, 0, DIM[0])
-					f_y = function(ymol, 0, DIM[1])
+				for u in xrange(-qu+1, qu):
+					for v in [-qu, qu]:
+						j = (2 * qm + 1) * (u + qm) + (v + qm)
 
-					temp_int_z_mol[0] += f_x * f_y * auv1[j]
-					temp_int_z_mol[1] += f_x * f_y * auv2[j]
+						f_x = function(xmol, u, dim[0])
+						f_y = function(ymol, v, dim[1])
+						df_dx = dfunction(xmol, u, dim[0])
+						df_dy = dfunction(ymol, v, dim[1])
+						ddf_ddx = ddfunction(xmol, u, dim[0])
+						ddf_ddy = ddfunction(ymol, v, dim[1])
 
-				else:
-					for u in [-qu, qu]:
-						for v in xrange(-qu, qu+1):
-							j = (2 * qm + 1) * (u + qm) + (v + qm)
-
-							f_x = function(xmol, u, DIM[0])
-							f_y = function(ymol, v, DIM[1])
-							df_dx = dfunction(xmol, u, DIM[0])
-							df_dy = dfunction(ymol, v, DIM[1])
-							ddf_ddx = ddfunction(xmol, u, DIM[0])
-							ddf_ddy = ddfunction(ymol, v, DIM[1])
-
-							temp_int_z_mol[0] += f_x * f_y * auv1[j]
-							temp_int_z_mol[1] += f_x * f_y * auv2[j]
-							temp_dxdyz_mol[0] += df_dx * f_y * auv1[j]
-							temp_dxdyz_mol[1] += f_x * df_dy * auv1[j]
-							temp_dxdyz_mol[2] += df_dx * f_y * auv2[j]
-							temp_dxdyz_mol[3] += f_x * df_dy * auv2[j]
-							temp_ddxddyz_mol[0] += ddf_ddx * f_y * auv1[j]
-							temp_ddxddyz_mol[1] += f_x * ddf_ddy * auv1[j]
-							temp_ddxddyz_mol[2] += ddf_ddx * f_y * auv2[j]
-							temp_ddxddyz_mol[3] += f_x * ddf_ddy * auv2[j]
-
-					for u in xrange(-qu+1, qu):
-						for v in [-qu, qu]:
-							j = (2 * qm + 1) * (u + qm) + (v + qm)
-
-							f_x = function(xmol, u, DIM[0])
-							f_y = function(ymol, v, DIM[1])
-							df_dx = dfunction(xmol, u, DIM[0])
-							df_dy = dfunction(ymol, v, DIM[1])
-							ddf_ddx = ddfunction(xmol, u, DIM[0])
-							ddf_ddy = ddfunction(ymol, v, DIM[1])
-
-							temp_int_z_mol[0] += f_x * f_y * auv1[j]
-							temp_int_z_mol[1] += f_x * f_y * auv2[j]
-							temp_dxdyz_mol[0] += df_dx * f_y * auv1[j]
-							temp_dxdyz_mol[1] += f_x * df_dy * auv1[j]
-							temp_dxdyz_mol[2] += df_dx * f_y * auv2[j]
-							temp_dxdyz_mol[3] += f_x * df_dy * auv2[j]
-							temp_ddxddyz_mol[0] += ddf_ddx * f_y * auv1[j]
-							temp_ddxddyz_mol[1] += f_x * ddf_ddy * auv1[j]
-							temp_ddxddyz_mol[2] += ddf_ddx * f_y * auv2[j]
-							temp_ddxddyz_mol[3] += f_x * ddf_ddy * auv2[j]
+						temp_int_z_mol[0] += f_x * f_y * auv1[j]
+						temp_int_z_mol[1] += f_x * f_y * auv2[j]
+						temp_dxdyz_mol[0] += df_dx * f_y * auv1[j]
+						temp_dxdyz_mol[1] += f_x * df_dy * auv1[j]
+						temp_dxdyz_mol[2] += df_dx * f_y * auv2[j]
+						temp_dxdyz_mol[3] += f_x * df_dy * auv2[j]
+						temp_ddxddyz_mol[0] += ddf_ddx * f_y * auv1[j]
+						temp_ddxddyz_mol[1] += f_x * ddf_ddy * auv1[j]
+						temp_ddxddyz_mol[2] += ddf_ddx * f_y * auv2[j]
+						temp_ddxddyz_mol[3] += f_x * ddf_ddy * auv2[j]
 
 			int_z_mol[qu] += temp_int_z_mol
 			dxdyz_mol[qu] += temp_dxdyz_mol
 			ddxddyz_mol[qu] += temp_ddxddyz_mol
 
-		with file('{}/INTPOS/{}_INTZ_MOL.npy'.format(directory, file_name_pos), 'w') as outfile:
-			np.save(outfile, (int_z_mol))
-		with file('{}/INTPOS/{}_INTDXDY_MOL.npy'.format(directory, file_name_pos), 'w') as outfile:
-	       		np.save(outfile, (dxdyz_mol))
-		with file('{}/INTPOS/{}_INTDDXDDY_MOL.npy'.format(directory, file_name_pos), 'w') as outfile:
-	       		np.save(outfile, (ddxddyz_mol))
+		with tables.open_file('{}/INTPOS/{}_INTZ_MOL.hdf5'.format(directory, file_name_pos), 'a') as outfile:
+			write_int_z_mol[0] = int_z_mol
+			outfile.root.int_z_mol.append(write_int_z_mol)
+		with tables.open_file('{}/INTPOS/{}_INTDXDY_MOL.hdf5'.format(directory, file_name_pos), 'a') as outfile:
+			write_dxdyz_mol[0] = dxdyz_mol
+			outfile.root.dxdyz_mol.append(write_dxdyz_mol)
+		with tables.open_file('{}/INTPOS/{}_INTDDXDDY_MOL.hdf5'.format(directory, file_name_pos), 'a') as outfile:
+			write_ddxddyz_mol[0] = ddxddyz_mol
+			outfile.root.ddxddyz_mol.append(write_ddxddyz_mol)
 
-	#return int_z_mol, dxdyz_mol, ddxddyz_mol
-
-
-def intrinsic_local_frame(directory, xat, yat, zat, qm, n0, phi, nmol, frame, model, nsite, eig_vec, recon, ow_local):
-
-	file_name_pos = '{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1./phi + 0.5), frame)
-	if recon: file_name_pos = '{}_R'.format(file_name_pos)
-
-	if not os.path.exists('{}/INTEULER/{}_ODIST.npy'.format(directory, file_name_pos)) or ow_local:
-
-		dxdyz_mol = np.load('{}/INTPOS/{}_INTDXDY_MOL.npy'.format(directory, file_name_pos), mmap_mode='r')
-
-		Odist = np.zeros((qm+1, 2, nmol, 9))
-
-		xat_mol = xat.reshape((nmol, nsite))
-		yat_mol = yat.reshape((nmol, nsite))
-		zat_mol = zat.reshape((nmol, nsite))
-
-		molecules = np.stack((xat_mol, yat_mol, zat_mol), axis=2)
-
-		O = ut.local_frame_molecule(molecules, model, eig_vec)
-
-		for qu in xrange(qm+1):
-			sys.stdout.write("PROCESSING {} ODIST {}: qm = {} qu = {}\r".format(directory, frame, qm, qu) )
-			sys.stdout.flush()
-
-			T1 = ut.local_frame_surface(dxdyz_mol[qu][0], dxdyz_mol[qu][1], -1)
-			T2 = ut.local_frame_surface(dxdyz_mol[qu][2], dxdyz_mol[qu][3], 1)
-
-			T1inv = np.linalg.inv(T1)
-			T2inv = np.linalg.inv(T2)
-
-			R1 = np.matmul(O, T1inv)
-			R2 = np.matmul(O, T2inv)
-
-			Odist[qu][0] += R1.reshape((nmol, 9))
-			Odist[qu][1] += R2.reshape((nmol, 9))
-
-		with file('{}/INTEULER/{}_ODIST.npy'.format(directory, file_name_pos), 'w') as outfile:
-			np.save(outfile, (Odist))
+	return int_z_mol, dxdyz_mol, ddxddyz_mol
 
 
-def intrinsic_z_den_corr(directory, zmol, model, qm, n0, phi, psi, frame, nslice, nsite, DIM, recon, ow_count):
+
+def intrinsic_z_den_corr(directory, file_name, zmol, auv1, auv2, qm, n0, phi, psi, frame, nframe, nslice, nsite, nz, nnz, DIM, recon, ow_count):
 	"Saves atom, mol and mass intrinsic profiles of trajectory frame" 
 
 	lslice = DIM[2] / nslice
-	nz = 100
-        nnz = 100
 
-	file_name_pos = '{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1./phi + 0.5), frame)
-	file_name_count = '{}_{}_{}_{}_{}_{}'.format(model.lower(), nslice, qm, n0, int(1./phi + 0.5), frame)	
-	file_name_norm = '{}_{}_{}_{}_{}_{}'.format(model.lower(), nz, qm, n0, int(1./phi + 0.5), frame)
-	file_name_auv = '{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1./phi + 0.5), frame)
+	file_name_pos = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
+	file_name_count = '{}_{}_{}_{}_{}_{}'.format(file_name, nslice, qm, n0, int(1./phi + 0.5), nframe)	
+	file_name_norm = '{}_{}_{}_{}_{}_{}'.format(file_name, nz, qm, n0, int(1./phi + 0.5), nframe)
 
 	if recon:
 		file_name_pos = '{}_R'.format(file_name_pos)
 		file_name_count = '{}_R'.format(file_name_count)
 		file_name_norm = '{}_R'.format(file_name_norm)
-		file_name_auv = '{}_R'.format(file_name_auv)	
 
 	try:
-		count_corr_array = np.load('{}/INTDEN/{}_COUNTCORR.npy'.format(directory, file_name_count), mmap_mode='r')
-		z_nz_array = np.load('{}/INTDEN/{}_N_NZ.npy'.format(directory, file_name_norm), mmap_mode='r')
+		with tables.open_file('{}/INTDEN/{}_COUNTCORR.hdf5'.format(directory, file_name_count), 'r') as infile:
+			count_corr_array = infile.root.count_corr_array[frame]
+		with tables.open_file('{}/INTDEN/{}_N_NZ.hdf5'.format(directory, file_name_norm), 'r') as infile:
+			z_nz_array = infile.root.z_nz_array[frame]
         except: ow_count = True
 
 	if ow_count:
 
-		auv1, auv2 = np.load('{}/ACOEFF/{}_INTCOEFF.npy'.format(directory, file_name_auv), mmap_mode='r')	
-
+		write_count_corr_array = np.zeros((1, qm+1, nslice, nnz))
+		write_z_nz_array = np.zeros((1, qm+1, nz, nnz))
 		count_corr_array = np.zeros((qm+1, nslice, nnz))
 		z_nz_array = np.zeros((qm+1, nz, nnz))	
 
 		nmol = len(zmol)
 
-		try:
-			int_z_mol = np.load('{}/INTPOS/{}_INTZ_MOL.npy'.format(directory, file_name_pos), mmap_mode='r')
-			dxdyz_mol = np.load('{}/INTPOS/{}_INTDXDY_MOL.npy'.format(directory, file_name_pos), mmap_mode='r')
-		except:
-			int_z_mol, dxdyz_mol, ddxddyz_mol = intrinsic_positions_dxdyz(directory, xmol, ymol, zmol, model, frame, nsite, qm, n0, phi, psi, DIM, recon, False)
+		with tables.open_file('{}/INTPOS/{}_INTZ_MOL.hdf5'.format(directory, file_name_pos), 'r') as infile:
+			int_z_mol = infile.root.int_z_mol[frame]
+		with tables.open_file('{}/INTPOS/{}_INTDXDY_MOL.hdf5'.format(directory, file_name_pos), 'r') as infile:
+			dxdyz_mol = infile.root.dxdyz_mol[frame]
 
 		for qu in xrange(qm+1):
 			sys.stdout.write("PROCESSING {} INTRINSIC DENSITY {}: qm = {} qu = {}\r".format(directory, frame, qm, qu) )
 			sys.stdout.flush()
 
-			temp_file_name_count = '{}_{}_{}_{}_{}_{}_{}'.format(model.lower(), nslice, qm, qu, n0, int(1/phi + 0.5), frame)
-			temp_file_name_norm = '{}_{}_{}_{}_{}_{}_{}'.format(model.lower(), nz, qm, qu, n0, int(1/phi + 0.5), frame)
+			temp_count_corr_array = np.zeros((nslice, nnz))
+			temp_z_nz_array = np.zeros((nz, nnz))
 
-			if recon: 
-				temp_file_name_count = '{}_R'.format(temp_file_name_count)
-				temp_file_name_norm = '{}_R'.format(temp_file_name_norm)
+			int_z1 = int_z_mol[qu][0]
+			int_z2 = int_z_mol[qu][1]
 
-			try:
-				with file('{}/INTDEN/{}_COUNTCORR.npy'.format(directory, temp_file_name_count)) as infile:
-					temp_count_corr_array += np.load(infile)
-				with file('{}/INTDEN/{}_N_NZ.npy'.format(directory, temp_file_name_norm)) as infile:
-                                	temp_z_nz_array += np.load(infile)
-				os.remove('{}/INTDEN/{}_COUNTCORR.npy'.format(directory, temp_file_name_count))
-				os.remove('{}/INTDEN/{}_N_NZ.npy'.format(directory, temp_file_name_norm))
+			z1 = zmol - int_z1
+			z2 = -zmol + int_z2
 
-			except Exception: 
+			dzx1 = dxdyz_mol[qu][0]
+			dzy1 = dxdyz_mol[qu][1]
+			dzx2 = dxdyz_mol[qu][2]
+			dzy2 = dxdyz_mol[qu][3]
 
-				temp_count_corr_array = np.zeros((nslice, nnz))
-				temp_z_nz_array = np.zeros((nz, nnz))
+			index1_mol = np.array((z1 + DIM[2]/2.) * nslice / DIM[2], dtype=int) % nslice
+			index2_mol = np.array((z2 + DIM[2]/2.) * nslice / DIM[2], dtype=int) % nslice
 
-				int_z1 = int_z_mol[qu][0]
-				int_z2 = int_z_mol[qu][1]
+			normal1 = abs(ut.unit_vector([-dzx1, -dzy1, np.ones(nmol)])[2])
+			normal2 = abs(ut.unit_vector([-dzx2, -dzy2, np.ones(nmol)])[2])
 
-				z1 = zmol - int_z1
-				z2 = -zmol + int_z2
+			index1_nz = np.array(normal1 * nnz, dtype=int) % nnz
+			index2_nz = np.array(normal2 * nnz, dtype=int) % nnz
 
-				dzx1 = dxdyz_mol[qu][0]
-				dzy1 = dxdyz_mol[qu][1]
-				dzx2 = dxdyz_mol[qu][2]
-				dzy2 = dxdyz_mol[qu][3]
+			temp_count_corr_array += np.histogram2d(index1_mol, index1_nz, bins=[nslice, nnz], range=[[0, nslice], [0, nnz]])[0]
+			temp_count_corr_array += np.histogram2d(index2_mol, index2_nz, bins=[nslice, nnz], range=[[0, nslice], [0, nnz]])[0]
 
-				index1_mol = np.array((z1 + DIM[2]/2.) * nslice / DIM[2], dtype=int) % nslice
-				index2_mol = np.array((z2 + DIM[2]/2.) * nslice / DIM[2], dtype=int) % nslice
+			index1_mol = np.array(abs(int_z1 - auv1[len(auv1)/2]) * 2 * nz / (nz*lslice), dtype=int) % nz
+			index2_mol = np.array(abs(int_z2 - auv2[len(auv2)/2]) * 2 * nz / (nz*lslice), dtype=int) % nz
 
-				normal1 = abs(ut.unit_vector([-dzx1, -dzy1, np.ones(nmol)])[2])
-				normal2 = abs(ut.unit_vector([-dzx2, -dzy2, np.ones(nmol)])[2])
-
-				index1_nz = np.array(normal1 * nnz, dtype=int) % nnz
-				index2_nz = np.array(normal2 * nnz, dtype=int) % nnz
-
-				temp_count_corr_array += np.histogram2d(index1_mol, index1_nz, bins=[nslice, nnz], range=[[0, nslice], [0, nnz]])[0]
-				temp_count_corr_array += np.histogram2d(index2_mol, index2_nz, bins=[nslice, nnz], range=[[0, nslice], [0, nnz]])[0]
-
-				index1_mol = np.array(abs(int_z1 - auv1[len(auv1)/2]) * 2 * nz / (nz*lslice), dtype=int) % nz
-				index2_mol = np.array(abs(int_z2 - auv2[len(auv2)/2]) * 2 * nz / (nz*lslice), dtype=int) % nz
-
-				temp_z_nz_array += np.histogram2d(index1_mol, index1_nz, bins=[nz, nnz], range=[[0, nz], [0, nnz]])[0]
-				temp_z_nz_array += np.histogram2d(index2_mol, index2_nz, bins=[nz, nnz], range=[[0, nz], [0, nnz]])[0]
+			temp_z_nz_array += np.histogram2d(index1_mol, index1_nz, bins=[nz, nnz], range=[[0, nz], [0, nnz]])[0]
+			temp_z_nz_array += np.histogram2d(index2_mol, index2_nz, bins=[nz, nnz], range=[[0, nz], [0, nnz]])[0]
 
 			count_corr_array[qu] += temp_count_corr_array
 			z_nz_array[qu] += temp_z_nz_array
 
-		with file('{}/INTDEN/{}_COUNTCORR.npy'.format(directory, file_name_count), 'w') as outfile:
-			np.save(outfile, (count_corr_array))
-		with file('{}/INTDEN/{}_N_NZ.npy'.format(directory, file_name_norm), 'w') as outfile:
-                        np.save(outfile, (z_nz_array))
+		with tables.open_file('{}/INTDEN/{}_COUNTCORR.hdf5'.format(directory, file_name_count), 'a') as outfile:
+			write_count_corr_array[0] = count_corr_array
+			outfile.root.count_corr_array.append(write_count_corr_array)
+		with tables.open_file('{}/INTDEN/{}_N_NZ.hdf5'.format(directory, file_name_norm), 'a') as outfile:
+			write_z_nz_array[0] = z_nz_array
+			outfile.root.z_nz_array.append(write_z_nz_array)
 
 	return count_corr_array, z_nz_array
-
-
-def intrinsic_R_tensors_old(directory, zmol, model, frame, nslice, com, DIM, nsite, qm, n0, phi, psi, recon, ow_R):
-
-	file_name_pos = '{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1/phi + 0.5), frame)
-	file_name_euler = '{}_{}_{}_{}_{}_{}'.format(model.lower(), nslice, qm, n0, int(1/phi + 0.5), frame)	
-	file_name_auv = '{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1./phi + 0.5), frame)
-
-	if recon:
-		file_name_pos = '{}_R'.format(file_name_pos)
-		file_name_euler = '{}_R'.format(file_name_euler)
-		file_name_auv = '{}_R'.format(file_name_auv)
-
-	try:
-		int_R = np.load('{}/INTEULER/{}_RDIST.npy'.format(directory, file_name_euler), mmap_mode='r')
-	except: ow_R = True
-
-	if ow_R:
-
-		nmol = len(zmol)
-
-		int_R = np.zeros((qm+1, nslice, 9))
-
-		with file('{}/INTEULER/{}_ODIST.npy'.format(directory, file_name_pos), 'r') as infile:
-			Odist = np.load(infile)
-		with file('{}/INTPOS/{}_INTZ_MOL.npy'.format(directory, file_name_pos), 'r') as infile:
-			int_z_mol = np.load(infile)
-	
-		for qu in xrange(qm+1):
-			#sys.stdout.write("PROCESSING {} RDIST {}: qm = {} qu = {}\r".format(directory, frame, qm, qu) )
-			#sys.stdout.flush()
-
-			temp_int_R = np.zeros((nslice, 9))
-
-			temp_file_name_euler = '{}_{}_{}_{}_{}_{}_{}'.format(model.lower(), nslice, qm, qu, n0, int(1/phi + 0.5), frame)	
-			temp_file_name_pos = '{}_{}_{}_{}_{}_{}'.format(model.lower(), qm, qu, n0, int(1/phi + 0.5), frame)
-
-			if recon: 
-				temp_file_name_euler += '_R'
-				temp_file_name_pos += '_R'
-
-			try:
-				with file('{}/INTEULER/{}_ODIST.npy'.format(directory, temp_file_name_euler), 'r') as infile:
-					temp_int_R += np.load(infile)
-				os.remove('{}/INTEULER/{}_ODIST.npy'.format(directory, temp_file_name_euler))
-
-			except:
-				int_z1 = int_z_mol[qu][0]
-				int_z2 = int_z_mol[qu][1]
-
-				z1 = zmol - int_z1
-				z2 = -zmol + int_z2
-
-				index1_mol = np.array((z1 + DIM[2]/2.) * nslice / DIM[2], dtype=int) % nslice
-				index2_mol = np.array((z2 + DIM[2]/2.) * nslice / DIM[2], dtype=int) % nslice
-
-				for j in xrange(nmol):
-	
-					temp_int_R[index1_mol[j]] += Odist[qu][0][j]**2 
-					temp_int_R[index2_mol[j]] += Odist[qu][1][j]**2
-
-			int_R[qu] += temp_int_R
-
-		with file('{}/INTEULER/{}_RDIST.npy'.format(directory, file_name_euler), 'w') as outfile:
-			np.save(outfile, int_R)
-
-	return int_R
-
-
-def intrinsic_R_tensors(directory, zmol, model, frame, nslice, com, DIM, nsite, qm, n0, phi, psi, recon):
-
-	file_name_pos = '{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1/phi + 0.5), frame)
-	file_name_euler = '{}_{}_{}_{}_{}_{}'.format(model.lower(), nslice, qm, n0, int(1/phi + 0.5), frame)	
-	file_name_auv = '{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1./phi + 0.5), frame)
-
-	if recon:
-		file_name_pos += '_R'
-		file_name_euler += '_R'
-		file_name_auv += '_R'
-
-	nmol = len(zmol)
-
-	int_R = np.zeros((qm+1, 9, nslice))
-
-	Odist = np.load('{}/INTEULER/{}_ODIST.npy'.format(directory, file_name_pos), mmap_mode='r')
-	int_z_mol = np.load('{}/INTPOS/{}_INTZ_MOL.npy'.format(directory, file_name_pos), mmap_mode='r')
-
-	try: os.remove('{}/INTEULER/{}_RDIST.npy'.format(directory, file_name_euler))
-	except: pass
-
-	Odist = np.moveaxis(Odist, -1, -2)**2
-
-	for qu in xrange(qm+1):
-		temp_file_name_euler = '{}_{}_{}_{}_{}_{}_{}'.format(model.lower(), nslice, qm, qu, n0, int(1/phi + 0.5), frame)
-		try: os.remove('{}/INTEULER/{}_ODIST.npy'.format(directory, temp_file_name_euler))
-		except: pass
-		#sys.stdout.write("PROCESSING {} RDIST {}: qm = {} qu = {}\r".format(directory, frame, qm, qu) )
-		#sys.stdout.flush()
-
-		int_z1 = int_z_mol[qu][0]
-		int_z2 = int_z_mol[qu][1]
-
-		z1 = zmol - int_z1
-		z2 = -zmol + int_z2
-
-		index1_mol = np.array((z1 + DIM[2]/2.) * nslice / DIM[2], dtype=int) % nslice
-		index2_mol = np.array((z2 + DIM[2]/2.) * nslice / DIM[2], dtype=int) % nslice
-
-		for j in xrange(9): 
-			int_R[qu][j] += np.histogram(index1_mol, bins=nslice, weights=Odist[qu][0][j], range=[0, nslice])[0]
-			int_R[qu][j] += np.histogram(index2_mol, bins=nslice, weights=Odist[qu][1][j], range=[0, nslice])[0]
-
-
-	return np.moveaxis(int_R, -1, -2)
-
-
-def intrinsic_mol_angles(directory, zmol, model, frame, nslice, npi, nmol, DIM, nsite, qm, n0, phi, psi, recon, ow_angle):
-
-	dpi = np.pi / npi
-
-	file_name_euler = '{}_{}_{}_{}_{}_{}'.format(model.lower(), nslice, qm, n0, int(1/phi + 0.5), frame)
-	file_name_pos = '{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1/phi + 0.5), frame)
-	file_name_coeff = '{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1./phi + 0.5), frame)
-	file_name_pangle = '{}_{}_{}_{}_{}_{}_{}'.format(model.lower(), nslice, npi, qm, n0, int(1/phi + 0.5), frame)
-
-	if recon: 
-		file_name_euler += '_R'
-		file_name_pos += '_R'
-		file_name_coeff += '_R'
-
-	try:
-		int_theta, int_phi, int_varphi = np.load('{}/INTEULER/{}_INTANGLE.npy'.format(directory, file_name_pos), mmap_mode='r')
-	except: ow_angle = True
-
-	if ow_angle:
-
-		int_P_z_theta_phi = np.zeros((qm+1, nslice, npi, npi*2))
-
-		int_theta = np.zeros((qm+1, 2, nmol))
-		int_phi = np.zeros((qm+1, 2, nmol))
-		int_varphi = np.zeros((qm+1, 2, nmol))
-
-		Odist = np.load('{}/INTEULER/{}_ODIST.npy'.format(directory, file_name_pos), mmap_mode='r')
-		int_z_mol = np.load('{}/INTPOS/{}_INTZ_MOL.npy'.format(directory, file_name_pos), mmap_mode='r')	
-
-		for qu in xrange(qm+1):
-	
-			temp_file_name_euler = '{}_{}_{}_{}_{}_{}_{}'.format(model.lower(), nslice, qm, qu, n0, int(1/phi + 0.5), frame)	
-			temp_file_name_pos = '{}_{}_{}_{}_{}_{}'.format(model.lower(), qm, qu, n0, int(1/phi + 0.5), frame)
-			temp_file_name_coeff = '{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1./phi + 0.5), frame)
-
-			if recon: 
-				temp_file_name_euler += '_R'
-				temp_file_name_pos += '_R'
-				temp_file_name_coeff += '_R'
-
-			try:
-				with file('{}/INTEULER/{}_ANGLE1.npy'.format(directory, temp_file_name_pos), 'r') as infile:
-					zeta_array1, int_theta[qu][0], int_phi[qu][0], int_varphi[qu][0] = np.load(infile)
-				with file('{}/INTEULER/{}_ANGLE2.npy'.format(directory, temp_file_name_pos), 'r') as infile:
-					zeta_array2, int_theta[qu][1], int_phi[qu][1], int_varphi[qu][1] = np.load(infile)
-
-				os.remove('{}/INTEULER/{}_ANGLE1.npy'.format(directory, temp_file_name_pos))
-				os.remove('{}/INTEULER/{}_ANGLE2.npy'.format(directory, temp_file_name_pos))
-
-			except Exception:
-				sys.stdout.write("PROCESSING {} INTRINSIC ANGLES {}: qm = {} qu = {} \r".format(directory, frame, qm, qu) )
-				sys.stdout.flush()
-
-				int_z1 = int_z_mol[qu][0]
-				int_z2 = int_z_mol[qu][1]
-
-				zeta_array1 = zmol - int_z1
-				zeta_array2 = -zmol + int_z2
-
-				R1 = np.moveaxis(Odist[qu][0], 0, 1)
-				R2 = np.moveaxis(Odist[qu][1], 0, 1)
-
-				int_theta[qu][0] = np.arccos(R1[8])
-				int_phi[qu][0] = (np.arctan(-R1[6] / R1[7]))
-				int_varphi[qu][0] = (np.arctan(R1[2] / R1[5]))
-
-				int_theta[qu][1] = np.arccos(R2[8])
-				int_phi[qu][1] = (np.arctan(-R2[6] / R2[7]))
-				int_varphi[qu][1] = (np.arctan(R2[2] / R2[5]))
-
-
-			index_z = np.array((zeta_array1 + DIM[2]/2) * nslice / DIM[2], dtype=int) % nslice
-			index_theta = np.array(int_theta[qu][0] /dpi, dtype=int) 
-			index_phi = np.array((int_phi[qu][0] + np.pi / 2.) /dpi, dtype=int)
-
-			int_P_z_theta_phi[qu] += np.histogramdd((index_z, index_theta, index_phi), bins=[nslice, npi, npi*2], range=[[0, nslice], [0, npi], [0, npi*2]])[0]
-
-			index_z = np.array((zeta_array2 + DIM[2]/2) * nslice / DIM[2], dtype=int) % nslice
-			index_theta = np.array(int_theta[qu][1] /dpi, dtype=int) 
-			index_phi = np.array((int_phi[qu][1] + np.pi / 2.) /dpi, dtype=int)
-
-			int_P_z_theta_phi[qu] += np.histogramdd((index_z, index_theta, index_phi), bins=[nslice, npi, npi*2], range=[[0, nslice], [0, npi], [0, npi*2]])[0]
-
-		with file('{}/INTEULER/{}_INTANGLE.npy'.format(directory, file_name_pos), 'w') as outfile:
-			np.save(outfile, (int_theta, int_phi, int_varphi))
-		with file('{}/INTEULER/{}_INTPANGLE.npy'.format(directory, file_name_pangle), 'w') as outfile:
-			np.save(outfile, (int_P_z_theta_phi))
-
-	return int_P_z_theta_phi
-
-
-def intrinsic_angle_dist(nslice, qm, npi, int_P_z_theta_phi):
-
-	print "BUILDING ANGLE DISTRIBUTIONS"
-
-	dpi = np.pi / npi
-
-	print ""
-	print "NORMALISING GRID"
-
-	for qu in xrange(qm+1):
-		for index1 in xrange(nslice): 
-			if np.sum(int_P_z_theta_phi[qu][index1]) != 0: int_P_z_theta_phi[qu][index1] = int_P_z_theta_phi[qu][index1] / np.sum(int_P_z_theta_phi[qu][index1])
-
-	int_P_z_phi_theta = np.moveaxis(int_P_z_theta_phi, -2, -1)
-
-	X_theta = np.arange(0, np.pi, dpi)
-	X_phi = np.arange(-np.pi / 2, np.pi / 2, dpi)
-
-	int_av_theta = np.zeros((qm+1, nslice))
-        int_av_phi = np.zeros((qm+1, nslice))
-	int_P1 = np.zeros((qm+1, nslice))
-	int_P2 = np.zeros((qm+1, nslice))
-
-	print "BUILDING AVERAGE ANGLE PROFILES"
-
-	for qu in xrange(qm+1):
-		for index1 in xrange(nslice):
-			sys.stdout.write("PROCESSING AVERAGE ANGLE PROFILES {} out of {} slices\r".format(index1, nslice) )
-			sys.stdout.flush() 
-
-			for index2 in xrange(npi):
-				int_av_theta[qu][index1] += np.sum(int_P_z_theta_phi[qu][index1][index2]) * X_theta[index2] 
-				int_P1[qu][index1] += np.sum(int_P_z_theta_phi[qu][index1][index2]) * np.cos(X_theta[index2])
-				int_P2[qu][index1] += np.sum(int_P_z_theta_phi[qu][index1][index2]) * 0.5 * (3 * np.cos(X_theta[index2])**2 - 1)
-
-				int_av_phi[qu][index1] += np.sum(int_P_z_phi_theta[qu][index1][index2]) * (X_phi[index2]) 
-
-			if int_av_theta[qu][index1] == 0: 
-				int_av_theta[qu][index1] += np.pi / 2.
-				int_av_phi[qu][index1] += np.pi / 4.
-
-	a_dist = (int_av_theta, int_av_phi, int_P1, int_P2)
-	
-	return a_dist
-
-
-def intrinsic_polarisability(nslice, qm, eig_val, count_int_O, av_int_O):
-
-	int_axx = np.zeros((qm+1, nslice))
-	int_azz = np.zeros((qm+1, nslice))
-
-	for qu in xrange(qm+1):
-		for n in xrange(nslice):
-			if count_int_O[qu][n] != 0:
-				av_int_O[qu][n] *= 1./ count_int_O[qu][n]
-				for j in xrange(3):
-					int_axx[qu][n] += eig_val[j] * 0.5 * (av_int_O[qu][n][j] + av_int_O[qu][n][j+3]) 
-					int_azz[qu][n] += eig_val[j] * av_int_O[qu][n][j+6] 
-			else: 					
-				int_axx[qu][n] = np.mean(eig_val)					
-				int_azz[qu][n] = np.mean(eig_val)
-
-	polar = (int_axx, int_azz)
-
-	return polar
 
 
 def cw_gamma_1(q, gamma, kappa): return gamma + kappa * q**2
@@ -1411,26 +1019,22 @@ def cw_gamma_dft(q, gamma, kappa, eta0, eta1): return gamma + eta0 * q + kappa *
 def cw_gamma_sk(q, gamma, w0, r0, dp): return gamma + np.pi/32 * w0 * r0**6 * dp**2 * q**2 * (np.log(q * r0 / 2.) - (3./4 * 0.5772))
 
 
-def intrinsic_profile(directory, model, csize, ntraj, nframe, natom, nmol, nsite, AT, M, a_type, mol_sigma, com, DIM, nslice, ncube, qm, QM, n0, phi, npi, vlim, ow_profile, ow_auv, ow_recon, ow_pos, ow_local, ow_dist, ow_count, ow_angle, ow_polar):
+def intrinsic_profile(directory, file_name, T, nframe, natom, nmol, nsite, AT, M, mol_sigma, mol_com, dim, nslice, ncube, qm, QM, n0, phi, psi, npi, vlim, ow_coeff, ow_recon, ow_pos, ow_intden, ow_count, ow_effden):
 
-	if model.lower() == 'argon': T = 85
-	else: T = 298
-
-	lslice = DIM[2] / nslice
-	Aslice = DIM[0]*DIM[1]
-	Vslice = DIM[0]*DIM[1]*lslice
+	lslice = dim[2] / nslice
+	Aslice = dim[0]*dim[1]
+	Vslice = dim[0]*dim[1]*lslice
 	Acm = 1E-8
 	ur = 1
-	Z1 = np.linspace(0, DIM[2], nslice)
-	Z2 = np.linspace(-DIM[2]/2, DIM[2]/2, nslice)
+	Z1 = np.linspace(0, dim[2], nslice)
+	Z2 = np.linspace(-dim[2]/2, dim[2]/2, nslice)
 	NZ = np.linspace(0, 1, 100)
 	n_waves = 2 * qm + 1
-	psi = phi * DIM[0] * DIM[1]
+	nz = 100
+        nnz = 100
 
 	atom_types = list(set(AT))
 	n_atom_types = len(atom_types)
-
-	eig_val, eig_vec = ut.get_polar_constants(model, a_type)
 
 	av_auv1 = np.zeros((2, nframe))
 	av_auv2 = np.zeros((2, nframe))
@@ -1444,72 +1048,107 @@ def intrinsic_profile(directory, model, csize, ntraj, nframe, natom, nmol, nsite
 	tot_auv1 = np.zeros((2, nframe, n_waves**2))
 	tot_auv2 = np.zeros((2, nframe, n_waves**2))
 
-	file_name_die = ['{}_{}_{}_{}_{}_{}_{}'.format(model.lower(), a_type, nslice, qm, n0, int(1/phi + 0.5), nframe), 
-		    	 '{}_{}_{}_{}_{}_{}_{}_R'.format(model.lower(), a_type, nslice, qm, n0, int(1/phi + 0.5), nframe)]
-	file_name_den = ['{}_{}_{}_{}_{}_{}'.format(model.lower(), nslice, qm, n0, int(1/phi + 0.5), nframe), 
-		         '{}_{}_{}_{}_{}_{}_R'.format(model.lower(), nslice, qm, n0, int(1/phi + 0.5), nframe)]
-	file_name_hydro = ['{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1/phi + 0.5), nframe), 
-		     	'{}_{}_{}_{}_{}_R'.format(model.lower(), qm, n0, int(1/phi + 0.5), nframe)]
+	file_name_pos = ['{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe),
+			 '{}_{}_{}_{}_{}_R'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)]
+	file_name_auv = ['{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe), 
+			 '{}_{}_{}_{}_{}_R'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)]
+	file_name_den = ['{}_{}_{}_{}_{}_{}'.format(file_name, nslice, qm, n0, int(1/phi + 0.5), nframe), 
+		         '{}_{}_{}_{}_{}_{}_R'.format(file_name, nslice, qm, n0, int(1/phi + 0.5), nframe)]
+	file_name_count = ['{}_{}_{}_{}_{}_{}'.format(file_name, nslice, qm, n0, int(1./phi + 0.5), nframe),
+			   '{}_{}_{}_{}_{}_{}_R'.format(file_name, nslice, qm, n0, int(1./phi + 0.5), nframe)]	
+	file_name_norm = ['{}_{}_{}_{}_{}_{}'.format(file_name, nz, qm, n0, int(1./phi + 0.5), nframe),
+			  '{}_{}_{}_{}_{}_{}_R'.format(file_name, nz, qm, n0, int(1./phi + 0.5), nframe)]
 
-	file_check = np.all([os.path.exists('{}/INTDEN/{}_EFF_DEN.npy'.format(directory, file_name_den[1])),
-			os.path.exists('{}/INTDIELEC/{}_DIE.npy'.format(directory, file_name_die[1])),
-			os.path.exists('{}/INTDIELEC/{}_CWDIE.npy'.format(directory, file_name_die[1])),
-			os.path.exists('{}/INTDIELEC/{}_ELLIP_NO.npy'.format(directory, file_name_die[1]))])
-			
+	if not os.path.exists('{}/SURFACE/{}_ACOEFF.hdf5'.format(directory, file_name_auv[0])) or ow_coeff:
+		ut.make_earray('{}/SURFACE/{}_ACOEFF.hdf5'.format(directory, file_name_auv[0]), 
+			['tot_coeff1', 'tot_coeff2'], tables.Float64Atom(), [(0, n_waves**2), (0, n_waves**2)])
+		ut.make_earray('{}/SURFACE/{}_PIVOTS.hdf5'.format(directory, file_name_auv[0]), 
+			['tot_piv_n1', 'tot_piv_n2'], tables.Float64Atom(), [(0, n0), (0, n0)])
+	if not os.path.exists('{}/SURFACE/{}_ACOEFF.hdf5'.format(directory, file_name_auv[1])) or ow_recon:
+		ut.make_earray('{}/SURFACE/{}_ACOEFF.hdf5'.format(directory, file_name_auv[1]), 
+			['tot_coeff1', 'tot_coeff2'], tables.Float64Atom(), [(0, n_waves**2), (0, n_waves**2)])
 
-	if not file_check or ow_auv or ow_pos or ow_local:
+	for r, recon in enumerate([False, True]):
+		if not os.path.exists('{}/INTPOS/{}_INTZ_MOL.hdf5'.format(directory, file_name_pos[r])) or ow_pos:
+			ut.make_earray('{}/INTPOS/{}_INTZ_MOL.hdf5'.format(directory, file_name_pos[r]), 
+				['int_z_mol'], tables.Float64Atom(), [(0, qm+1, 2, nmol)])
+		if not os.path.exists('{}/INTPOS/{}_INTDXDY_MOL.hdf5'.format(directory, file_name_pos[r])) or ow_pos:
+			ut.make_earray('{}/INTPOS/{}_INTDXDY_MOL.hdf5'.format(directory, file_name_pos[r]), 
+				['dxdyz_mol'], tables.Float64Atom(), [(0, qm+1, 4, nmol)])
+		if not os.path.exists('{}/INTPOS/{}_INTDDXDDY_MOL.hdf5'.format(directory, file_name_pos[r])) or ow_pos:
+			ut.make_earray('{}/INTPOS/{}_INTDDXDDY_MOL.hdf5'.format(directory, file_name_pos[r]), 
+				['ddxddyz_mol'], tables.Float64Atom(), [(0, qm+1, 4, nmol)])
+		if not os.path.exists('{}/INTDEN/{}_COUNTCORR.hdf5'.format(directory, file_name_count[r])) or ow_count:
+			ut.make_earray('{}/INTDEN/{}_COUNTCORR.hdf5'.format(directory, file_name_count[r]), 
+				['count_corr_array'], tables.Float64Atom(), [(0, qm+1, nslice, 100)])
+		if not os.path.exists('{}/INTDEN/{}_N_NZ.hdf5'.format(directory, file_name_norm[r])) or ow_count:
+			ut.make_earray('{}/INTDEN/{}_N_NZ.hdf5'.format(directory, file_name_norm[r]), 
+				['z_nz_array'], tables.Float64Atom(), [(0, qm+1, 100, 100)])
+
+	file_check = [os.path.exists('{}/SURFACE/{}_ACOEFF.hdf5'.format(directory, file_name_auv[0])),
+		      	os.path.exists('{}/SURFACE/{}_ACOEFF.hdf5'.format(directory, file_name_auv[1])),	
+			os.path.exists('{}/SURFACE/{}_PIVOTS.hdf5'.format(directory, file_name_auv[0])),
+			os.path.exists('{}/INTPOS/{}_INTZ_MOL.hdf5'.format(directory, file_name_pos[0])),
+			os.path.exists('{}/INTPOS/{}_INTZ_MOL.hdf5'.format(directory, file_name_pos[1])),
+			os.path.exists('{}/INTPOS/{}_INTDXDY_MOL.hdf5'.format(directory, file_name_pos[0])),
+			os.path.exists('{}/INTPOS/{}_INTDXDY_MOL.hdf5'.format(directory, file_name_pos[1])),
+			os.path.exists('{}/INTPOS/{}_INTDDXDDY_MOL.hdf5'.format(directory, file_name_pos[0])),
+			os.path.exists('{}/INTPOS/{}_INTDDXDDY_MOL.hdf5'.format(directory, file_name_pos[1]))]
+
+	file_check = np.all(file_check)
+
+	if file_check:
+		try:
+			for r, recon in enumerate([False, True]):
+				with tables.open_file('{}/SURFACE/{}_ACOEFF.hdf5'.format(directory, file_name_auv[r]), 'r') as infile:
+					tot_auv1[r] = infile.root.tot_coeff1
+					tot_auv2[r] = infile.root.tot_coeff2
+		except: 
+			tot_auv1 = np.zeros((2, nframe, n_waves**2))
+			tot_auv2 = np.zeros((2, nframe, n_waves**2))
+			file_check = False
+
+	if not file_check or ow_coeff or ow_recon or ow_pos:
 
 		print "IMPORTING GLOBAL POSITION DISTRIBUTIONS\n"
 
-		xat, yat, zat = ut.read_atom_positions(directory, model, csize, ntraj, nframe, com)
-		xmol, ymol, zmol = ut.read_mol_positions(directory, model, csize, ntraj, nframe, com)
-		COM = ut.read_com_positions(directory, model, csize, ntraj, nframe, com)
-	
+		xat, yat, zat = ut.read_atom_positions(directory, file_name, nframe, nframe)
+		xmol, ymol, zmol = ut.read_mol_positions(directory, file_name, nframe, nframe)
+		COM = ut.read_com_positions(directory, file_name, nframe, nframe)
+
 		for frame in xrange(nframe):
-			sys.stdout.write("PROCESSING INTRINSIC SURFACE PROFILES {} out of {} frames\r".format(frame, nframe) )
-			sys.stdout.flush()
+		
+			tot_auv1[0][frame], tot_auv2[0][frame], tot_auv1[1][frame],tot_auv2[1][frame], piv_n1, piv_n2 = intrinsic_surface(directory, file_name_auv[0], xmol[frame], ymol[frame], zmol[frame]-COM[frame][2], dim, nmol, ncube, qm, n0, phi, psi, vlim, mol_sigma, frame, nframe, True, ow_coeff, ow_recon)
 
-			tot_auv1[0][frame], tot_auv2[0][frame], tot_auv1[1][frame],tot_auv2[1][frame], piv_n1, piv_n2 = intrinsic_surface(directory, xmol[frame], ymol[frame], zmol[frame]-COM[frame][2], model, nsite, nmol, ncube, DIM, qm, n0, phi, psi, vlim, mol_sigma, M, frame, nframe, ow_auv, ow_recon, ow_pos)
+			for r, recon in enumerate([False, True]):
+				intrinsic_positions_dxdyz(directory, file_name, xmol[frame], ymol[frame], zmol[frame]-COM[frame][2], tot_auv1[r][frame], tot_auv2[r][frame], frame, nframe, nsite, qm, n0, phi, psi, dim, recon, ow_pos)
 
-			for i, recon in enumerate([False, True]):
-				intrinsic_positions_dxdyz(directory, xmol[frame], ymol[frame], zmol[frame]-COM[frame][2], model, frame, nsite, qm, n0, phi, psi, DIM, recon, ow_pos)
-				intrinsic_local_frame(directory, xat[frame], yat[frame], zat[frame], qm, n0, phi, nmol, frame, model, nsite, eig_vec, recon, ow_local)	
+				av_auv1_2[r] += tot_auv1[r][frame]**2 / nframe
+				av_auv2_2[r] += tot_auv2[r][frame]**2 / nframe
 
-				av_auv1_2[i] += tot_auv1[i][frame]**2 / nframe
-				av_auv2_2[i] += tot_auv2[i][frame]**2 / nframe
+				av_auv1[r][frame] = tot_auv1[r][frame][n_waves**2/2]
+				av_auv2[r][frame] = tot_auv2[r][frame][n_waves**2/2]
 
-				av_auv1[i][frame] = tot_auv1[i][frame][n_waves**2/2]
-				av_auv2[i][frame] = tot_auv2[i][frame][n_waves**2/2]
-
-				av_auvU_2[i] += (tot_auv1[i][frame] + tot_auv2[i][frame])**2/ (4. * nframe)
-				av_auvP_2[i] += (tot_auv1[i][frame] - tot_auv2[i][frame])**2/ (4. * nframe)
+				av_auvU_2[r] += (tot_auv1[r][frame] + tot_auv2[r][frame])**2/ (4. * nframe)
+				av_auvP_2[r] += (tot_auv1[r][frame] - tot_auv2[r][frame])**2/ (4. * nframe)
 		
 		del xat, yat, zat, xmol, ymol, zmol, COM
 		gc.collect()
 
 	else:
-		for frame in xrange(nframe):
-			sys.stdout.write("PROCESSING INTRINSIC SURFACE PROFILES {} out of {} frames\r".format(frame, nframe) )
-			sys.stdout.flush()
+		sys.stdout.write("LOADING INTRINSIC SURFACE PROFILES {} frames\n".format(nframe) )
+		sys.stdout.flush()
 
-			file_name_auv = ['{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1/phi + 0.5), frame), 
-		     			'{}_{}_{}_{}_{}_R'.format(model.lower(), qm, n0, int(1/phi + 0.5), frame)] 
-
-			for i, recon in enumerate([False, True]):
+		for r, recon in enumerate([False, True]):
 		
-				tot_auv1[i][frame], tot_auv2[i][frame] = np.load('{}/ACOEFF/{}_INTCOEFF.npy'.format(directory, file_name_auv[i]), mmap_mode = 'r')
+			av_auv1_2[r] += np.sum(tot_auv1[r]**2, axis=0) / nframe
+			av_auv2_2[r] += np.sum(tot_auv2[r]**2, axis=0) / nframe
 
-				av_auv1_2[i] += tot_auv1[i][frame]**2 / nframe
-				av_auv2_2[i] += tot_auv2[i][frame]**2 / nframe
+			av_auv1[r] += np.swapaxes(tot_auv1, 1, 2)[r][n_waves**2/2]
+			av_auv2[r] += np.swapaxes(tot_auv2, 1, 2)[r][n_waves**2/2]
 
-				av_auv1[i][frame] = tot_auv1[i][frame][n_waves**2/2]
-				av_auv2[i][frame] = tot_auv2[i][frame][n_waves**2/2]
-
-				av_auvU_2[i] += (tot_auv1[i][frame] + tot_auv2[i][frame])**2/ (4. * nframe)
-				av_auvP_2[i] += (tot_auv1[i][frame] - tot_auv2[i][frame])**2/ (4. * nframe)
-
-
-	print "\n"
+			av_auvU_2[r] += np.sum(tot_auv1[r] + tot_auv2[r], axis=0)**2/ (4. * nframe)
+			av_auvP_2[r] += np.sum(tot_auv1[r] - tot_auv2[r], axis=0)**2/ (4. * nframe)
 
 	AU = np.zeros((2, qm+1))
 	AP = np.zeros((2, qm+1))
@@ -1526,113 +1165,45 @@ def intrinsic_profile(directory, model, csize, ntraj, nframe, natom, nmol, nsite
 	tot_auv1 = np.array([np.transpose(tot_auv1[0]), np.transpose(tot_auv2[1])])
 	tot_auv2 = np.array([np.transpose(tot_auv2[0]), np.transpose(tot_auv2[1])])
 
-	"""
 	for r, recon in enumerate([False, True]):
-		if not os.path.exists('{}/INTTHERMO/{}_HYDRO.npy'.format(directory, file_name_hydro[r])) or False:
-			tot_Gamma1, tot_omega1 = auv_correlation(tot_auv1[r], qm)
-			tot_Gamma2, tot_omega2 = auv_correlation(tot_auv2[r], qm)
 
-			with file('{}/INTTHERMO/{}_HYDRO.npy'.format(directory, file_name_hydro[r]), 'w') as outfile:
-		                np.save(outfile, (tot_Gamma1, tot_omega1, tot_Gamma2, tot_omega2))
-	
-	with file('{}/INTTHERMO/{}_HYDRO.npy'.format(directory, file_name_hydro[0]), 'r') as infile:
-		tot_Gamma1, tot_omega1, tot_Gamma2, tot_omega2 = np.load(infile)
-	with file('{}/INTTHERMO/{}_HYDRO.npy'.format(directory, file_name_hydro[1]), 'r') as infile:
-		tot_Gamma1_recon, tot_omega1_recon, tot_Gamma2_recon, tot_omega2_recon = np.load(infile)
-	"""
-	#"""
-	for qu in xrange(qm+1):
-		for r, recon in enumerate([False, True]):
-			temp_file_name_die = ['{}_{}_{}_{}_{}_{}_{}_{}'.format(model.lower(), a_type, nslice, qm, qu, n0, int(1/phi + 0.5), nframe), 
-			    	 	'{}_{}_{}_{}_{}_{}_{}_{}_R'.format(model.lower(), a_type, nslice, qm, qu, n0, int(1/phi + 0.5), nframe)]
-			temp_file_name_den = ['{}_{}_{}_{}_{}_{}_{}'.format(model.lower(), nslice, qm, qu, n0, int(1/phi + 0.5), nframe), 
-					 '{}_{}_{}_{}_{}_{}_{}_R'.format(model.lower(), nslice, qm, qu, n0, int(1/phi + 0.5), nframe)]
-			if os.path.exists('{}/INTDEN/{}_MOL_DEN.npy'.format(directory, temp_file_name_den[r])):
-				os.remove('{}/INTDEN/{}_MOL_DEN.npy'.format(directory, temp_file_name_den[r]))
-				os.remove('{}/INTDEN/{}_MOL_DEN_CORR.npy'.format(directory, temp_file_name_den[r]))
-				os.remove('{}/INTEULER/{}_INT_EUL.npy'.format(directory, temp_file_name_die[r]))
-	#"""
+		file_check = np.all([os.path.exists('{}/INTDEN/{}_EFF_DEN.npy'.format(directory, file_name_den[r]))])
 
-	if not file_check or ow_profile:
-
-		print "ENTERING PROFILE LOOP {} {}\n".format(file_check, ow_profile)
-
-		for r, recon in enumerate([False, True]):
+		if not file_check or ow_effden:
 
 			file_check = np.all([os.path.exists('{}/INTDEN/{}_MOL_DEN.npy'.format(directory, file_name_den[r])),
-				os.path.exists('{}/INTDEN/{}_MOL_DEN_CORR.npy'.format(directory, file_name_den[r])),
-				os.path.exists('{}/INTEULER/{}_INT_EUL.npy'.format(directory, file_name_die[r]))])
+			     	     os.path.exists('{}/INTDEN/{}_MOL_DEN_CORR.npy'.format(directory, file_name_den[r]))])
 
-			if not file_check or ow_dist: 
+			if not file_check or ow_intden:
 
-				_, _, zmol = ut.read_mol_positions(directory, model, csize, ntraj, nframe, com)
-				COM = ut.read_com_positions(directory, model, csize, ntraj, nframe, com)
+				xat, yat, zat = ut.read_atom_positions(directory, file_name, nframe, nframe)
+				_, _, zmol = ut.read_mol_positions(directory, file_name, nframe, nframe)
+				COM = ut.read_com_positions(directory, file_name, nframe, nframe)
 
 				av_den_corr_matrix = np.zeros((qm+1, nslice, 100))
 				av_z_nz_matrix = np.zeros((qm+1, 100, 100))	
-
-				#count_int_R = np.zeros((qm+1, nslice))
-				av_int_R = np.zeros((qm+1, nslice, 9))
-
-				int_P_z_theta_phi = np.zeros((qm+1, nslice, npi, npi*2))
 
 				for frame in xrange(nframe):
 					sys.stdout.write("PROCESSING INTRINSIC DISTRIBUTIONS {} out of {} frames\r".format(frame, nframe) )
 					sys.stdout.flush() 
 
-					int_count_corr_array, int_count_z_nz = intrinsic_z_den_corr(directory, zmol[frame]-COM[frame][2], model, qm, n0, phi, psi, frame, nslice, nsite, DIM, recon, ow_count)
+					int_count_corr_array, int_count_z_nz = intrinsic_z_den_corr(directory, file_name, zmol[frame]-COM[frame][2], tot_auv1[r][frame], tot_auv2[r][frame], qm, n0, phi, psi, frame, nframe, nslice, nsite, nz, nnz, dim, recon, ow_count)
 					av_den_corr_matrix += int_count_corr_array
 					av_z_nz_matrix += int_count_z_nz
 
-					if model.upper() != 'ARGON':
-
-						#temp_int_P_z_theta_phi = intrinsic_mol_angles(directory, zmol[frame]-COM[frame][2], model, frame, nslice, npi, nmol, DIM, nsite, qm, n0, phi, psi, recon, ow_angle)
-						#int_P_z_theta_phi += temp_int_P_z_theta_phi
-
-						temp_int_R = intrinsic_R_tensors(directory, zmol[frame]-COM[frame][2], model, frame, nslice, com, DIM, nsite, qm, n0, phi, psi, recon)
-						av_int_R += temp_int_R
-	
 				N = np.linspace(0, 50 * lslice, 100)
-
-				P_z_nz = np.array([matrix / np.sum(matrix) for matrix in av_z_nz_matrix]) * 2 * 0.01 * lslice
-				P_den_corr_matrix = np.array([[A / np.sum(A) for A in B] for B in av_den_corr_matrix])
-				P_corr = np.array([[A / np.sum(A) for A in np.transpose(B)] for B in P_den_corr_matrix])
 
 				int_den_corr = av_den_corr_matrix / (2 * nframe * Vslice)
 				mol_int_den = np.sum(int_den_corr, axis=2)
-				count_int_R = np.sum(av_den_corr_matrix, axis=2)
-
 
 				with file('{}/INTDEN/{}_MOL_DEN.npy'.format(directory, file_name_den[r]), 'w') as outfile:
 					np.save(outfile, mol_int_den)
 				with file('{}/INTDEN/{}_MOL_DEN_CORR.npy'.format(directory, file_name_den[r]), 'w') as outfile:
 					np.save(outfile, int_den_corr)
 
-				if model.upper() != 'ARGON':
-
-					int_axx, int_azz = intrinsic_polarisability(nslice, qm, eig_val, count_int_R, av_int_R)
-					int_av_theta = np.zeros(nslice)
-					int_av_phi = np.zeros(nslice)
-					int_P1 = np.zeros(nslice)
-					int_P2 = np.zeros(nslice)
-					#int_av_theta, int_av_phi, int_P1, int_P2 = intrinsic_angle_dist(nslice, qm, npi, int_P_z_theta_phi)
-
-					with file('{}/INTEULER/{}_INT_EUL.npy'.format(directory, file_name_die[r]), 'w') as outfile:
-						np.save(outfile, (int_axx, int_azz, int_av_theta, int_av_phi, int_P1, int_P2))
-
-			else:
-				mol_int_den = np.load('{}/INTDEN/{}_MOL_DEN.npy'.format(directory, file_name_den[r]), mmap_mode='r')
-
-				if model.upper() == 'ARGON':
-					int_axx = np.ones((qm+1, nslice)) * eig_val
-					int_azz = np.ones((qm+1, nslice)) * eig_val
-				else:
-					int_axx, int_azz, int_av_theta, int_av_phi, int_P1, int_P2 = np.load('{}/INTEULER/{}_INT_EUL.npy'.format(directory, file_name_die[r]), mmap_mode='r')
+			else: mol_int_den = np.load('{}/INTDEN/{}_MOL_DEN.npy'.format(directory, file_name_den[r]), mmap_mode='r')
 
 			eff_den = np.zeros((qm+1, nslice))
-			int_die = np.zeros((qm+1, 2, nslice))
-			cw_die = np.zeros((qm+1, 8, nslice))
-			ellip_no = np.zeros((qm+1, 4, nslice))	
 
 			for qu in xrange(1, qm+1):
 
@@ -1641,8 +1212,8 @@ def intrinsic_profile(directory, model, csize, ntraj, nframe, natom, nmol, nsite
 
 				for u in xrange(-qu, qu):
 					for v in xrange(-qu, qu):
-						q = 4 * np.pi**2 * (u**2 / DIM[0]**2 + v**2/DIM[1]**2)
-						q2 = u**2 * DIM[1]/DIM[0] + v**2 * DIM[0]/DIM[1]
+						q = 4 * np.pi**2 * (u**2 / dim[0]**2 + v**2/dim[1]**2)
+						q2 = u**2 * dim[1]/dim[0] + v**2 * dim[0]/dim[1]
 
 						if q2 not in q2_set:
 							q_set.append(q)
@@ -1652,73 +1223,43 @@ def intrinsic_profile(directory, model, csize, ntraj, nframe, natom, nmol, nsite
 				q2_set = np.sort(q2_set, axis=None)
 				Q_set.append(q_set)
 
-				AU[r][qu] = (slice_area(av_auvU_2[r], qm, qu, DIM))
-				AP[r][qu] = (slice_area(av_auvP_2[r], qm, qu, DIM))
-				ACU[r][qu] = (slice_area(av_auvCU_2[r], qm, qu, DIM))
+				AU[r][qu] = (slice_area(av_auvU_2[r], qm, qu, dim))
+				AP[r][qu] = (slice_area(av_auvP_2[r], qm, qu, dim))
+				ACU[r][qu] = (slice_area(av_auvCU_2[r], qm, qu, dim))
 
-				cw_gammaU[r].append(gamma_q_auv(av_auvU_2[r]*2, qm, qu, DIM, T, q2_set))
-				cw_gammaP[r].append(gamma_q_auv(av_auvP_2[r]*2, qm, qu, DIM, T, q2_set))
-				cw_gammaCU[r].append(gamma_q_auv(av_auvCU_2[r], qm, qu, DIM, T, q2_set))
-	
-				#Gamma_hist1, omega_hist1 = get_hydro_param(tot_Gamma1, tot_omega1, qm, qu, DIM, q2_set)
-				#Gamma_hist2, omega_hist2 = get_hydro_param(tot_Gamma2, tot_omega2, qm, qu, DIM, q2_set)
-				#Gamma_hist1_recon, omega_hist1_recon = get_hydro_param(tot_Gamma1_recon, tot_omega1_recon, qm, qu, DIM, q2_set)
-				#Gamma_hist2_recon, omega_hist2_recon = get_hydro_param(tot_Gamma2_recon, tot_omega2_recon, qm, qu, DIM, q2_set)
+				cw_gammaU[r].append(gamma_q_auv(av_auvU_2[r]*2, qm, qu, dim, T, q2_set))
+				cw_gammaP[r].append(gamma_q_auv(av_auvP_2[r]*2, qm, qu, dim, T, q2_set))
+				cw_gammaCU[r].append(gamma_q_auv(av_auvCU_2[r], qm, qu, dim, T, q2_set))
 
 				if qu == qm:
-					file_name_gamma = ['{}_{}_{}_{}_{}'.format(model.lower(), qm, n0, int(1/phi + 0.5), nframe),
-							'{}_{}_{}_{}_{}_R'.format(model.lower(), qm, n0, int(1/phi + 0.5), nframe)]
+					file_name_gamma = ['{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe),
+							'{}_{}_{}_{}_{}_R'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)]
 
 					with file('{}/INTTHERMO/{}_GAMMA.npy'.format(directory, file_name_gamma[r]), 'w') as outfile:
 						np.save(outfile, (Q_set[-1], cw_gammaU[r][-1], cw_gammaP[r][-1], cw_gammaCU[r][-1]))
 
-
 				Delta1 = (ut.sum_auv_2(av_auv1_2[r], qm, qu) - np.mean(av_auv1[r])**2)
 				Delta2 = (ut.sum_auv_2(av_auv2_2[r], qm, qu) - np.mean(av_auv2[r])**2)
 
-				print Delta1, Delta2
+				centres = np.ones(2) * (np.mean(av_auv1[r]) - np.mean(av_auv2[r]))/2.
+				deltas = np.ones(2) * 0.5 * (Delta1 + Delta2)
 
-				rho_axx =  np.array([mol_int_den[qu][n] * int_axx[qu][n] for n in range(nslice)])
-				rho_azz =  np.array([mol_int_den[qu][n] * int_azz[qu][n] for n in range(nslice)])
+				arrays = [mol_int_den[qu], mol_int_den[qu]]
 
-				int_exx = np.array([(1 + 8 * np.pi / 3. * rho_axx[n]) / (1 - 4 * np.pi / 3. * rho_axx[n]) for n in range(nslice)])
-				int_ezz = np.array([(1 + 8 * np.pi / 3. * rho_azz[n]) / (1 - 4 * np.pi / 3. * rho_azz[n]) for n in range(nslice)])
+				cw_arrays = ut.gaussian_smoothing(arrays, centres, deltas, dim, nslice)
 
-				int_no = np.sqrt(ur * int_exx)
-				int_ni = np.sqrt(ur * int_ezz)
-
-				centres = np.ones(9) * (np.mean(av_auv1[r]) - np.mean(av_auv2[r]))/2.
-				deltas = np.ones(9) * 0.5 * (Delta1 + Delta2)
-
-				arrays = [mol_int_den[qu], int_axx[qu], int_azz[qu], rho_axx, rho_azz, int_exx, int_ezz, int_no, int_ni]
-
-				cw_arrays = ut.gaussian_smoothing(arrays, centres, deltas, DIM, nslice)
-
-				cw_exx1 = np.array([(1 + 8 * np.pi / 3. * cw_arrays[0][n] * cw_arrays[1][n]) / (1 - 4 * np.pi / 3. * cw_arrays[0][n] * cw_arrays[1][n]) for n in range(nslice)])
-				cw_ezz1 = np.array([(1 + 8 * np.pi / 3. * cw_arrays[0][n] * cw_arrays[2][n]) / (1 - 4 * np.pi / 3. * cw_arrays[0][n] * cw_arrays[2][n]) for n in range(nslice)])
-
-				cw_exx2 = np.array([(1 + 8 * np.pi / 3. * cw_arrays[3][n]) / (1 - 4 * np.pi / 3. * cw_arrays[3][n]) for n in range(nslice)])
-				cw_ezz2 = np.array([(1 + 8 * np.pi / 3. * cw_arrays[4][n]) / (1 - 4 * np.pi / 3. * cw_arrays[4][n]) for n in range(nslice)])
+				eff_den[qu] = cw_arrays[0]
 
 				print '\n'
 				print "WRITING TO FILE... qm = {}  qu = {}  var1 = {}  var2 = {}".format(qm, qu, Delta1, Delta2)
 
-				eff_den[qu] = cw_arrays[0]
-				int_die[qu] += np.array((int_exx, int_ezz))
-				cw_die[qu] += np.array((cw_exx1, cw_ezz1, cw_exx2, cw_ezz2, cw_arrays[5], cw_arrays[6], cw_arrays[7]**2, cw_arrays[8]**2))
-				ellip_no[qu] += np.array((np.sqrt(cw_exx1), np.sqrt(cw_exx2), np.sqrt(cw_arrays[5]), cw_arrays[7]))
-
-
 			with file('{}/INTDEN/{}_EFF_DEN.npy'.format(directory, file_name_den[r]), 'w') as outfile:
 				np.save(outfile, eff_den)
-			with file('{}/INTDIELEC/{}_DIE.npy'.format(directory, file_name_die[r]), 'w') as outfile:
-				np.save(outfile, int_die)
-			with file('{}/INTDIELEC/{}_CWDIE.npy'.format(directory, file_name_die[r]), 'w') as outfile:
-				np.save(outfile, cw_die)
-			with file('{}/ELLIP/{}_ELLIP_NO.npy'.format(directory, file_name_die[r]), 'w') as outfile:
-				np.save(outfile, ellip_no)
 
+		else:
+			with file('{}/INTDEN/{}_EFF_DEN.npy'.format(directory, file_name_den[r]), 'r') as infile:
+				eff_den = np.load(infile)
 
-	print "INTRINSIC SAMPLING METHOD {} {} {} {} {} COMPLETE\n".format(directory, model.upper(), qm, n0, phi)
+	print "INTRINSIC SAMPLING METHOD {} {} {} {} {} COMPLETE\n".format(directory, file_name, qm, n0, phi)
 
 	return av_auv1, av_auv2 

@@ -1,4 +1,7 @@
 #!/bin/bash
 
-python src/main.py
+declare  traj="$1"
+declare  top="$2"
+
+python src/main_edit.py $traj $top 
 
