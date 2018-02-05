@@ -10,12 +10,15 @@
     By Frank Longford 2016
 
 Instructions:
+=============
 
 1) run alias.sh [traj] [top]
 
-	traj: 	Trajectory file (filetypes supported: http://mdtraj.org/1.9.0/load_functions.html#format-specific-loading-functions)
-	top:	Topology file  (see MDTraj homepage: http://mdtraj.org/1.9.0/index.html for detailed instructions)
+	traj: 	Trajectory file
+	top:	Topology file  
+	(see MDTraj homepage: MDTraj_ for supported filetypes and detailed instructions)
 
+.. _MDTraj: http://mdtraj.org/1.9.0/index.html
 
 2) (optional) Choose residue to use for surface identification
 
