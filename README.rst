@@ -7,7 +7,7 @@
 |___________________________________________|  v1.1
 
     Air-Liquid Interface Analysis Suite
-    By Frank Longford
+    By Frank Longford 2016
 
 Instructions:
 
