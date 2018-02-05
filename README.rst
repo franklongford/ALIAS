@@ -5,10 +5,10 @@ ALIAS: Air-Liquid Interface Analysis Suite
 By Frank Longford (2016)
 ----------------------
 
-Intrinsic surface identifier built for Python following the Intrinsic Sampling method of Chacon and Tarazona 2004 citation_.
+Intrinsic surface identifier built for Python following the Intrinsic Sampling method of 'Chacon and Tarazona 2004'_ .
 Extra functions included for Surface Reconstruction routine by Longford 2018.
 
-.. _citation: https://journals.aps.org/prb/abstract/10.1103/PhysRevB.70.235407
+.. _Chacon and Tarazona 2004: https://journals.aps.org/prb/abstract/10.1103/PhysRevB.70.235407
 
 
 Instructions:
