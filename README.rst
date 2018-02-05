@@ -2,8 +2,14 @@
 ALIAS: Air-Liquid Interface Analysis Suite
 ==========================================
 
-By Frank Longford 2016
+By Frank Longford (2016)
 ----------------------
+
+Intrinsic surface identifier built for Python following the Intrinsic Sampling method of Chacon and Tarazona 2004 citation_.
+Extra functions included for Surface Reconstruction routine by Longford 2018.
+
+.. _citation: https://journals.aps.org/prb/abstract/10.1103/PhysRevB.70.235407
+
 
 Instructions:
 -------------
@@ -12,7 +18,7 @@ Instructions:
 
 	traj: 	Trajectory file
 	top:	Topology file  
-	(see MDTraj homepage: MDTraj_ for supported filetypes and detailed instructions)
+	(see MDTraj_ homepage for supported filetypes and detailed instructions)
 
 .. _MDTraj: http://mdtraj.org/1.9.0/index.html
 
