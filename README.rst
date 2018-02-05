@@ -38,7 +38,7 @@ Instructions:
 
 5) Enter molecular radius:
 
-	Enter a suitable radius (in angstroms) for the molecular interaction sphere.
+	Enter a suitable radius :math:`\sigma` (in angstroms) for the molecular interaction sphere.
 	For small molecules with one LJ site, this should be the LJ sigma parameter.
 	Larger molecules may require experimenation using different radii. 
 	Note: radius determines minimum seperation distance between molecules, so interaction sphere should not be less than this distance.
