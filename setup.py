@@ -3,7 +3,7 @@
 from setuptools import setup, find_packages
 
 
-with open('README.rst') as f:
+with open('README.txt') as f:
     readme = f.read()
 
 with open('LICENSE') as f:
@@ -11,11 +11,11 @@ with open('LICENSE') as f:
 
 setup(
     name='ALIAS',
-    version='0.0.1',
-    description='Analysis tools for simulations of air-liquid interfaces ',
+    version='1.1.1',
+    description='Intinsic Surface Analysis tools for simulations of air-liquid interfaces',
     long_description=readme,
     author='Frank Longford',
-    author_email='f.g.j.longford@soton.ac.uk',
+    author_email='f.longford@soton.ac.uk',
     url='https://github.com/franklongford/alias',
     license=license,
     packages=find_packages(exclude=('tests', 'docs'))

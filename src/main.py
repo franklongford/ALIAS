@@ -13,10 +13,6 @@ Last modified 05/02/2018 by Frank Longford
 import matplotlib
 #matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.cm as cm
-from matplotlib.colors import BoundaryNorm
-from matplotlib.ticker import MaxNLocator
 
 import numpy as np
 import scipy as sp

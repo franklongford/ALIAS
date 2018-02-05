@@ -34,7 +34,6 @@ from matplotlib.ticker import MaxNLocator
 
 import utilities as ut
 import intrinsic_sampling_method as ism
-import thermodynamics as thermo
 
 """ FIGURE PARAMETERS """
 fig_x = 12

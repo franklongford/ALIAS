@@ -11,6 +11,11 @@ Created 24/11/16 by Frank Longford
 Last modified 22/08/17 by Frank Longford
 """
 
+import numpy as np
+import scipy as sp
+
+import utilities as ut
+
 sqrt_2 = np.sqrt(2.)
 vcheck = np.vectorize(ut.check_uv)
 		

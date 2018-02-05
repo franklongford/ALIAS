@@ -3,5 +3,5 @@
 declare  traj="$1"
 declare  top="$2"
 
-python src/main_edit.py $traj $top 
+python src/main.py $traj $top 
 
