@@ -11,6 +11,12 @@ Extra functions included for Surface Reconstruction routine by Longford 2018.
 .. _Chacon and Tarazona 2004: https://journals.aps.org/prb/abstract/10.1103/PhysRevB.70.235407
 
 
+Installation:
+-------------
+
+run python setup.py install
+
+
 Instructions:
 -------------
 
