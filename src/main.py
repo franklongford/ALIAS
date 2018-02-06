@@ -140,8 +140,6 @@ except:
 lslice = 0.05 * mol_sigma
 nslice = int(dim[2] / lslice)
 npi = 50
-vlim = 3
-ncube = 3
 
 q_max = 2 * np.pi / mol_sigma
 q_min = 2 * np.pi / np.sqrt(dim[0] * dim[1])

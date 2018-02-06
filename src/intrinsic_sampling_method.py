@@ -8,7 +8,7 @@ interface.
 ********************************************************************
 Created 24/11/16 by Frank Longford
 
-Last modified 22/08/17 by Frank Longford
+Last modified 06/02/18 by Frank Longford
 """
 
 import numpy as np
@@ -19,8 +19,59 @@ import utilities as ut
 sqrt_2 = np.sqrt(2.)
 vcheck = np.vectorize(ut.check_uv)
 		
-def intrinsic_surface(directory, file_name, xmol, ymol, zmol, dim, nmol, ncube, qm, n0, phi, psi, vlim, mol_sigma, frame, nframe, recon, ow_auv, ow_recon):
-	"Creates intrinsic surface of frame." 
+def intrinsic_surface(directory, file_name, xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, psi, frame, ncube=3, vlim=3, recon=True, ow_coeff=False, ow_recon=False):
+	"""
+	intrinsic_surface(directory, file_name, xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, psi, frame, ncube=3, vlim=3, recon=True, ow_coeff=False, ow_recon=False)
+
+	Creates intrinsic surface of trajectory frame using molecular positions xmol, ymol, zmol.
+
+	Parameters
+	----------
+
+	directory:  str
+		File path of directory of alias analysis.
+	file_name:  str
+		File name of trajectory being analysed.
+	xmol:  float, array_like; shape=(nmol)
+		Molecular coordinates in x dimension
+	ymol:  float, array_like; shape=(nmol)
+		Molecular coordinates in y dimension
+	zmol:  float, array_like; shape=(nmol)
+		Molecular coordinates in z dimension
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+	mol_sigma:  float
+		Radius of spherical molecular interaction sphere
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	n0:  int
+		Maximum number of molecular pivots in intrinsic surface
+	phi:  float
+		Weighting factor of minimum surface area term in surface optimisation function
+	psi:  float
+		Initial value for weighting factor of surface curvature variance in surface reconstruction function
+	frame:  int
+		Trajectory frame to analyse
+	ncube:	int (optional)
+		Grid size for initial pivot molecule selection
+	vlim:  int (optional)
+		Minimum number of molecular meighbours within radius max_r required for molecular NOT to be considered in vapour region
+	recon:	bool (optional)
+		Return surface reconstructed coefficients or original coefficients
+	ow_coeff:  bool (optional)
+		Overwrite surface coefficients
+	ow_recon:  bool (optional)
+		Overwrite reconstructed surface coefficients
+
+	Returns
+	-------
+
+	coeff:	array_like (float); shape=(2, n_waves**2)
+		Optimised surface coefficients
+	pivots:  array_like (int); shape=(2, n0)
+		Indicies of pivot molecules in molecular position arrays	
+
+	""" 
 
 	n_waves = 2*qm+1
 	write_auv = np.zeros((1, n_waves**2))
@@ -28,75 +79,118 @@ def intrinsic_surface(directory, file_name, xmol, ymol, zmol, dim, nmol, ncube, 
 	max_r = 1.5 * mol_sigma
 	tau = 0.5 * mol_sigma
 
-	with tables.open_file('{}/SURFACE/{}_ACOEFF.hdf5'.format(directory, file_name), 'r') as infile:
+	with tables.open_file('{}/surface/{}_coeff.hdf5'.format(directory, file_name), 'r') as infile:
 		max_frame = infile.root.tot_coeff1.shape[0]
 
-	sys.stdout.write("PROCESSING INTRINSIC SURFACE PROFILES {} out of {} frames\r".format(frame, nframe) )
+	sys.stdout.write("Optimising Intrinsic Surface coefficients: frame {}\r".format(frame))
 	sys.stdout.flush()
 
-	if max_frame <= frame or ow_auv:
+	if max_frame <= frame or ow_coeff:
 
-		auv1, auv2, piv_n1, piv_n2 = build_surface(xmol, ymol, zmol, dim, nmol, ncube, mol_sigma, qm, n0, phi, vlim, tau, max_r)
+		auv1, auv2, piv_n1, piv_n2 = build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, ncube, vlim, tau, max_r)
 
-		with tables.open_file('{}/SURFACE/{}_ACOEFF.hdf5'.format(directory, file_name), 'a') as outfile:
+		with tables.open_file('{}/surface/{}_coeff.hdf5'.format(directory, file_name), 'a') as outfile:
 			write_auv[0] = auv1
 			outfile.root.tot_coeff1.append(write_auv)
 			write_auv[0] = auv2
 			outfile.root.tot_coeff2.append(write_auv)
-		with tables.open_file('{}/SURFACE/{}_PIVOTS.hdf5'.format(directory, file_name), 'a') as outfile:
+		with tables.open_file('{}/surface/{}_pivots.hdf5'.format(directory, file_name), 'a') as outfile:
 			write_piv_n[0] = piv_n1
 			outfile.root.tot_piv_n1.append(write_piv_n)
 			write_piv_n[0] = piv_n2
 			outfile.root.tot_piv_n2.append(write_piv_n)
 	else:
-		with tables.open_file('{}/SURFACE/{}_ACOEFF.hdf5'.format(directory, file_name), 'r') as infile:
+		with tables.open_file('{}/surface/{}_coeff.hdf5'.format(directory, file_name), 'r') as infile:
 			auv1 = infile.root.tot_coeff1[frame]
 			auv2 = infile.root.tot_coeff2[frame]
-		with tables.open_file('{}/SURFACE/{}_PIVOTS.hdf5'.format(directory, file_name), 'r') as infile:
+		with tables.open_file('{}/surface/{}_pivots.hdf5'.format(directory, file_name), 'r') as infile:
 			piv_n1 = infile.root.tot_piv_n1[frame]
 			piv_n2 = infile.root.tot_piv_n2[frame]
 
+	coeff = np.array((auv1, auv2))
+	pivots = np.array((piv_n1, piv_n2), dtype=int))
+
 	if recon:
-		with tables.open_file('{}/SURFACE/{}_R_ACOEFF.hdf5'.format(directory, file_name), 'r') as infile:
+		with tables.open_file('{}/surface/{}_R_coeff.hdf5'.format(directory, file_name), 'r') as infile:
 			max_frame_R = infile.root.tot_coeff1.shape[0]
 
 		if max_frame_R <= frame or ow_recon:
-			sys.stdout.write("PROCESSING {}\nINTRINSIC SURFACE RECONSTRUCTION {}\n".format(directory, frame) )
+			sys.stdout.write("Reconstructing Intrinsic Surface coefficients: frame {}\r".format(frame))
 			sys.stdout.flush()
 
 			auv1_recon, auv2_recon = surface_reconstruction(xmol, ymol, zmol, qm, n0, phi, psi, auv1, auv2, np.array(piv_n1, dtype=int), np.array(piv_n2, dtype=int), dim)
 		
-			with tables.open_file('{}/SURFACE/{}_R_ACOEFF.hdf5'.format(directory, file_name), 'a') as outfile:
+			with tables.open_file('{}/surface/{}_R_coeff.hdf5'.format(directory, file_name), 'a') as outfile:
 				write_auv[0] = auv1_recon
 				outfile.root.tot_coeff1.append(write_auv)
 				write_auv[0] = auv2_recon
 				outfile.root.tot_coeff2.append(write_auv)
 		else: 
-			with tables.open_file('{}/SURFACE/{}_R_ACOEFF.hdf5'.format(directory, file_name), 'r') as infile:
+			with tables.open_file('{}/surface/{}_R_coeff.hdf5'.format(directory, file_name), 'r') as infile:
 				auv1_recon = infile.root.tot_coeff1[frame]
 				auv2_recon = infile.root.tot_coeff2[frame]
 
-		return auv1, auv2, auv1_recon, auv2_recon, np.array(piv_n1, dtype=int), np.array(piv_n2, dtype=int)
+		coeff = np.array((auv1_recon, auv2_recon))
 
-	else: return auv1, auv2, np.array(piv_n1, dtype=int), np.array(piv_n2, dtype=int)
+	return coeff, pivots
 	
 		
 def numpy_remove(list1, list2):
+	"""
+	numpy_remove(list1, list2)
+
+	Deletes overlapping elements of list2 from list1
+	"""
 
 	return np.delete(list1, np.where(np.isin(list1, list2)))
 
 
-def build_surface(xmol, ymol, zmol, DIM, nmol, ncube, mol_sigma, qm, n0, phi, vlim, tau, max_r):
-	"Create coefficients auv1 and auv2 for Fourier sum representing intrinsic surface"
-
-	print "\n ------------- BUILDING INTRINSIC SURFACE --------------"
-
+def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, ncube, vlim, tau, max_r):
+					
 	"""
-	xmol, ymol, zmol = x, y, z positions of molecules
-	mol_list = index list of molecules eligible to be used as 'pivots' for the fitting routine  
-	piv_n = index of pivot molecules
-	new_pivots = list of pivots to be added to piv_n and piv_z
-	"""
+	build_surface(xmol, ymol, zmol, dim, nmol, ncube, mol_sigma, qm, n0, phi, vlim, tau, max_r)
+
+	Create coefficients auv1 and auv2 for Fourier sum representing intrinsic surface.
+
+	Parameters
+	----------
+
+	xmol:  float, array_like; shape=(nmol)
+		Molecular coordinates in x dimension
+	ymol:  float, array_like; shape=(nmol)
+		Molecular coordinates in y dimension
+	zmol:  float, array_like; shape=(nmol)
+		Molecular coordinates in z dimension
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+	mol_sigma:  float
+		Radius of spherical molecular interaction sphere
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	n0:  int
+		Maximum number of molecular pivots in intrinsic surface
+	phi:  float
+		Weighting factor of minimum surface area term in surface optimisation function
+	ncube:	int (optional)
+		Grid size for initial pivot molecule selection
+	vlim:  int (optional)
+		Minimum number of molecular meighbours within radius max_r required for molecular NOT to be considered in vapour region
+	tau:  float
+		Threshold length along z axis either side of existing intrinsic surface for selection of new pivot points
+	max_r:  float
+		Maximum radius for selection of vapour phase molecules
+
+	Returns
+	-------
+
+	coeff:	array_like (float); shape=(2, n_waves**2)
+		Optimised surface coefficients
+	pivots:  array_like (int); shape=(2, n0)
+		Indicies of pivot molecules in molecular position arrays	
+
+	""" 
+
+	nmol = len(xmol)
 	tau1 = tau
 	tau2 = tau
 	mol_list = np.arange(nmol)
