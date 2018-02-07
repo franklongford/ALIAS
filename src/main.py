@@ -62,7 +62,7 @@ if not os.path.exists(alias_dir): os.mkdir(alias_dir)
 if not os.path.exists(data_dir): os.mkdir(data_dir)
 if not os.path.exists(figure_dir): os.mkdir(figure_dir)
 
-checkfile_name = '{}/{}_CHK'.format(alias_dir, traj_file.split('.')[0])
+checkfile_name = '{}/{}_chk'.format(alias_dir, traj_file.split('.')[0])
 if not os.path.exists('{}.pkl'.format(checkfile_name)): ut.make_checkfile(checkfile_name)
 checkfile = ut.read_checkfile(checkfile_name)
 
@@ -115,7 +115,7 @@ except:
 	checkfile = ut.update_checkfile(checkfile_name, 'mol_com', mol_com)
 
 file_name = "{}_{}_{}".format(traj_file.split('.')[0], mol, mol_com)
-if not os.path.exists('{}/POS/{}_{}_COM.npy'.format(data_dir, file_name, nframe)):
+if not os.path.exists('{}/pos/{}_{}_com.npy'.format(data_dir, file_name, nframe)):
 	ut.make_at_mol_com(traj, data_dir, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol, mol_com) 
 
 del traj
@@ -134,7 +134,7 @@ try:
 		T = checkfile['T']
 	else: raise Exception
 except: 
-	T = float(raw_input("	Enter average temperature of simulation in K: "))
+	T = float(raw_input("\nEnter average temperature of simulation in K: "))
 	checkfile = ut.update_checkfile(checkfile_name, 'T', T)
 
 lslice = 0.05 * mol_sigma
@@ -147,17 +147,25 @@ qm = int(q_max / q_min)
 
 print "\n------STARTING INTRINSIC SAMPLING-------\n"
 
+if not os.path.exists("{}/surface".format(data_dir)): os.mkdir("{}/surface".format(data_dir))
+
 print "Max wavelength = {:12.4f} sigma   Min wavelength = {:12.4f} sigma".format(q_max, q_min)
 print "Max frequency qm = {:6d}".format(qm)
 
-if bool(raw_input("\nUse recommended weighting coefficient for surface area minimisation: phi = 1E-8? (Y/N): ".format(checkfile['n0'])).upper() == 'Y'):
-	phi = 5E-8
-else: phi = float(raw_input("\nManually enter weighting coefficient: "))
+try:
+	if bool(raw_input("\nUse weighting coefficient for surface area minimisation found in checkfile: phi = {}? (Y/N): ".format(checkfile['phi'])).upper() == 'Y'):
+		phi = checkfile['phi']
+	else: raise Exception
+except: 
+	if bool(raw_input("\nUse recommended weighting coefficient for surface area minimisation: phi = 1E-8? (Y/N): ").upper() == 'Y'):
+		phi = 5E-8
+	else: phi = float(raw_input("\nManually enter weighting coefficient: "))
+	checkfile = ut.update_checkfile(checkfile_name, 'phi', phi)
 
 try:
 	if bool(raw_input("\nUse surface pivot number found in checkfile? {} pivots (Y/N): ".format(checkfile['n0'])).upper() == 'Y'):
 		n0 = checkfile['n0']
-	elif bool(raw_input("\nManually enter in new surface pivot number (search will commence otherwise)? (Y/N): ".format(checkfile['n0'])).upper() == 'Y'):
+	elif bool(raw_input("\nManually enter in new surface pivot number? (search will commence otherwise): (Y/N)").upper() == 'Y'):
 		n0 = int(raw_input("\nEnter number of surface pivots: "))
 		checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
 	else: raise Exception
@@ -169,10 +177,8 @@ except:
 
 	print "Using initial pivot number = {}, step size = {}".format(int(dim[0] * dim[1] * start_ns / mol_sigma**2), int(dim[0] * dim[1] * step_ns / mol_sigma**2))
 
-	ns, n0 = ism.optimise_ns(data_dir, file_name, nmol, nsite, nframe, qm, phi, vlim, ncube, dim, mol_sigma, start_ns, step_ns)
+	ns, n0 = ism.optimise_ns(data_dir, file_name, nmol, nsite, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns)
 	checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
-
-psi = phi * dim[0] * dim[1]
 
 QM = range(1, qm+1)
 print "\nResolution parameters:"
@@ -181,13 +187,18 @@ print "-" * 14 * 5
 for qu in QM: print "{:12d} | {:12.4f} | {:12.4f}".format(qu, q_max / (qu*q_min), mol_sigma * q_max / (10*qu*q_min))
 print ""
 
-if not os.path.exists("{}/INTPOS".format(data_dir)): os.mkdir("{}/INTPOS".format(data_dir))
-if not os.path.exists("{}/INTDEN".format(data_dir)): os.mkdir("{}/INTDEN".format(data_dir))
-if not os.path.exists("{}/INTTHERMO".format(data_dir)): os.mkdir("{}/INTTHERMO".format(data_dir))
+if not os.path.exists("{}/intpos".format(data_dir)): os.mkdir("{}/intpos".format(data_dir))
 
 ow_coeff = bool(raw_input("OVERWRITE ACOEFF? (Y/N): ").upper() == 'Y')
 ow_recon = bool(raw_input("OVERWRITE RECON ACOEFF? (Y/N): ").upper() == 'Y')
 
+ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=True, ow_coeff=ow_coeff, ow_recon=ow_recon)
+
+ow_pos = bool(raw_input("OVERWRITE POSITIONS? (Y/N): ").upper() == 'Y')
+
+ism.intrinsic_positions_dxdyz(data_dir, file_name, nframe, nsite, qm, n0, phi, dim, False, ow_pos)
+
+"""
 ow_intden = False
 ow_count = False
 
@@ -200,3 +211,4 @@ pos_1, pos_2 = ism.intrinsic_profile(data_dir, file_name, T, nframe, natom, nmol
 
 if bool(raw_input("PLOT GRAPHS? (Y/N): ").upper() == 'Y'):
 	graphs.print_graphs_intrinsic_density(data_dir, figure_dir, file_name, nsite, AT, M, nslice, qm, QM, n0, phi, nframe, dim, pos_1, pos_2)
+"""
