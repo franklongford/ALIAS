@@ -78,7 +78,7 @@ def make_coeff_pivots(directory, file_name, xmol, ymol, zmol, dim, mol_sigma, qm
 	with tables.open_file('{}/surface/{}_coeff.hdf5'.format(directory, file_name), 'r') as infile:
 		max_frame = infile.root.tot_coeff.shape[0]
 
-	if max_frame <= frame: mode = 'a'
+	if max_frame <= frame and not ow_coeff: mode = 'a'
 	elif ow_coeff: mode = 'r+'
 	else: mode = False
 
@@ -145,7 +145,7 @@ def make_recon_coeff(directory, file_name, coeff, pivots, xmol, ymol, zmol, dim,
 	with tables.open_file('{}/surface/{}_R_coeff.hdf5'.format(directory, file_name), 'r') as infile:
 		max_frame = infile.root.tot_coeff.shape[0]
 
-	if max_frame <= frame: mode = 'a'
+	if max_frame <= frame and not ow_coeff: mode = 'a'
 	elif ow_coeff: mode = 'r+'
 	else: mode = False
 
@@ -925,46 +925,51 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 	n_waves = 2 * qm + 1
 
 	"Make coefficient and pivot files"
-	if not os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_auv)) or ow_coeff:
+	if not os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_auv)):
 		ut.make_earray('{}/surface/{}_coeff.hdf5'.format(directory, file_name_auv), 
 			['tot_coeff'], tables.Float64Atom(), [(0, 2, n_waves**2)])
 		ut.make_earray('{}/surface/{}_pivot.hdf5'.format(directory, file_name_auv), 
 			['tot_pivot'], tables.Int64Atom(), [(0, 2, n0)])
 		file_check = False
-	else:
+	elif not ow_coeff:
 		"Checking number of frames in current coefficient files"
 		try:
 			tot_coeff = np.zeros((nframe, 2, n_waves**2))
 			tot_coeff += load_coeff(directory, file_name_auv, 'all')
 			file_check = True
 		except: file_check = False
-
+	else: file_check = False
 
 	if recon:
 		psi = phi * dim[0] * dim[1]
 		"Make recon coefficient file"
-		if not os.path.exists('{}/surface/{}_R_coeff.hdf5'.format(directory, file_name_auv)) or ow_recon:
+		if not os.path.exists('{}/surface/{}_R_coeff.hdf5'.format(directory, file_name_auv)):
 			ut.make_earray('{}/surface/{}_R_coeff.hdf5'.format(directory, file_name_auv), 
 				['tot_coeff'], tables.Float64Atom(), [(0, 2, n_waves**2)])
 			file_check = False
-		else:
+		elif not ow_recon:
 			"Checking number of frames in current recon coefficient files"
 			try:
 				tot_coeff_recon = np.zeros((nframe, 2, n_waves**2))
 				tot_coeff_recon += load_coeff(directory, file_name_auv + '_R')
 				file_check = True
 			except: file_check = False
-
-	print file_check
+		else: file_check = False
 
 	if not file_check:
 		print "IMPORTING GLOBAL POSITION DISTRIBUTIONS\n"
 		xmol, ymol, zmol = ut.read_mol_positions(directory, file_name, nframe, nframe)
 		COM = ut.read_com_positions(directory, file_name, nframe, nframe)
+		nmol = xmol.shape[1]
+		com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
+
+		assert com_tile.shape == (nframe, nmol) 
+
+		zmol = zmol - com_tile
 
 		for frame in xrange(nframe):
-			coeff, pivots = make_coeff_pivots(directory, file_name_auv, xmol[frame], ymol[frame], zmol[frame] - COM[frame][2], dim, mol_sigma, qm, n0, phi, frame, ow_coeff=ow_coeff)
-			if recon: make_recon_coeff(directory, file_name_auv, coeff, pivots, xmol[frame], ymol[frame], zmol[frame] - COM[frame][2], dim, mol_sigma, qm, n0, phi, psi, frame, ow_coeff=ow_recon)
+			coeff, pivots = make_coeff_pivots(directory, file_name_auv, xmol[frame], ymol[frame], zmol[frame], dim, mol_sigma, qm, n0, phi, frame, ow_coeff=ow_coeff)
+			if recon: make_recon_coeff(directory, file_name_auv, coeff, pivots, xmol[frame], ymol[frame], zmol[frame], dim, mol_sigma, qm, n0, phi, psi, frame, ow_coeff=ow_recon)
 
 
 
@@ -1034,11 +1039,11 @@ def cw_gamma_dft(q, gamma, kappa, eta0, eta1): return gamma + eta0 * q + kappa *
 def cw_gamma_sk(q, gamma, w0, r0, dp): return gamma + np.pi/32 * w0 * r0**6 * dp**2 * q**2 * (np.log(q * r0 / 2.) - (3./4 * 0.5772))
 
 
-def load_int_z_mol(directory, file_name, frame):
+def load_pos_derivatives(directory, file_name, frame):
 	"""
-	load_int_z_mol(directory, file_name, frame)
+	load_pos_derivatives(directory, file_name, frame)
 
-	Load surface coefficients from coeff.hdf5 file
+	Load intrinsic molecular positions, and 1st and 2nd derivatives wrt x and y from hdf5 files
 
 	Parameters
 	----------
@@ -1053,154 +1058,209 @@ def load_int_z_mol(directory, file_name, frame):
 	Returns
 	-------
 
-	int_z_mol:  array_like (float); shape=(nframe, qm+1, 2, nmol)
-		Molecular distances from intrinsic surface 
+	int_z_mol:  array_like (float); shape=(nframe, 2, qm+1, nmol)
+		Molecular distances from intrinsic surface
+	int_dxdy_mol:  array_like (float); shape=(nframe, 4, qm+1, nmol)
+		First derivatives of intrinsic surface wrt x and y at xmol, ymol
+	int_ddxddy_mol:  array_like (float); shape=(nframe, 4, qm+1, nmol)
+		Second derivatives of intrinsic surface wrt x and y at xmol, ymol 
 	"""
 
 	with tables.open_file('{}/intpos/{}_int_z_mol.hdf5'.format(directory, file_name), 'r') as infile:
 		if frame == 'all': int_z_mol = infile.root.int_z_mol[:]
 		else: int_z_mol = infile.root.int_z_mol[frame]
-	return int_z_mol
+	with tables.open_file('{}/intpos/{}_int_dxdy_mol.hdf5'.format(directory, file_name), 'r') as infile:
+		if frame == 'all': int_z_mol = infile.root.int_dxdy_mol[:]
+		else: int_dxdy_mol = infile.root.int_dxdy_mol[frame]
+	with tables.open_file('{}/intpos/{}_int_ddxddy_mol.hdf5'.format(directory, file_name), 'r') as infile:
+		if frame == 'all': int_z_mol = infile.root.int_ddxddy_mol[:]
+		else: int_ddxddy_mol = infile.root.int_ddxddy_mol[frame]
 
-def intrinsic_positions_dxdyz(directory, file_name, nframe, nsite, qm, n0, phi, dim, recon, ow_pos):
+	return int_z_mol, int_dxdy_mol, int_ddxddy_mol
+
+
+def save_pos_derivatives(directory, file_name, int_z_mol, int_dxdy_mol, int_ddxddy_mol, frame, qm, nmol, mode='a'):
+	"""
+	save_coeff(directory, file_name, coeff, frame, n_waves, write='a')
+
+	Save surface coefficients from frame in coeff.hdf5 file
+
+	Parameters
+	----------
+
+	directory:  str
+		File path of directory of alias analysis.
+	file_name:  str
+		File name of trajectory being analysed
+	coeff:	array_like (float); shape=(2, n_waves**2)
+		Optimised surface coefficients
+	frame:  int
+		Trajectory frame to save
+	n_waves:  int
+		Number of coefficients / waves in surface
+	mode:  str (optional)
+		Option to append 'a' to hdf5 file or overwrite 'rw' existing data	
+	"""
+
+
+	with tables.open_file('{}/intpos/{}_int_z_mol.hdf5'.format(directory, file_name), mode) as outfile:
+		if mode.lower() == 'a':
+			write_int_z_mol = np.zeros((1, 2, qm+1, nmol))
+			write_int_z_mol[0] = int_z_mol
+			outfile.root.int_z_mol.append(write_int_z_mol)
+		elif mode.lower() == 'r+':
+			outfile.root.int_z_mol[frame] = int_z_mol
+	with tables.open_file('{}/intpos/{}_int_dxdy_mol.hdf5'.format(directory, file_name), mode) as outfile:
+		if mode.lower() == 'a':
+			write_dxdy_mol = np.zeros((1, 4, qm+1, nmol))
+			write_dxdy_mol[0] = int_dxdy_mol
+			outfile.root.int_dxdy_mol.append(write_dxdy_mol)
+		elif mode.lower() == 'r+':
+			outfile.root.int_dxdy_mol[frame] = int_dxdy_mol
+	with tables.open_file('{}/intpos/{}_int_ddxddy_mol.hdf5'.format(directory, file_name), mode) as outfile:
+		if mode.lower() == 'a':
+			write_ddxddy_mol = np.zeros((1, 4, qm+1, nmol))
+			write_ddxddy_mol[0] = int_ddxddy_mol
+			outfile.root.tot_coeff.append(write_ddxddy_mol)
+		elif mode.lower() == 'r+':
+			outfile.root.int_ddxddy_mol[frame] = int_ddxddy_mol
+
+
+def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, nsite, qm, n0, phi, dim, recon, ow_pos):
 	"""
 	intrinsic_positions_dxdyz(directory, file_name, xmol, ymol, zmol, auv1, auv2, frame, nframe, nsite, qm, n0, phi, psi, dim, recon, ow_pos)
 
 	Calculate distances and derivatives at each atomic position with respect to intrinsic surface in simulation frame 
 	"""
 
-	xmol, ymol, zmol = ut.read_mol_positions(directory, file_name, nframe, nframe)
-	COM = ut.read_com_positions(directory, file_name, nframe, nframe)
-	nmol = xmol.shape[1]
-	
-	print np.sum(zmol[0] - COM[0][2])
-
-	com_tile = np.moveaxis(np.tile(np.moveaxis(COM, 0, 1)[2], (nmol, 1)), 0, 1)
-	zmol = zmol - com_tile
-
-	print np.sum(zmol[0])
-
 	n_waves = 2 * qm + 1
+
 	file_name_auv = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
 	if recon: file_name_auv += '_R'
-
-	tot_coeff = load_coeff(directory, file_name_auv, 'all')
-
-	tot_coeff1 = np.tile(np.rollaxis(tot_coeff, 0, 2)[0], (nmol, 1, 1))
-	tot_coeff2 = np.tile(np.rollaxis(tot_coeff, 0, 2)[1], (nmol, 1, 1))
-
-	print tot_coeff1.shape
-
-	assert tot_coeff1.shape == (n_waves**2, nframe, nmol)
-	assert tot_coeff2.shape == (n_waves**2, nframe, nmol)
 
 	file_name_pos = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
 	if recon: file_name_pos += '_R'
 
-	if not os.path.exists('{}/intpos/{}_int_z_mol.hdf5'.format(directory, file_name_pos)) or ow_pos:
+	if not os.path.exists('{}/intpos/{}_int_z_mol.hdf5'.format(directory, file_name_pos)):
 		ut.make_earray('{}/intpos/{}_int_z_mol.hdf5'.format(directory, file_name_pos), 
-			['int_z_mol'], tables.Float64Atom(), [(0, qm+1, 2, nmol)])
+			['int_z_mol'], tables.Float64Atom(), [(0, 2, qm+1, nmol)])
 		ut.make_earray('{}/intpos/{}_int_dxdy_mol.hdf5'.format(directory, file_name_pos), 
-			['int_dxdy_mol'], tables.Float64Atom(), [(0, qm+1, 4, nmol)])
+			['int_dxdy_mol'], tables.Float64Atom(), [(0, 4, qm+1, nmol)])
 		ut.make_earray('{}/intpos/{}_int_ddxddy_mol.hdf5'.format(directory, file_name_pos), 
-			['int_ddxddy_mol'], tables.Float64Atom(), [(0, qm+1, 4, nmol)])
+			['int_ddxddy_mol'], tables.Float64Atom(), [(0, 4, qm+1, nmol)])
+		file_check = False
 
-	else:
+	elif not ow_pos:
 		"Checking number of frames in current distance files"
 		try:
-			tot_int_z_mol = np.zeros((qm+1, 2, nframe, nmol))
-			tot_coeff += load_coeff(directory, file_name_auv, 'all')
+			tot_int_z_mol = np.zeros((2, qm+1, nframe, nmol))
+			tot_int_z_mol += load_int_z_mol(directory, file_name_pos, 'all')
 			file_check = True
 		except: file_check = False
+	else: file_check = False
 
+	print file_check
 
-	if ow_pos:
+	if not file_check:
+		xmol, ymol, _ = ut.read_mol_positions(directory, file_name, nframe, nframe)
+		tot_coeff = load_coeff(directory, file_name_auv, 'all')
 
-		write_int_z_mol = np.zeros((1, nframe, qm+1, 2, nmol))
-		write_dxdyz_mol = np.zeros((1, nframe, qm+1, 4, nmol)) 
-		write_ddxddyz_mol = np.zeros((1, nframe, qm+1, 4, nmol))
+		for frame in xrange(nframe):
 
-		int_z_mol = np.zeros((qm+1, 2, nframe, nmol))
-		dxdyz_mol = np.zeros((qm+1, 4, nframe, nmol)) 
-		ddxddyz_mol = np.zeros((qm+1, 4, nframe, nmol))
+			"Checking number of frames in int_z_mol file"
+			with tables.open_file('{}/intpos/{}_int_z_mol.hdf5'.format(directory, file_name_pos), 'r') as infile:
+				max_frame = infile.root.int_z_mol.shape[0]
 
-		temp_int_z_mol = np.zeros((2, nframe, nmol))
-		temp_dxdyz_mol = np.zeros((4, nframe, nmol)) 
-		temp_ddxddyz_mol = np.zeros((4, nframe, nmol))
+			if max_frame <= frame and not ow_pos: mode = 'a'
+			elif ow_pos: mode = 'r+'
+			else: mode = False
 
-		for qu in xrange(qm+1):
-			sys.stdout.write("PROCESSING {} INTRINSIC POSITIONS AND DXDY {}: qm = {} qu = {}\r".format(directory, frame, qm, qu))
-			sys.stdout.flush()
-
-			if qu == 0:
-				j = (2 * qm + 1) * qm + qm
-				f_x = wave_function(xmol, 0, dim[0])
-				f_y = wave_function(ymol, 0, dim[1])
-
-				temp_int_z_mol[0] += f_x * f_y * tot_coeff1[j]
-				temp_int_z_mol[1] += f_x * f_y * tot_coeff2[j]
+			if not mode:
+				int_z_mol, int_dxdy_mol, int_ddxddy_mol = load_pos_derivatives(directory, file_name, frame)
 
 			else:
-				for u in [-qu, qu]:
-					for v in xrange(-qu, qu+1):
-						j = (2 * qm + 1) * (u + qm) + (v + qm)
+				sys.stdout.write("Calculating molecular distances and derivatives: frame {}\r".format(frame))
+				sys.stdout.flush()
 
-						f_x = wave_function(xmol, u, dim[0])
-						f_y = wave_function(ymol, v, dim[1])
-						df_dx = d_wave_function(xmol, u, dim[0])
-						df_dy = d_wave_function(ymol, v, dim[1])
-						ddf_ddx = dd_wave_function(xmol, u, dim[0])
-						ddf_ddy = dd_wave_function(ymol, v, dim[1])
+				int_z_mol, int_dxdy_mol, int_ddxddy_mol = make_pos_derivatives(directory, file_name_pos, xmol[frame], ymol[frame], tot_coeff[frame], frame, nmol, dim, qm)
+				save_pos_derivatives(directory, file_name_pos, int_z_mol, int_dxdy_mol, int_ddxddy_mol, frame, qm, nmol, mode)
 
-						temp_int_z_mol[0] += f_x * f_y * tot_coeff1[j]
-						temp_int_z_mol[1] += f_x * f_y * tot_coeff2[j]
-						temp_dxdyz_mol[0] += df_dx * f_y * tot_coeff1[j]
-						temp_dxdyz_mol[1] += f_x * df_dy * tot_coeff1[j]
-						temp_dxdyz_mol[2] += df_dx * f_y * tot_coeff2[j]
-						temp_dxdyz_mol[3] += f_x * df_dy * tot_coeff2[j]
-						temp_ddxddyz_mol[0] += ddf_ddx * f_y * tot_coeff1[j]
-						temp_ddxddyz_mol[1] += f_x * ddf_ddy * tot_coeff1[j]
-						temp_ddxddyz_mol[2] += ddf_ddx * f_y * tot_coeff2[j]
-						temp_ddxddyz_mol[3] += f_x * ddf_ddy * tot_coeff2[j]
 
-				for u in xrange(-qu+1, qu):
-					for v in [-qu, qu]:
-						j = (2 * qm + 1) * (u + qm) + (v + qm)
+def make_pos_derivatives(directory, file_name_pos, xmol, ymol, coeff, frame, nmol, dim, qm):
 
-						f_x = wave_function(xmol, u, dim[0])
-						f_y = wave_function(ymol, v, dim[1])
-						df_dx = d_wave_function(xmol, u, dim[0])
-						df_dy = d_wave_function(ymol, v, dim[1])
-						ddf_ddx = dd_wave_function(xmol, u, dim[0])
-						ddf_ddy = dd_wave_function(ymol, v, dim[1])
+	
+	int_z_mol = np.zeros((qm+1, 2, nmol))
+	int_dxdy_mol = np.zeros((qm+1, 4, nmol)) 
+	int_ddxddy_mol = np.zeros((qm+1, 4, nmol))
 
-						temp_int_z_mol[0] += f_x * f_y * tot_coeff1[j]
-						temp_int_z_mol[1] += f_x * f_y * tot_coeff2[j]
-						temp_dxdyz_mol[0] += df_dx * f_y * tot_coeff1[j]
-						temp_dxdyz_mol[1] += f_x * df_dy * tot_coeff1[j]
-						temp_dxdyz_mol[2] += df_dx * f_y * tot_coeff2[j]
-						temp_dxdyz_mol[3] += f_x * df_dy * tot_coeff2[j]
-						temp_ddxddyz_mol[0] += ddf_ddx * f_y * tot_coeff1[j]
-						temp_ddxddyz_mol[1] += f_x * ddf_ddy * tot_coeff1[j]
-						temp_ddxddyz_mol[2] += ddf_ddx * f_y * tot_coeff2[j]
-						temp_ddxddyz_mol[3] += f_x * ddf_ddy * tot_coeff2[j]
+	temp_int_z_mol = np.zeros((2, nmol))
+	temp_dxdy_mol = np.zeros((4, nmol)) 
+	temp_ddxddy_mol = np.zeros((4, nmol))
+	
+	for qu in xrange(qm+1):
 
-			int_z_mol[qu] += temp_int_z_mol
-			dxdyz_mol[qu] += temp_dxdyz_mol
-			ddxddyz_mol[qu] += temp_ddxddyz_mol
+		if qu == 0:
+			j = (2 * qm + 1) * qm + qm
+			f_x = wave_function(xmol, 0, dim[0])
+			f_y = wave_function(ymol, 0, dim[1])
 
-		with tables.open_file('{}/intpos/{}_intz_mol.hdf5'.format(directory, file_name_pos), 'a') as outfile:
-			write_int_z_mol[0] = int_z_mol
-			outfile.root.int_z_mol.append(write_int_z_mol)
-		with tables.open_file('{}/intpos/{}_intdxdy_mol.hdf5'.format(directory, file_name_pos), 'a') as outfile:
-			write_dxdyz_mol[0] = dxdyz_mol
-			outfile.root.dxdyz_mol.append(write_dxdyz_mol)
-		with tables.open_file('{}/intpos/{}_intddxddy_mol.hdf5'.format(directory, file_name_pos), 'a') as outfile:
-			write_ddxddyz_mol[0] = ddxddyz_mol
-			outfile.root.ddxddyz_mol.append(write_ddxddyz_mol)
+			temp_int_z_mol[0] += f_x * f_y * coeff[0][j]
+			temp_int_z_mol[1] += f_x * f_y * coeff[1][j]
 
-	return int_z_mol, dxdyz_mol, ddxddyz_mol
+		else:
+			for u in [-qu, qu]:
+				for v in xrange(-qu, qu+1):
+					j = (2 * qm + 1) * (u + qm) + (v + qm)
 
+					f_x = wave_function(xmol, u, dim[0])
+					f_y = wave_function(ymol, v, dim[1])
+					df_dx = d_wave_function(xmol, u, dim[0])
+					df_dy = d_wave_function(ymol, v, dim[1])
+					ddf_ddx = dd_wave_function(xmol, u, dim[0])
+					ddf_ddy = dd_wave_function(ymol, v, dim[1])
+
+					temp_int_z_mol[0] += f_x * f_y * coeff[0][j]
+					temp_int_z_mol[1] += f_x * f_y * coeff[1][j]
+					temp_dxdy_mol[0] += df_dx * f_y * coeff[0][j]
+					temp_dxdy_mol[1] += f_x * df_dy * coeff[0][j]
+					temp_dxdy_mol[2] += df_dx * f_y * coeff[1][j]
+					temp_dxdy_mol[3] += f_x * df_dy * coeff[1][j]
+					temp_ddxddy_mol[0] += ddf_ddx * f_y * coeff[0][j]
+					temp_ddxddy_mol[1] += f_x * ddf_ddy * coeff[0][j]
+					temp_ddxddy_mol[2] += ddf_ddx * f_y * coeff[1][j]
+					temp_ddxddy_mol[3] += f_x * ddf_ddy * coeff[1][j]
+
+			for u in xrange(-qu+1, qu):
+				for v in [-qu, qu]:
+					j = (2 * qm + 1) * (u + qm) + (v + qm)
+
+					f_x = wave_function(xmol, u, dim[0])
+					f_y = wave_function(ymol, v, dim[1])
+					df_dx = d_wave_function(xmol, u, dim[0])
+					df_dy = d_wave_function(ymol, v, dim[1])
+					ddf_ddx = dd_wave_function(xmol, u, dim[0])
+					ddf_ddy = dd_wave_function(ymol, v, dim[1])
+
+					temp_int_z_mol[0] += f_x * f_y * coeff[0][j]
+					temp_int_z_mol[1] += f_x * f_y * coeff[1][j]
+					temp_dxdy_mol[0] += df_dx * f_y * coeff[0][j]
+					temp_dxdy_mol[1] += f_x * df_dy * coeff[0][j]
+					temp_dxdy_mol[2] += df_dx * f_y * coeff[1][j]
+					temp_dxdy_mol[3] += f_x * df_dy * coeff[1][j]
+					temp_ddxddy_mol[0] += ddf_ddx * f_y * coeff[0][j]
+					temp_ddxddy_mol[1] += f_x * ddf_ddy * coeff[0][j]
+					temp_ddxddy_mol[2] += ddf_ddx * f_y * coeff[1][j]
+					temp_ddxddy_mol[3] += f_x * ddf_ddy * coeff[1][j]
+
+		int_z_mol[qu] += temp_int_z_mol
+		int_dxdy_mol[qu] += temp_dxdy_mol
+		int_ddxddy_mol[qu] += temp_ddxddy_mol
+
+	int_z_mol = np.swapaxes(int_z_mol, 0, 1)
+	int_dxdy_mol = np.swapaxes(int_dxdy_mol, 0, 1)
+	int_ddxddy_mol = np.swapaxes(int_ddxddy_mol, 0, 1)
+	
+	return int_z_mol, int_dxdy_mol, int_ddxddy_mol
 
 
 def intrinsic_z_den_corr(directory, file_name, zmol, auv1, auv2, qm, n0, phi, psi, frame, nframe, nslice, nsite, nz, nnz, DIM, recon, ow_count):

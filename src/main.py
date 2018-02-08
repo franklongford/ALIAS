@@ -191,12 +191,10 @@ if not os.path.exists("{}/intpos".format(data_dir)): os.mkdir("{}/intpos".format
 
 ow_coeff = bool(raw_input("OVERWRITE ACOEFF? (Y/N): ").upper() == 'Y')
 ow_recon = bool(raw_input("OVERWRITE RECON ACOEFF? (Y/N): ").upper() == 'Y')
-
-ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=True, ow_coeff=ow_coeff, ow_recon=ow_recon)
-
 ow_pos = bool(raw_input("OVERWRITE POSITIONS? (Y/N): ").upper() == 'Y')
 
-ism.intrinsic_positions_dxdyz(data_dir, file_name, nframe, nsite, qm, n0, phi, dim, False, ow_pos)
+ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=True, ow_coeff=ow_coeff, ow_recon=ow_recon)
+ism.create_intrinsic_positions_dxdyz(data_dir, file_name, nmol, nframe, nsite, qm, n0, phi, dim, False, ow_pos)
 
 """
 ow_intden = False
