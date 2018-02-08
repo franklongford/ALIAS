@@ -849,6 +849,7 @@ def optimise_ns(directory, file_name, nmol, nsite, nframe, qm, phi, dim, mol_sig
 	xmol, ymol, zmol = ut.read_mol_positions(directory, file_name, nframe, nframe_ns)
 	COM = ut.read_com_positions(directory, file_name, nframe, nframe_ns)
 
+	if nframe < nframe_ns: nframe_ns = nframe
 	ns = start_ns
 	optimising = True
 
@@ -1175,9 +1176,7 @@ def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, nsite, 
 			elif ow_pos: mode = 'r+'
 			else: mode = False
 
-			if not mode:
-				int_z_mol, int_dxdy_mol, int_ddxddy_mol = load_pos_derivatives(directory, file_name, frame)
-
+			if not mode: pass
 			else:
 				sys.stdout.write("Calculating molecular distances and derivatives: frame {}\r".format(frame))
 				sys.stdout.flush()
