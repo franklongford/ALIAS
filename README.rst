@@ -6,9 +6,11 @@ By Frank Longford (2016)
 ----------------------
 
 Intrinsic surface identifier built for Python following the Intrinsic Sampling method of `Chacon and Tarazona 2004`_.
+Surface pivot density optimisation routine follows guidelines based on diffusion rate by `Duque, Tarazona and Chacon 2008`_.
 Extra functions included for Surface Reconstruction routine by Longford 2018.
 
 .. _Chacon and Tarazona 2004: https://journals.aps.org/prb/abstract/10.1103/PhysRevB.70.235407
+.. _Duque, Tarazona and Chacon 2008: http://aip.scitation.org/doi/10.1063/1.2841128
 
 
 Installation:

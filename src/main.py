@@ -8,7 +8,7 @@ Created 24/11/2016 by Frank Longford
 
 Contributors: Frank Longford
 
-Last modified 05/02/2018 by Frank Longford
+Last modified 14/12/18 by Frank Longford
 """
 import matplotlib
 #matplotlib.use('Agg')
@@ -65,6 +65,8 @@ if not os.path.exists(figure_dir): os.mkdir(figure_dir)
 checkfile_name = '{}/{}_chk'.format(alias_dir, traj_file.split('.')[0])
 if not os.path.exists('{}.pkl'.format(checkfile_name)): ut.make_checkfile(checkfile_name)
 checkfile = ut.read_checkfile(checkfile_name)
+
+print "Loading trajectory file {}".format(sys.argv[1])
 
 traj, MOL, nframe, dim = ut.get_sim_param(traj_dir, top_dir, traj_file, top_file)
 
@@ -177,7 +179,7 @@ except:
 
 	print "Using initial pivot number = {}, step size = {}".format(int(dim[0] * dim[1] * start_ns / mol_sigma**2), int(dim[0] * dim[1] * step_ns / mol_sigma**2))
 
-	ns, n0 = ism.optimise_ns(data_dir, file_name, nmol, nsite, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns)
+	ns, n0 = ism.optimise_ns(data_dir, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns)
 	checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
 
 QM = range(1, qm+1)
@@ -194,7 +196,7 @@ ow_recon = bool(raw_input("OVERWRITE RECON ACOEFF? (Y/N): ").upper() == 'Y')
 ow_pos = bool(raw_input("OVERWRITE POSITIONS? (Y/N): ").upper() == 'Y')
 
 ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=True, ow_coeff=ow_coeff, ow_recon=ow_recon)
-ism.create_intrinsic_positions_dxdyz(data_dir, file_name, nmol, nframe, nsite, qm, n0, phi, dim, False, ow_pos)
+ism.create_intrinsic_positions_dxdyz(data_dir, file_name, nmol, nframe, qm, n0, phi, dim, False, ow_pos)
 
 """
 ow_intden = False

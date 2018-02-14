@@ -9,7 +9,7 @@ Created 24/11/2016 by Frank Longford
 
 Contributors: Frank Longford, Sam Munday
 
-Last modified 29/11/2016 by Frank Longford
+Last modified 14/12/18 by Frank Longford
 """
 
 import numpy as np
@@ -24,6 +24,16 @@ import matplotlib.pyplot as plt
 
 SQRT2 = np.sqrt(2.)
 SQRTPI = np.sqrt(np.pi)
+
+
+def numpy_remove(list1, list2):
+	"""
+	numpy_remove(list1, list2)
+
+	Deletes overlapping elements of list2 from list1
+	"""
+
+	return np.delete(list1, np.where(np.isin(list1, list2)))
 
 
 def make_checkfile(checkfile_name):
@@ -333,12 +343,6 @@ def get_fourier(auv, nm):
         return f
 
 
-def check_uv(u, v):
-
-	if abs(u) + abs(v) == 0: return 1.
-	elif u * v == 0: return 2.
-	else: return 1.
-
 
 def sum_auv_2(auv, nm, qm):
 
@@ -353,20 +357,6 @@ def sum_auv_2(auv, nm, qm):
 
 			if abs(u) + abs(v) == 0 : sum_2 += auv[j]
 			else: sum_2 += 1/4. * check_uv(u, v) * auv[j]
-
-	return sum_2
-
-def H_var_est(auv, nm, qm, DIM):
-
-	if qm == 0:	
-		j = (2 * nm + 1) * nm + nm 
-		return 0#auv[j]
-
-	sum_2 = 0
-	for u in xrange(-qm, qm+1):
-                for v in xrange(-qm, qm+1):
-			j = (2 * nm + 1) * (u + nm) + (v + nm)
-			sum_2 += 4 * np.pi**4 * check_uv(u, v) * auv[j] * (u**4/DIM[0]**4 + v**4/DIM[1]**4 + 2 * u**2 * v**2 / (DIM[0]**2 * DIM[1]**2))
 
 	return sum_2
 
