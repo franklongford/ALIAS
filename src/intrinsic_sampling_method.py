@@ -425,7 +425,7 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, ncube, vlim, ta
 		start1 = time.time()
 
 		"Update A matrix and b vector"
-		temp_A, temp_b = update_A_b(xmol, ymol, zmol, qm, n_waves, new_piv1, new_piv2, dim)
+		temp_A, temp_b = update_A_b(xmol, ymol, zmol, dim, qm, n_waves, new_piv1, new_piv2)
 
 		A += temp_A
 		b += temp_b
@@ -456,8 +456,8 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, ncube, vlim, ta
                         print "ENDING SEARCH"
 
 		"Calculate distance between molecular z positions and intrinsic surface"
-		if build_surf1: zeta_list1 = zeta_list(xmol, ymol, mol_list1, auv1, qm, dim)
-		if build_surf2: zeta_list2 = zeta_list(xmol, ymol, mol_list2, auv2, qm, dim)
+		if build_surf1: zeta_list1 = make_zeta_list(xmol, ymol, dim, mol_list1, auv1, qm)
+		if build_surf2: zeta_list2 = make_zeta_list(xmol, ymol, dim, mol_list2, auv2, qm)
 
 		"Search for more molecular pivot sites"
                 while finding_pivots:
@@ -492,14 +492,37 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, ncube, vlim, ta
 	return coeff, pivots
 
 
-def zeta_list(xmol, ymol, mol_list, auv, qm, dim):
+def make_zeta_list(xmol, ymol, dim, mol_list, coeff, qm):
 	"""
-	zeta_list(xmol, ymol, mol_list, auv, qm, dim)
+	zeta_list(xmol, ymol, dim, mol_list, coeff, qm)
 
-	Calculate dz (zeta) between molecular sites an intrinsic surface for highest resolution"
+	Calculate dz (zeta) between molecular sites and intrinsic surface for highest resolution"
+
+	Parameters
+	----------
+	
+	xmol:  float, array_like; shape=(nmol)
+		Molecular coordinates in x dimension
+	ymol:  float, array_like; shape=(nmol)
+		Molecular coordinates in y dimension
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+	mol_list:  int, array_like; shape=(n0)
+		Indices of molcules available to be slected as pivots
+	coeff:	array_like (float); shape=(n_waves**2)
+		Optimised surface coefficients
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	
+	Returns
+	-------
+
+	zeta_list:  float, array_like; shape=(n0)
+		Array of dz (zeta) between molecular sites and intrinsic surface
+	
 	"""
 
-	zeta_list = chi(xmol[mol_list], ymol[mol_list], qm, qm, auv, dim)
+	zeta_list = chi(xmol[mol_list], ymol[mol_list], qm, qm, coeff, dim)
    
 	return zeta_list
 
@@ -509,6 +532,35 @@ def pivot_selection(zmol, mol_sigma, n0, mol_list, zeta_list, piv_n, tau):
 	pivot_selection(zmol, mol_sigma, n0, mol_list, zeta_list, piv_n, tau)
 
 	Search through zeta_list for values within tau threshold and add to pivot list
+
+	Parameters
+	----------
+	
+	zmol:  float, array_like; shape=(nmol)
+		Molecular coordinates in z dimension
+	mol_sigma:  float
+		Radius of spherical molecular interaction sphere
+	n0:  int
+		Maximum number of molecular pivots in intrinsic surface
+	mol_list:  int, array_like; shape=(n0)
+		Indices of molcules available to be slected as pivots
+	zeta_list:  float, array_like; shape=(n0)
+		Array of dz (zeta) between molecular sites and intrinsic surface
+	piv_n:  int, array_like; shape=(n0)
+		Molecular pivot indices
+	tau:  float
+		Threshold length along z axis either side of existing intrinsic surface for selection of new pivot points
+
+	Returns
+	-------
+
+	mol_list:  int, array_like; shape=(n0)
+		Updated indices of molcules available to be slected as pivots
+	new_piv:  int, array_like
+		Indices of new pivot molecules just selected
+	piv_n:  int, array_like; shape=(n0)
+		Updated molecular pivot indices
+
 	"""
 
 	"Find new pivots based on zeta <= tau"
@@ -538,18 +590,63 @@ def LU_decomposition(A, b):
 	"""
 	LU_decomposition(A, b)
 
-	Perform lower-upper decomposition to solve equation Ax = b
+	Perform lower-upper decomposition to solve equation Ax = b using scipy linalg lover-upper solver
+
+	Parameters
+	----------
+
+	A:  float, array_like; shape=(n_waves**2, n_waves**2)
+		Matrix containing weightings for each coefficient product x_i.x_j in the linear algebra equation Ax = b
+	b:  float, array_like; shape=(n_waves**2)
+		Vector containing solutions to the linear algebra equation Ax = b
+
+	Returns
+	-------
+
+	coeff:	array_like (float); shape=(n_waves**2)
+		Optimised surface coefficients	
+
 	"""
 	lu, piv  = sp.linalg.lu_factor(A)
-	auv = sp.linalg.lu_solve((lu, piv), b)
-	return auv
+	coeff = sp.linalg.lu_solve((lu, piv), b)
+
+	return coeff
 
 
-def update_A_b(xmol, ymol, zmol, qm, n_waves, new_piv1, new_piv2, dim):
+def update_A_b(xmol, ymol, zmol, dim, qm, n_waves, new_piv1, new_piv2):
 	"""
-	update_A_b(xmol, ymol, zmol, qm, n_waves, new_piv1, new_piv2, dim)
+	update_A_b(xmol, ymol, zmol, dim, qm, n_waves, new_piv1, new_piv2)
 	
 	Update A matrix and b vector for new pivot selection
+
+	Paramters
+	---------
+
+	xmol:  float, array_like; shape=(nmol)
+		Molecular coordinates in x dimension
+	ymol:  float, array_like; shape=(nmol)
+		Molecular coordinates in y dimension
+	zmol:  float, array_like; shape=(nmol)
+		Molecular coordinates in z dimension
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	n_waves:  int
+		Number of coefficients / waves in surface
+	new_piv1:  int, array_like
+		Indices of new pivot molecules for surface 1
+	new_piv2:  int, array_like
+		Indices of new pivot molecules for surface 2
+
+	Returns
+	-------
+
+	A:  float, array_like; shape=(2, n_waves**2, n_waves**2)
+		Matrix containing weightings for each coefficient product x_i.x_j in the linear algebra equation Ax = b for both surfaces 
+	b:  float, array_like; shape=(2, n_waves**2)
+		Vector containing solutions to the linear algebra equation Ax = b for both surfaces
+
 	"""
 
 	A = np.zeros((2, n_waves**2, n_waves**2))
@@ -836,6 +933,43 @@ def optimise_ns(directory, file_name, nmol, nsite, nframe, qm, phi, dim, mol_sig
 	optimise_ns(directory, file_name, nmol, nsite, nframe, qm, phi, vlim, ncube, dim, mol_sigma, start_ns, step_ns, nframe_ns = 20)
 
 	Routine to find optimised pivot density coefficient ns and pivot number n0 based on lowest pivot diffusion rate
+
+	Parameters
+	----------
+
+	directory:  str
+		File path of directory of alias analysis.
+	file_name:  str
+		File name of trajectory being analysed.
+	nmol:  int
+		Number of molecules in simulation
+	nsite: int
+		Number of atomic sites in each molecule
+	nframe: int
+		Number of trajectory frames in simulation
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	phi:  float
+		Weighting factor of minimum surface area term in surface optimisation function
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+	mol_sigma:  float
+		Radius of spherical molecular interaction sphere
+	start_ns:  float
+		Initial value for pivot density optimisation routine
+	step_ns:  float
+		Search step difference between each pivot density value ns
+	nframe_ns:  (optional) int
+		Number of trajectory frames to perform optimisation with
+
+	Returns
+	-------
+
+	opt_ns: float
+		Optimised surface pivot density parameter
+	opt_n0: int
+		Optimised number of pivot molecules
+
 	"""
 
 	mol_ex_1 = []
@@ -995,52 +1129,7 @@ def slice_area(auv_2, qm, qu, dim):
         return 1 + 0.5*Axi
 
 
-def gamma_q_auv(auv_2, qm, qu, DIM, T, q2_set):
-	"""
-	gamma_q_auv(auv_2, qm, qu, DIM, T, q2_set)
-
-	Calculate frequency dependent surface tension spectrum across surface wave coefficients
-	"""
-
-	gamma_list = []
-	gamma_hist = np.zeros(len(q2_set))
-	gamma_count = np.zeros(len(q2_set))
-
-	dim = np.array(DIM) * 1E-10
-
-	coeff = con.k * 1E3 * T
-
-	for u in xrange(-qu, qu+1):
-		for v in xrange(-qu, qu+1):
-			j = (2 * qm + 1) * (u + qm) + (v + qm)
-			dot_prod = np.pi**2 * (u**2 * dim[1] / dim[0] + v**2 * dim[0] / dim[1])
-			set_index = np.round(u**2*dim[1]/dim[0] + v**2*dim[0]/dim[1], 4)
-
-			if set_index != 0:
-				gamma = 1. / (ut.check_uv(u, v) * auv_2[j] * 1E-20 * dot_prod)
-				gamma_list.append(gamma)
-				gamma_hist[q2_set == set_index] += gamma
-				gamma_count[q2_set == set_index] += 1
-
-	for i in xrange(len(q2_set)):
-		if gamma_count[i] != 0: gamma_hist[i] *= 1. / gamma_count[i]
-
-	return gamma_hist * coeff
-
-
-def cw_gamma_1(q, gamma, kappa): return gamma + kappa * q**2
-
-
-def cw_gamma_2(q, gamma, kappa0, l0): return gamma + q**2 * (kappa0 + l0 * np.log(q))
-
-
-def cw_gamma_dft(q, gamma, kappa, eta0, eta1): return gamma + eta0 * q + kappa * q**2 + eta1 * q**3
-
-
-def cw_gamma_sk(q, gamma, w0, r0, dp): return gamma + np.pi/32 * w0 * r0**6 * dp**2 * q**2 * (np.log(q * r0 / 2.) - (3./4 * 0.5772))
-
-
-def load_pos_derivatives(directory, file_name, frame):
+def load_pos_dxdy(directory, file_name, frame):
 	"""
 	load_pos_derivatives(directory, file_name, frame)
 
@@ -1080,7 +1169,7 @@ def load_pos_derivatives(directory, file_name, frame):
 	return int_z_mol, int_dxdy_mol, int_ddxddy_mol
 
 
-def save_pos_derivatives(directory, file_name, int_z_mol, int_dxdy_mol, int_ddxddy_mol, frame, qm, nmol, mode='a'):
+def save_pos_dxdy(directory, file_name, int_z_mol, int_dxdy_mol, int_ddxddy_mol, frame, qm, nmol, mode='a'):
 	"""
 	save_coeff(directory, file_name, coeff, frame, n_waves, write='a')
 
@@ -1181,11 +1270,11 @@ def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, nsite, 
 				sys.stdout.write("Calculating molecular distances and derivatives: frame {}\r".format(frame))
 				sys.stdout.flush()
 
-				int_z_mol, int_dxdy_mol, int_ddxddy_mol = make_pos_derivatives(directory, file_name_pos, xmol[frame], ymol[frame], tot_coeff[frame], frame, nmol, dim, qm)
-				save_pos_derivatives(directory, file_name_pos, int_z_mol, int_dxdy_mol, int_ddxddy_mol, frame, qm, nmol, mode)
+				int_z_mol, int_dxdy_mol, int_ddxddy_mol = make_pos_dxdy(directory, file_name_pos, xmol[frame], ymol[frame], tot_coeff[frame], frame, nmol, dim, qm)
+				save_pos_dxdy(directory, file_name_pos, int_z_mol, int_dxdy_mol, int_ddxddy_mol, frame, qm, nmol, mode)
 
 
-def make_pos_derivatives(directory, file_name_pos, xmol, ymol, coeff, frame, nmol, dim, qm):
+def make_pos_dxdy(directory, file_name_pos, xmol, ymol, coeff, frame, nmol, dim, qm):
 
 	
 	int_z_mol = np.zeros((qm+1, 2, nmol))
@@ -1350,248 +1439,3 @@ def intrinsic_z_den_corr(directory, file_name, zmol, auv1, auv2, qm, n0, phi, ps
 	return count_corr_array, z_nz_array
 
 
-
-def intrinsic_profile(directory, file_name, T, nframe, natom, nmol, nsite, AT, M, mol_sigma, mol_com, dim, nslice, ncube, qm, QM, n0, phi, psi, npi, vlim, ow_coeff, ow_recon, ow_pos, ow_intden, ow_count, ow_effden):
-
-	lslice = dim[2] / nslice
-	Aslice = dim[0]*dim[1]
-	Vslice = dim[0]*dim[1]*lslice
-	Acm = 1E-8
-	ur = 1
-	Z1 = np.linspace(0, dim[2], nslice)
-	Z2 = np.linspace(-dim[2]/2, dim[2]/2, nslice)
-	NZ = np.linspace(0, 1, 100)
-	n_waves = 2 * qm + 1
-	nz = 100
-        nnz = 100
-
-	atom_types = list(set(AT))
-	n_atom_types = len(atom_types)
-
-	av_auv1 = np.zeros((2, nframe))
-	av_auv2 = np.zeros((2, nframe))
-
-	av_auv1_2 = np.zeros((2, n_waves**2))
-	av_auv2_2 = np.zeros((2, n_waves**2))
-
-	av_auvU_2 = np.zeros((2, n_waves**2))
-        av_auvP_2 = np.zeros((2, n_waves**2))
-
-	tot_auv1 = np.zeros((2, nframe, n_waves**2))
-	tot_auv2 = np.zeros((2, nframe, n_waves**2))
-
-	file_name_pos = ['{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe),
-			 '{}_{}_{}_{}_{}_R'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)]
-	file_name_auv = ['{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe), 
-			 '{}_{}_{}_{}_{}_R'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)]
-	file_name_den = ['{}_{}_{}_{}_{}_{}'.format(file_name, nslice, qm, n0, int(1/phi + 0.5), nframe), 
-		         '{}_{}_{}_{}_{}_{}_R'.format(file_name, nslice, qm, n0, int(1/phi + 0.5), nframe)]
-	file_name_count = ['{}_{}_{}_{}_{}_{}'.format(file_name, nslice, qm, n0, int(1./phi + 0.5), nframe),
-			   '{}_{}_{}_{}_{}_{}_R'.format(file_name, nslice, qm, n0, int(1./phi + 0.5), nframe)]	
-	file_name_norm = ['{}_{}_{}_{}_{}_{}'.format(file_name, nz, qm, n0, int(1./phi + 0.5), nframe),
-			  '{}_{}_{}_{}_{}_{}_R'.format(file_name, nz, qm, n0, int(1./phi + 0.5), nframe)]
-
-	if not os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_auv[0])) or ow_coeff:
-		ut.make_earray('{}/surface/{}_coeff.hdf5'.format(directory, file_name_auv[0]), 
-			['tot_coeff1', 'tot_coeff2'], tables.Float64Atom(), [(0, n_waves**2), (0, n_waves**2)])
-		ut.make_earray('{}/surface/{}_pivots.hdf5'.format(directory, file_name_auv[0]), 
-			['tot_piv_n1', 'tot_piv_n2'], tables.Float64Atom(), [(0, n0), (0, n0)])
-	if not os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_auv[1])) or ow_recon:
-		ut.make_earray('{}/surface/{}_coeff.hdf5'.format(directory, file_name_auv[1]), 
-			['tot_coeff1', 'tot_coeff2'], tables.Float64Atom(), [(0, n_waves**2), (0, n_waves**2)])
-
-	for r, recon in enumerate([False, True]):
-		if not os.path.exists('{}/intpos/{}_intz_mol.hdf5'.format(directory, file_name_pos[r])) or ow_pos:
-			ut.make_earray('{}/intpos/{}_intz_mol.hdf5'.format(directory, file_name_pos[r]), 
-				['int_z_mol'], tables.Float64Atom(), [(0, qm+1, 2, nmol)])
-		if not os.path.exists('{}/intpos/{}_intdxdy_mol.hdf5'.format(directory, file_name_pos[r])) or ow_pos:
-			ut.make_earray('{}/intpos/{}_intdxdy_mol.hdf5'.format(directory, file_name_pos[r]), 
-				['dxdyz_mol'], tables.Float64Atom(), [(0, qm+1, 4, nmol)])
-		if not os.path.exists('{}/intpos/{}_intddxddy_mol.hdf5'.format(directory, file_name_pos[r])) or ow_pos:
-			ut.make_earray('{}/intpos/{}_intddxddy_mol.hdf5'.format(directory, file_name_pos[r]), 
-				['ddxddyz_mol'], tables.Float64Atom(), [(0, qm+1, 4, nmol)])
-		if not os.path.exists('{}/intden/{}_countcorr.hdf5'.format(directory, file_name_count[r])) or ow_count:
-			ut.make_earray('{}/intden/{}_countcorr.hdf5'.format(directory, file_name_count[r]), 
-				['count_corr_array'], tables.Float64Atom(), [(0, qm+1, nslice, 100)])
-		if not os.path.exists('{}/intden/{}_n_nz.hdf5'.format(directory, file_name_norm[r])) or ow_count:
-			ut.make_earray('{}/intden/{}_n_nz.hdf5'.format(directory, file_name_norm[r]), 
-				['z_nz_array'], tables.Float64Atom(), [(0, qm+1, 100, 100)])
-
-	file_check = [os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_auv[0])),
-		      	os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_auv[1])),	
-			os.path.exists('{}/surface/{}_pivots.hdf5'.format(directory, file_name_auv[0])),
-			os.path.exists('{}/intpos/{}_intz_mol.hdf5'.format(directory, file_name_pos[0])),
-			os.path.exists('{}/intpos/{}_intz_mol.hdf5'.format(directory, file_name_pos[1])),
-			os.path.exists('{}/intpos/{}_intdxdy_mol.hdf5'.format(directory, file_name_pos[0])),
-			os.path.exists('{}/intpos/{}_intdxdy_mol.hdf5'.format(directory, file_name_pos[1])),
-			os.path.exists('{}/intpos/{}_intddxddy_mol.hdf5'.format(directory, file_name_pos[0])),
-			os.path.exists('{}/intpos/{}_intddxddy_mol.hdf5'.format(directory, file_name_pos[1]))]
-
-	file_check = np.all(file_check)
-
-	if file_check:
-		try:
-			for r, recon in enumerate([False, True]):
-				with tables.open_file('{}/surface/{}_coeff.hdf5'.format(directory, file_name_auv[r]), 'r') as infile:
-					tot_auv1[r] = infile.root.tot_coeff1
-					tot_auv2[r] = infile.root.tot_coeff2
-		except: 
-			tot_auv1 = np.zeros((2, nframe, n_waves**2))
-			tot_auv2 = np.zeros((2, nframe, n_waves**2))
-			file_check = False
-
-	if not file_check or ow_coeff or ow_recon or ow_pos:
-
-		print "IMPORTING GLOBAL POSITION DISTRIBUTIONS\n"
-
-		xat, yat, zat = ut.read_atom_positions(directory, file_name, nframe, nframe)
-		xmol, ymol, zmol = ut.read_mol_positions(directory, file_name, nframe, nframe)
-		COM = ut.read_com_positions(directory, file_name, nframe, nframe)
-
-		for frame in xrange(nframe):
-			for r, recon in enumerate([False, True]):
-				tot_auv1[r][frame], tot_auv2[r][frame], piv_n1, piv_n2 = intrinsic_surface(directory, file_name_auv[0], 
-					xmol[frame], ymol[frame], zmol[frame]-COM[frame][2], dim, mol_sigma, qm, n0, phi, psi, frame,
-					recon=recon, ow_coeff=ow_coeff, ow_recon=ow_recon)
-				intrinsic_positions_dxdyz(directory, file_name, xmol[frame], ymol[frame], zmol[frame]-COM[frame][2], 
-					tot_auv1[r][frame], tot_auv2[r][frame], frame, nframe, nsite, qm, n0, phi, psi, dim, recon, ow_pos)
-
-				av_auv1_2[r] += tot_auv1[r][frame]**2 / nframe
-				av_auv2_2[r] += tot_auv2[r][frame]**2 / nframe
-
-				av_auv1[r][frame] = tot_auv1[r][frame][n_waves**2/2]
-				av_auv2[r][frame] = tot_auv2[r][frame][n_waves**2/2]
-
-				av_auvU_2[r] += (tot_auv1[r][frame] + tot_auv2[r][frame])**2/ (4. * nframe)
-				av_auvP_2[r] += (tot_auv1[r][frame] - tot_auv2[r][frame])**2/ (4. * nframe)
-		
-		del xat, yat, zat, xmol, ymol, zmol, COM
-		gc.collect()
-
-	else:
-		sys.stdout.write("LOADING INTRINSIC SURFACE PROFILES {} frames\n".format(nframe) )
-		sys.stdout.flush()
-
-		for r, recon in enumerate([False, True]):
-		
-			av_auv1_2[r] += np.sum(tot_auv1[r]**2, axis=0) / nframe
-			av_auv2_2[r] += np.sum(tot_auv2[r]**2, axis=0) / nframe
-
-			av_auv1[r] += np.swapaxes(tot_auv1, 1, 2)[r][n_waves**2/2]
-			av_auv2[r] += np.swapaxes(tot_auv2, 1, 2)[r][n_waves**2/2]
-
-			av_auvU_2[r] += np.sum(tot_auv1[r] + tot_auv2[r], axis=0)**2/ (4. * nframe)
-			av_auvP_2[r] += np.sum(tot_auv1[r] - tot_auv2[r], axis=0)**2/ (4. * nframe)
-
-	AU = np.zeros((2, qm+1))
-	AP = np.zeros((2, qm+1))
-	ACU = np.zeros((2, qm+1))
-
-	Q_set = []
-
-	cw_gammaU = [[], []]
-	cw_gammaP = [[], []]
-	cw_gammaCU = [[], []]
-
-	av_auvCU_2 = np.array([av_auvP_2[0] - av_auvU_2[0], av_auvP_2[1] - av_auvU_2[1]])
-
-	tot_auv1 = np.array([np.transpose(tot_auv1[0]), np.transpose(tot_auv2[1])])
-	tot_auv2 = np.array([np.transpose(tot_auv2[0]), np.transpose(tot_auv2[1])])
-
-	for r, recon in enumerate([False, True]):
-
-		file_check = np.all([os.path.exists('{}/intden/{}_eff_den.npy'.format(directory, file_name_den[r]))])
-
-		if not file_check or ow_effden:
-
-			file_check = np.all([os.path.exists('{}/intden/{}_mol_den.npy'.format(directory, file_name_den[r])),
-			     	     os.path.exists('{}/intden/{}_mol_den_corr.npy'.format(directory, file_name_den[r]))])
-
-			if not file_check or ow_intden:
-
-				xat, yat, zat = ut.read_atom_positions(directory, file_name, nframe, nframe)
-				_, _, zmol = ut.read_mol_positions(directory, file_name, nframe, nframe)
-				COM = ut.read_com_positions(directory, file_name, nframe, nframe)
-
-				av_den_corr_matrix = np.zeros((qm+1, nslice, 100))
-				av_z_nz_matrix = np.zeros((qm+1, 100, 100))	
-
-				for frame in xrange(nframe):
-					sys.stdout.write("PROCESSING INTRINSIC DISTRIBUTIONS {} out of {} frames\r".format(frame, nframe) )
-					sys.stdout.flush() 
-
-					int_count_corr_array, int_count_z_nz = intrinsic_z_den_corr(directory, file_name, zmol[frame]-COM[frame][2], tot_auv1[r][frame], tot_auv2[r][frame], qm, n0, phi, psi, frame, nframe, nslice, nsite, nz, nnz, dim, recon, ow_count)
-					av_den_corr_matrix += int_count_corr_array
-					av_z_nz_matrix += int_count_z_nz
-
-				N = np.linspace(0, 50 * lslice, 100)
-
-				int_den_corr = av_den_corr_matrix / (2 * nframe * Vslice)
-				mol_int_den = np.sum(int_den_corr, axis=2)
-
-				with file('{}/intden/{}_mol_den.npy'.format(directory, file_name_den[r]), 'w') as outfile:
-					np.save(outfile, mol_int_den)
-				with file('{}/intden/{}_mol_den_corr.npy'.format(directory, file_name_den[r]), 'w') as outfile:
-					np.save(outfile, int_den_corr)
-
-			else: mol_int_den = np.load('{}/intden/{}_mol_den.npy'.format(directory, file_name_den[r]), mmap_mode='r')
-
-			eff_den = np.zeros((qm+1, nslice))
-
-			for qu in xrange(1, qm+1):
-
-				q_set = []
-				q2_set = []
-
-				for u in xrange(-qu, qu):
-					for v in xrange(-qu, qu):
-						q = 4 * np.pi**2 * (u**2 / dim[0]**2 + v**2/dim[1]**2)
-						q2 = u**2 * dim[1]/dim[0] + v**2 * dim[0]/dim[1]
-
-						if q2 not in q2_set:
-							q_set.append(q)
-							q2_set.append(np.round(q2, 4))
-
-				q_set = np.sqrt(np.sort(q_set, axis=None))
-				q2_set = np.sort(q2_set, axis=None)
-				Q_set.append(q_set)
-
-				AU[r][qu] = (slice_area(av_auvU_2[r], qm, qu, dim))
-				AP[r][qu] = (slice_area(av_auvP_2[r], qm, qu, dim))
-				ACU[r][qu] = (slice_area(av_auvCU_2[r], qm, qu, dim))
-
-				cw_gammaU[r].append(gamma_q_auv(av_auvU_2[r]*2, qm, qu, dim, T, q2_set))
-				cw_gammaP[r].append(gamma_q_auv(av_auvP_2[r]*2, qm, qu, dim, T, q2_set))
-				cw_gammaCU[r].append(gamma_q_auv(av_auvCU_2[r], qm, qu, dim, T, q2_set))
-
-				if qu == qm:
-					file_name_gamma = ['{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe),
-							'{}_{}_{}_{}_{}_R'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)]
-
-					with file('{}/intthermo/{}_gamma.npy'.format(directory, file_name_gamma[r]), 'w') as outfile:
-						np.save(outfile, (Q_set[-1], cw_gammaU[r][-1], cw_gammaP[r][-1], cw_gammaCU[r][-1]))
-
-				Delta1 = (ut.sum_auv_2(av_auv1_2[r], qm, qu) - np.mean(av_auv1[r])**2)
-				Delta2 = (ut.sum_auv_2(av_auv2_2[r], qm, qu) - np.mean(av_auv2[r])**2)
-
-				centres = np.ones(2) * (np.mean(av_auv1[r]) - np.mean(av_auv2[r]))/2.
-				deltas = np.ones(2) * 0.5 * (Delta1 + Delta2)
-
-				arrays = [mol_int_den[qu], mol_int_den[qu]]
-
-				cw_arrays = ut.gaussian_smoothing(arrays, centres, deltas, dim, nslice)
-
-				eff_den[qu] = cw_arrays[0]
-
-				print '\n'
-				print "WRITING TO FILE... qm = {}  qu = {}  var1 = {}  var2 = {}".format(qm, qu, Delta1, Delta2)
-
-			with file('{}/intden/{}_eff_den.npy'.format(directory, file_name_den[r]), 'w') as outfile:
-				np.save(outfile, eff_den)
-		else:
-			with file('{}/intden/{}_eff_den.npy'.format(directory, file_name_den[r]), 'r') as infile:
-				eff_den = np.load(infile)
-
-	print "INTRINSIC SAMPLING METHOD {} {} {} {} {} COMPLETE\n".format(directory, file_name, qm, n0, phi)
-
-	return av_auv1, av_auv2 
