@@ -15,13 +15,33 @@ import numpy as np
 import scipy as sp
 import subprocess, time, sys, os, math, copy, gc
 
-import utilities_edit as ut
+import utilities as ut
 import mdtraj as md
 
-traj_dir = 'test'
+traj_dir = '/home/fl7g13/test'
 traj_file = 'test_water.nc'
-top_dir = 'test'
+top_dir = '/home/fl7g13/test'
 top_file = 'test_water.prmtop'
+
+alias_dir = traj_dir + '/alias_analysis'
+
+def test_unit_vector():
+
+	vector = [-3, 2, 6]
+	u_vector = ut.unit_vector(vector)
+
+	assert np.sum(u_vector - np.array([-0.42857143,  0.28571429,  0.85714286])) <= 1E-5
+	#assert np.sum(u_vector * magnitude - np.array(vector)) <= 1E-5
+
+	vector_array = [[3, 2, 6], [1, 2, 5], [4, 2, 5], [-7, -1, 2]]
+
+	#vunit = np.vectorize(ut.unit_vector)
+
+	u_vector_array = ut.unit_vector(vector_array)
+
+	assert np.array(vector_array).shape == u_vector_array.shape
+	#assert np.sum(u_vector_array * magnitude - np.array(vector_array)) <= 1E-5
+
 
 def test_sim_param():
 
@@ -36,14 +56,11 @@ def test_sim_param():
 
 def test_checkfile():
 
-	file_name = traj_file.split('.')[0]
-	ut.make_checkfile(traj_dir, file_name)
-	checkfile = ut.read_checkfile(traj_dir, file_name)
+	checkfile_name = '{}/{}_chk'.format(alias_dir, traj_file.split('.')[0])
+	if not os.path.exists('{}.pkl'.format(checkfile_name)): ut.make_checkfile(checkfile_name)
+	checkfile = ut.read_checkfile(checkfile_name)
 
-	assert len(checkfile['M']) == 0
-	assert checkfile['opt_ns'] == 0
-
-	checkfile = ut.update_checkfile(traj_dir, file_name, 'M', [12, 1.0, 1.0, 1.0])
+	checkfile = ut.update_checkfile(checkfile_name, 'M', [16.0, 1.008, 1.008, 0])
 
 	assert len(checkfile['M']) == 4
-	assert np.sum(checkfile['M']) == 15.0
+	assert np.sum(np.array(checkfile['M']) - 18.016) <= 1E-5

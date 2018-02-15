@@ -35,7 +35,6 @@ def check_uv(u, v):
 
 vcheck = np.vectorize(check_uv)
 
-
 def wave_function(x, u, Lx):
 	"""
 	wave_function(x, u, Lx)
@@ -119,8 +118,8 @@ def update_A_b(xmol, ymol, zmol, dim, qm, n_waves, new_piv1, new_piv2):
 		fuv2[j] = wave_function(xmol[new_piv2], int(j/n_waves)-qm, dim[0]) * wave_function(ymol[new_piv2], int(j%n_waves)-qm, dim[1])
 		b[1][j] += np.sum(zmol[new_piv2] * fuv2[j])
 
-	A[0] += np.dot(fuv1, np.transpose(fuv1))
-	A[1] += np.dot(fuv2, np.transpose(fuv2))
+	A[0] += np.dot(fuv1, fuv1.T)
+	A[1] += np.dot(fuv2, fuv2.T)
 
 	return A, b
 
@@ -286,12 +285,12 @@ def intrinsic_area(coeff, qm, qu, dim):
         return int_A
 
 
-def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, ncube, vlim, tau, max_r):
+def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncube=3, vlim=3):
 					
 	"""
-	build_surface(xmol, ymol, zmol, dim, nmol, ncube, mol_sigma, qm, n0, phi, vlim, tau, max_r)
+	build_surface(xmol, ymol, zmol, dim, nmol, mol_sigma, qm, n0, phi, tau, max_r, ncube=3, vlim=3)
 
-	Create coefficients auv1 and auv2 for Fourier sum representing intrinsic surface.
+	Create coefficients for Fourier sum representing intrinsic surface.
 
 	Parameters
 	----------
@@ -309,7 +308,7 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, ncube, vlim, ta
 	qm:  int
 		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
 	n0:  int
-		Maximum number of molecular pivots in intrinsic surface
+		Maximum number of molecular pivot in intrinsic surface
 	phi:  float
 		Weighting factor of minimum surface area term in surface optimisation function
 	ncube:	int (optional)
@@ -326,7 +325,7 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, ncube, vlim, ta
 
 	coeff:	array_like (float); shape=(2, n_waves**2)
 		Optimised surface coefficients
-	pivots:  array_like (int); shape=(2, n0)
+	pivot:  array_like (int); shape=(2, n0)
 		Indicies of pivot molecules in molecular position arrays	
 
 	""" 
@@ -349,7 +348,7 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, ncube, vlim, ta
 	mat_ymol = np.tile(ymol, (nmol, 1))
 	mat_zmol = np.tile(zmol, (nmol, 1))
 
-	dr2 = np.array((mat_xmol - np.transpose(mat_xmol))**2 + (mat_ymol - np.transpose(mat_ymol))**2 + (mat_zmol - np.transpose(mat_zmol))**2, dtype=float)
+	dr2 = np.array((mat_xmol - mat_xmol.T)**2 + (mat_ymol - mat_ymol.T)**2 + (mat_zmol - mat_zmol.T)**2, dtype=float)
 	
 	"Remove molecules from vapour phase ans assign an initial grid of pivots furthest away from centre of mass"
 	print 'Lx = {:5.3f}   Ly = {:5.3f}   qm = {:5d}\nphi = {}   n_piv = {:5d}   vlim = {:5d}   max_r = {:5.3f}'.format(dim[0], dim[1], qm, phi, n0, vlim, max_r) 
@@ -481,271 +480,9 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, ncube, vlim, ta
 
 	print '\nTOTAL time: {:7.2f} s \n'.format(end - start)
 
-	pivots = np.array((piv_n1, piv_n2), dtype=int)
+	pivot = np.array((piv_n1, piv_n2), dtype=int)
 
-	return coeff, pivots
-
-
-def save_coeff(directory, file_name, coeff, frame, n_waves, mode='a'):
-	"""
-	save_coeff(directory, file_name, coeff, frame, n_waves, write='a')
-
-	Save surface coefficients from frame in coeff.hdf5 file
-
-	Parameters
-	----------
-
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed
-	coeff:	float, array_like; shape=(2, n_waves**2)
-		Optimised surface coefficients
-	frame:  int
-		Trajectory frame to save
-	n_waves:  int
-		Number of coefficients / waves in surface
-	mode:  str (optional)
-		Option to append 'a' to hdf5 file or overwrite 'rw' existing data	
-	"""
-
-	with tables.open_file('{}/surface/{}_coeff.hdf5'.format(directory, file_name), mode) as outfile:
-		if mode.lower() == 'a':
-			write_coeff = np.zeros((1, 2, n_waves**2))
-			write_coeff[0] = coeff
-			outfile.root.tot_coeff.append(write_coeff)
-		elif mode.lower() == 'r+':
-			outfile.root.tot_coeff[frame] = coeff
-
-
-def save_pivots(directory, file_name, pivots, frame, n0, mode='a'):
-	"""
-	save_pivots(directory, file_name, pivots, frame, n0, mode='a')
-
-	Save surface pivot molecules indicies from frame in pivot.hdf5 file
-
-	Parameters
-	----------
-
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed
-	pivots:  int, array_like; shape=(2, n0)
-		Indicies of pivot molecules in molecular position arrays
-	frame:  int
-		Trajectory frame to save
-	n0:  int
-		Maximum number of molecular pivots in intrinsic surface
-	mode:  str (optional)
-		Option to append 'a' to hdf5 file or overwrite 'rw' existing data
-	"""
-
-	with tables.open_file('{}/surface/{}_pivot.hdf5'.format(directory, file_name), mode) as outfile:
-		if mode.lower() == 'a':
-			write_pivots = np.zeros((1, 2, n0))
-			write_pivots[0] = pivots
-			outfile.root.tot_pivot.append(write_pivots)
-		elif mode.lower() == 'r+':
-			outfile.root.tot_pivot[frame] = pivots
-
-
-def load_coeff(directory, file_name, frame):
-	"""
-	load_coeff(directory, file_name, frame)
-
-	Load surface coefficients from coeff.hdf5 file
-
-	Parameters
-	----------
-
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed
-	frame:  int (optional)
-		Trajectory frame to load
-
-	Returns
-	-------
-
-	coeff:	array_like (float); shape=(2, n_waves**2)
-		Optimised surface coefficients
-	"""
-
-	with tables.open_file('{}/surface/{}_coeff.hdf5'.format(directory, file_name), 'r') as infile:
-		if frame == 'all': coeff = infile.root.tot_coeff[:]
-		else: coeff = infile.root.tot_coeff[frame]
-	return coeff
-
-
-def load_pivots(directory, file_name, frame):
-	"""
-	load_pivots(directory, file_name, frame)
-
-	Load surface pivot molecular indicies from pivot.hdf5 file
-
-	Parameters
-	----------
-
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed
-	frame:  int (optional)
-		Trajectory frame to load
-
-	Returns
-	-------
-
-	pivots:  int, array_like; shape=(2, n0)
-		Indicies of pivot molecules in molecular position arrays
-	"""
-
-	with tables.open_file('{}/surface/{}_pivot.hdf5'.format(directory, file_name), 'r') as infile:
-		if frame == 'all': pivots = infile.root.tot_pivot[:]
-		else: pivots = infile.root.tot_pivot[frame]
-	return pivots
-
-	
-def make_coeff_pivots(directory, file_name, xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, frame, ncube=3, vlim=3, ow_coeff=False):
-	"""
-	make_coeff_pivots(directory, file_name, xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, psi, frame, ncube=3, vlim=3, ow_coeff=False)
-
-	Creates intrinsic surface of trajectory frame using molecular positions xmol, ymol, zmol.
-
-	Parameters
-	----------
-
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed.
-	xmol:  float, array_like; shape=(nmol)
-		Molecular coordinates in x dimension
-	ymol:  float, array_like; shape=(nmol)
-		Molecular coordinates in y dimension
-	zmol:  float, array_like; shape=(nmol)
-		Molecular coordinates in z dimension
-	dim:  float, array_like; shape=(3)
-		XYZ dimensions of simulation cell
-	mol_sigma:  float
-		Radius of spherical molecular interaction sphere
-	qm:  int
-		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
-	n0:  int
-		Maximum number of molecular pivots in intrinsic surface
-	phi:  float
-		Weighting factor of minimum surface area term in surface optimisation function
-	frame:  int
-		Trajectory frame to analyse
-	ncube:	int (optional)
-		Grid size for initial pivot molecule selection
-	vlim:  int (optional)
-		Minimum number of molecular meighbours within radius max_r required for molecular NOT to be considered in vapour region
-	ow_coeff:  bool (optional)
-		Overwrite surface coefficients
-
-
-	Returns
-	-------
-
-	coeff:	array_like (float); shape=(2, n_waves**2)
-		Optimised surface coefficients
-	pivots:  array_like (int); shape=(2, n0)
-		Indicies of pivot molecules in molecular position arrays
-
-	""" 
-
-	n_waves = 2*qm+1
-	max_r = 1.5 * mol_sigma
-	tau = 0.5 * mol_sigma
-
-	"Checking number of frames in coeff files"
-	with tables.open_file('{}/surface/{}_coeff.hdf5'.format(directory, file_name), 'r') as infile:
-		max_frame = infile.root.tot_coeff.shape[0]
-
-	if max_frame <= frame: mode = 'a'
-	elif ow_coeff: mode = 'r+'
-	else: mode = False
-
-	if not mode:
-		coeff = load_coeff(directory, file_name, frame=frame)
-		pivots = load_pivots(directory, file_name, frame=frame)
-
-	else:
-		sys.stdout.write("Optimising Intrinsic Surface coefficients: frame {}\n".format(frame))
-		sys.stdout.flush()
-
-		coeff, pivots = build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, ncube, vlim, tau, max_r)
-		save_coeff(directory, file_name, coeff, frame, n_waves, mode)
-		save_pivots(directory, file_name, pivots, frame, n0, mode)
-
-	return coeff, pivots
-
-
-def make_recon_coeff(directory, file_name, coeff, pivots, xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, psi, frame, ow_coeff=False):
-	"""
-	make_recon_coeff(directory, file_name, coeff, pivots, xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, psi, frame, ow_coeff=False)
-
-	Creates intrinsic surface of trajectory frame using molecular positions xmol, ymol, zmol.
-
-	Parameters
-	----------
-
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed.
-	coeff:	float, array_like; shape=(2, n_waves**2)
-		Optimised surface coefficients
-	pivots:  int, array_like; shape=(2, n0)
-		Indicies of pivot molecules in molecular position arrays
-	xmol:  float, array_like; shape=(nmol)
-		Molecular coordinates in x dimension
-	ymol:  float, array_like; shape=(nmol)
-		Molecular coordinates in y dimension
-	zmol:  float, array_like; shape=(nmol)
-		Molecular coordinates in z dimension
-	dim:  float, array_like; shape=(3)
-		XYZ dimensions of simulation cell
-	mol_sigma:  float
-		Radius of spherical molecular interaction sphere
-	qm:  int
-		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
-	n0:  int
-		Maximum number of molecular pivots in intrinsic surface
-	phi:  float
-		Weighting factor of minimum surface area term in surface optimisation function
-	psi:  float
-		Initial value for weighting factor of surface curvature variance in surface reconstruction function
-	frame:  int
-		Trajectory frame to analyse
-	ow_coeff:  bool (optional)
-		Overwrite surface coefficients	
-
-	""" 
-
-	n_waves = 2*qm+1 
-
-	"Checking number of frames in reconstructed coeff files"
-	with tables.open_file('{}/surface/{}_R_coeff.hdf5'.format(directory, file_name), 'r') as infile:
-		max_frame = infile.root.tot_coeff.shape[0]
-
-	if max_frame <= frame: mode = 'a'
-	elif ow_coeff: mode = 'r+'
-	else: mode = False
-
-	if not mode:
-		coeff_R = load_coeff(directory, file_name + '_R', frame=frame)
-	else:
-		sys.stdout.write("Reconstructing Intrinsic Surface coefficients: frame {}\r".format(frame))
-		sys.stdout.flush()
-
-		coeff_R = surface_reconstruction(coeff, pivots, xmol, ymol, zmol, dim, qm, n0, phi, psi)
-		save_coeff(directory, file_name + '_R', coeff_R, frame, n_waves, mode)
-
-	return coeff_R
+	return coeff, pivot
 
 
 def H_var_coeff(coeff, qm, qu, dim):
@@ -788,9 +525,9 @@ def H_var_coeff(coeff, qm, qu, dim):
 	return np.sum(H_var)
 
 
-def H_var_piv(xmol, ymol, coeff, pivots, qm, qu, dim):
+def H_var_piv(xmol, ymol, coeff, pivot, qm, qu, dim):
 	"""
-	H_var_piv(xmol, ymol, coeff, pivots, qm, qu, dim)
+	H_var_piv(xmol, ymol, coeff, pivot, qm, qu, dim)
 
 	Variance of mean curvature H at pivot points determined by coeff at resolution qu
 
@@ -803,7 +540,7 @@ def H_var_piv(xmol, ymol, coeff, pivots, qm, qu, dim):
 		Molecular coordinates in y dimension
 	coeff:	float, array_like; shape=(n_waves**2)
 		Optimised surface coefficients
-	pivots:  int, array_like; shape=(2, n0)
+	pivot:  int, array_like; shape=(2, n0)
 		Indicies of pivot molecules in molecular position arrays
 	qm:  int
 		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
@@ -823,7 +560,7 @@ def H_var_piv(xmol, ymol, coeff, pivots, qm, qu, dim):
 	if qu == 0: return 0
 	
 	n_waves = 2 * qm +1
-	n0 = len(pivots)
+	n0 = len(pivot)
 
 	"Create arrays of wave frequency indicies u and v"
 	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
@@ -844,7 +581,7 @@ def H_var_piv(xmol, ymol, coeff, pivots, qm, qu, dim):
 	"Form the diagonal chi^2 terms and b vector solutions"
         fuv = np.zeros((n_waves**2, n0))
         for j in xrange(n_waves**2):
-                fuv[j] = wave_function(xmol[pivots], int(j/n_waves)-qm, dim[0]) * wave_function(ymol[pivots], int(j%n_waves)-qm, dim[1])
+                fuv[j] = wave_function(xmol[pivot], int(j/n_waves)-qm, dim[0]) * wave_function(ymol[pivot], int(j%n_waves)-qm, dim[1])
 	ffuv = np.dot(fuv, fuv.T)
 
 	coeff_matrix = np.tile(coeff, (n_waves**2, 1))
@@ -853,7 +590,7 @@ def H_var_piv(xmol, ymol, coeff, pivots, qm, qu, dim):
 	return np.sum(H_var)
 
 
-def surface_reconstruction(coeff, pivots, xmol, ymol, zmol, dim, qm, n0, phi, psi):
+def surface_reconstruction(coeff, pivot, xmol, ymol, zmol, dim, qm, n0, phi, psi):
 	"""
 	surface_reconstruction( xmol, ymol, zmol, dim, qm, n0, phi, psi)
 
@@ -864,7 +601,7 @@ def surface_reconstruction(coeff, pivots, xmol, ymol, zmol, dim, qm, n0, phi, ps
 
 	coeff:	array_like (float); shape=(2, n_waves**2)
 		Optimised surface coefficients
-	pivots:  array_like (int); shape=(2, n0)
+	pivot:  array_like (int); shape=(2, n0)
 		Indicies of pivot molecules in molecular position arrays
 	xmol:  float, array_like; shape=(nmol)
 		Molecular coordinates in x dimension
@@ -911,10 +648,10 @@ def surface_reconstruction(coeff, pivots, xmol, ymol, zmol, dim, qm, n0, phi, ps
 	b = np.zeros((2, n_waves**2))
 
         for j in xrange(n_waves**2):
-                fuv1[j] = wave_function(xmol[pivots[0]], int(j/n_waves)-qm, dim[0]) * wave_function(ymol[pivots[0]], int(j%n_waves)-qm, dim[1])
-                b[0][j] += np.sum(zmol[pivots[0]] * fuv1[j])
-                fuv2[j] = wave_function(xmol[pivots[1]], int(j/n_waves)-qm, dim[0]) * wave_function(ymol[pivots[1]], int(j%n_waves)-qm, dim[1])
-                b[1][j] += np.sum(zmol[pivots[1]] * fuv2[j])
+                fuv1[j] = wave_function(xmol[pivot[0]], int(j/n_waves)-qm, dim[0]) * wave_function(ymol[pivot[0]], int(j%n_waves)-qm, dim[1])
+                b[0][j] += np.sum(zmol[pivot[0]] * fuv1[j])
+                fuv2[j] = wave_function(xmol[pivot[1]], int(j/n_waves)-qm, dim[0]) * wave_function(ymol[pivot[1]], int(j%n_waves)-qm, dim[1])
+                b[1][j] += np.sum(zmol[pivot[1]] * fuv2[j])
 
 	ffuv1 = np.dot(fuv1, fuv1.T)
 	ffuv2 = np.dot(fuv2, fuv2.T)
@@ -1152,9 +889,9 @@ def ddxy_ddchi(x, y, coeff, qm, qu, dim):
 	return ddx_ddchi, ddy_ddchi
 
 
-def H_est(x, y, coeff, qm, qu, dim):
+def H_xy(x, y, coeff, qm, qu, dim):
 	"""
-	H_est(x, y, coeff, qm, qu, dim)
+	H_xy(x, y, coeff, qm, qu, dim)
 
 	Calculation of mean curvature at position (x,y) at resolution qu
 
@@ -1233,6 +970,8 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 
 	"""
 
+	if not os.path.exists("{}/surface".format(directory)): os.mkdir("{}/surface".format(directory))
+
 	mol_ex_1 = []
 	mol_ex_2 = []
 	NS = []
@@ -1250,6 +989,8 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 	ns = start_ns
 	optimising = True
 
+	surf_dir = directory + '/surface'
+
 	while optimising:
 
 		NS.append(ns)
@@ -1258,18 +999,37 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 		tot_piv_n1 = np.zeros((nframe_ns, n0))
 		tot_piv_n2 = np.zeros((nframe_ns, n0))
 
-		file_name_auv = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
+		file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
 
-		if not os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_auv)):
-			ut.make_earray('{}/surface/{}_coeff.hdf5'.format(directory, file_name_auv), 
-				['tot_coeff'], tables.Float64Atom(), [(0, 2, n_waves**2)])
-			ut.make_earray('{}/surface/{}_pivot.hdf5'.format(directory, file_name_auv), 
-				['tot_pivot'], tables.Int64Atom(), [(0, 2, n0)])
+		if not os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_coeff)):
+			ut.make_hdf5(surf_dir, file_name_coeff + '_coeff', (2, n_waves**2), tables.Float64Atom())
+			ut.make_hdf5(surf_dir, file_name_coeff + '_pivot', (2, n0), tables.Int64Atom())
 
 		for frame in xrange(nframe_ns):
-			coeff, pivots = make_coeff_pivots(directory, file_name_auv, xmol[frame], ymol[frame], zmol[frame], dim, mol_sigma, qm, n0, phi, frame, ow_coeff=True)
-			tot_piv_n1[frame] += pivots[0]
-			tot_piv_n2[frame] += pivots[1]
+			"Checking number of frames in coeff and pivot files"
+			frame_check_coeff = (ut.shape_check_hdf5(surf_dir, file_name_coeff + '_coeff')[0] <= frame)
+			frame_check_pivot = (ut.shape_check_hdf5(surf_dir, file_name_coeff + '_pivot')[0] <= frame)
+
+			if frame_check_coeff: mode_coeff = 'a'
+			elif ow_coeff: mode_coeff = 'r+'
+			else: mode_coeff = False
+
+			if frame_check_pivot: mode_pivot = 'a'
+			elif ow_coeff: mode_pivot = 'r+'
+			else: mode_pivot = False
+
+			if not mode_coeff and not mode_pivot:
+				pivot = ut.load_hdf5(surf_dir, file_name_coeff + '_pivot', frame)
+			else:
+				sys.stdout.write("Optimising Intrinsic Surface coefficients: frame {}\n".format(frame))
+				sys.stdout.flush()
+
+				coeff, pivot = build_surface(xmol[frame], ymol[frame], zmol[frame], dim, mol_sigma, qm, n0, phi, tau, max_r)
+				ut.save_hdf5(surf_dir, file_name_coeff + '_coeff', coeff, frame, mode_coeff)
+				ut.save_hdf5(surf_dir, file_name_coeff + '_pivot', pivot, frame, mode_pivot)
+
+			tot_piv_n1[frame] += pivot[0]
+			tot_piv_n2[frame] += pivot[1]
 
 		ex_1, ex_2 = mol_exchange(tot_piv_n1, tot_piv_n2, nframe_ns, n0)
 
@@ -1292,9 +1052,9 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 	for ns in NS:
 		if ns != opt_ns:
 			n0 = int(dim[0] * dim[1] * ns / mol_sigma**2)
-			file_name_auv = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
-			os.remove('{}/surface/{}_coeff.hdf5'.format(directory, file_name_auv))
-			os.remove('{}/surface/{}_pivot.hdf5'.format(directory, file_name_auv))
+			file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
+			os.remove('{}/surface/{}_coeff.hdf5'.format(directory, file_name_coeff))
+			os.remove('{}/surface/{}_pivot.hdf5'.format(directory, file_name_coeff))
 
 	return opt_ns, opt_n0
 
@@ -1375,38 +1135,39 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 
 	"""
 
-	file_name_auv = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
+	print"\n-- Running Intrinsic Surface Routine ---\n"
+
+	if not os.path.exists("{}/surface".format(directory)): os.mkdir("{}/surface".format(directory))
+
+	surf_dir = directory + '/surface'
+	file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
 	n_waves = 2 * qm + 1
+	max_r = 1.5 * mol_sigma
+	tau = 0.5 * mol_sigma
+
 
 	"Make coefficient and pivot files"
-	if not os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_auv)):
-		ut.make_earray('{}/surface/{}_coeff.hdf5'.format(directory, file_name_auv), 
-			['tot_coeff'], tables.Float64Atom(), [(0, 2, n_waves**2)])
-		ut.make_earray('{}/surface/{}_pivot.hdf5'.format(directory, file_name_auv), 
-			['tot_pivot'], tables.Int64Atom(), [(0, 2, n0)])
+	if not os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_coeff)):
+		ut.make_hdf5(surf_dir, file_name_coeff + '_coeff', (2, n_waves**2), tables.Float64Atom())
+		ut.make_hdf5(surf_dir, file_name_coeff + '_pivot', (2, n0), tables.Int64Atom())
 		file_check = False
 	elif not ow_coeff:
 		"Checking number of frames in current coefficient files"
 		try:
-			tot_coeff = np.zeros((nframe, 2, n_waves**2))
-			tot_coeff += load_coeff(directory, file_name_auv, 'all')
-			file_check = True
+			file_check = (ut.shape_check_hdf5(surf_dir, file_name_coeff + '_coeff') == (nframe, 2, n_waves**2))
+			file_check *= (ut.shape_check_hdf5(surf_dir, file_name_coeff + '_pivot') == (nframe, 2, n0))
 		except: file_check = False
 	else: file_check = False
 
 	if recon:
 		psi = phi * dim[0] * dim[1]
 		"Make recon coefficient file"
-		if not os.path.exists('{}/surface/{}_R_coeff.hdf5'.format(directory, file_name_auv)):
-			ut.make_earray('{}/surface/{}_R_coeff.hdf5'.format(directory, file_name_auv), 
-				['tot_coeff'], tables.Float64Atom(), [(0, 2, n_waves**2)])
+		if not os.path.exists('{}/surface/{}_R_coeff.hdf5'.format(directory, file_name_coeff)):
+			ut.make_hdf5(surf_dir, file_name_coeff + '_R_coeff', (2, n_waves**2), tables.Float64Atom())
 			file_check = False
 		elif not ow_recon:
 			"Checking number of frames in current recon coefficient files"
-			try:
-				tot_coeff_recon = np.zeros((nframe, 2, n_waves**2))
-				tot_coeff_recon += load_coeff(directory, file_name_auv + '_R')
-				file_check = True
+			try: file_check = (ut.shape_check_hdf5(surf_dir, file_name_coeff + '_R_coeff') == (nframe, 2, n_waves**2))
 			except: file_check = False
 		else: file_check = False
 
@@ -1422,8 +1183,43 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 		zmol = zmol - com_tile
 
 		for frame in xrange(nframe):
-			coeff, pivots = make_coeff_pivots(directory, file_name_auv, xmol[frame], ymol[frame], zmol[frame], dim, mol_sigma, qm, n0, phi, frame, ow_coeff=ow_coeff)
-			if recon: make_recon_coeff(directory, file_name_auv, coeff, pivots, xmol[frame], ymol[frame], zmol[frame], dim, mol_sigma, qm, n0, phi, psi, frame, ow_coeff=ow_recon)
+			"Checking number of frames in coeff and pivot files"
+			frame_check_coeff = (ut.shape_check_hdf5(surf_dir, file_name_coeff + '_coeff')[0] <= frame)
+			frame_check_pivot = (ut.shape_check_hdf5(surf_dir, file_name_coeff + '_pivot')[0] <= frame)
+
+			if frame_check_coeff: mode_coeff = 'a'
+			elif ow_coeff: mode_coeff = 'r+'
+			else: mode_coeff = False
+
+			if frame_check_pivot: mode_pivot = 'a'
+			elif ow_coeff: mode_pivot = 'r+'
+			else: mode_pivot = False
+
+			if not mode_coeff and not mode_pivot: pass
+			else:
+				sys.stdout.write("Optimising Intrinsic Surface coefficients: frame {}\n".format(frame))
+				sys.stdout.flush()
+
+				coeff, pivot = build_surface(xmol[frame], ymol[frame], zmol[frame], dim, mol_sigma, qm, n0, phi, tau, max_r)
+				ut.save_hdf5(surf_dir, file_name_coeff + '_coeff', coeff, frame, mode_coeff)
+				ut.save_hdf5(surf_dir, file_name_coeff + '_pivot', pivot, frame, mode_pivot)
+
+			if recon:
+				frame_check_coeff = (ut.shape_check_hdf5(surf_dir, file_name_coeff + '_R_coeff')[0] <= frame)
+
+				if frame_check_coeff: mode_coeff = 'a'
+				elif ow_coeff: mode_coeff = 'r+'
+				else: mode_coeff = False
+
+				if not mode_coeff: pass
+				else:
+					sys.stdout.write("Reconstructing Intrinsic Surface coefficients: frame {}\r".format(frame))
+					sys.stdout.flush()
+
+					coeff = ut.load_hdf5(surf_dir, file_name_coeff + '_coeff', frame)
+					pivot = ut.load_hdf5(surf_dir, file_name_coeff + '_pivot', frame)
+					coeff_R = surface_reconstruction(coeff, pivot, xmol[frame], ymol[frame], zmol[frame], dim, qm, n0, phi, psi)
+					ut.save_hdf5(surf_dir, file_name_coeff + '_R_coeff', coeff_R, frame, mode_coeff)
 
 
 def make_pos_dxdy(directory, file_name_pos, xmol, ymol, coeff, nmol, dim, qm):
@@ -1538,100 +1334,7 @@ def make_pos_dxdy(directory, file_name_pos, xmol, ymol, coeff, nmol, dim, qm):
 	return int_z_mol, int_dxdy_mol, int_ddxddy_mol
 
 
-def load_pos_dxdy(directory, file_name, frame):
-	"""
-	load_pos_derivatives(directory, file_name, frame)
-
-	Load intrinsic molecular positions, and 1st and 2nd derivatives wrt x and y from hdf5 files
-
-	Parameters
-	----------
-
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed
-	frame:  int (optional)
-		Trajectory frame to load
-
-	Returns
-	-------
-
-	int_z_mol:  array_like (float); shape=(nframe, 2, qm+1, nmol)
-		Molecular distances from intrinsic surface
-	int_dxdy_mol:  array_like (float); shape=(nframe, 4, qm+1, nmol)
-		First derivatives of intrinsic surface wrt x and y at xmol, ymol
-	int_ddxddy_mol:  array_like (float); shape=(nframe, 4, qm+1, nmol)
-		Second derivatives of intrinsic surface wrt x and y at xmol, ymol 
-	"""
-
-	with tables.open_file('{}/intpos/{}_int_z_mol.hdf5'.format(directory, file_name), 'r') as infile:
-		if frame == 'all': int_z_mol = infile.root.int_z_mol[:]
-		else: int_z_mol = infile.root.int_z_mol[frame]
-	with tables.open_file('{}/intpos/{}_int_dxdy_mol.hdf5'.format(directory, file_name), 'r') as infile:
-		if frame == 'all': int_z_mol = infile.root.int_dxdy_mol[:]
-		else: int_dxdy_mol = infile.root.int_dxdy_mol[frame]
-	with tables.open_file('{}/intpos/{}_int_ddxddy_mol.hdf5'.format(directory, file_name), 'r') as infile:
-		if frame == 'all': int_z_mol = infile.root.int_ddxddy_mol[:]
-		else: int_ddxddy_mol = infile.root.int_ddxddy_mol[frame]
-
-	return int_z_mol, int_dxdy_mol, int_ddxddy_mol
-
-
-def save_pos_dxdy(directory, file_name, int_z_mol, int_dxdy_mol, int_ddxddy_mol, frame, qm, nmol, mode='a'):
-	"""
-	save_coeff(directory, file_name, coeff, frame, n_waves, write='a')
-
-	Save surface coefficients from frame in coeff.hdf5 file
-
-	Parameters
-	----------
-
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed
-	int_z_mol:  array_like (float); shape=(nframe, 2, qm+1, nmol)
-		Molecular distances from intrinsic surface
-	int_dxdy_mol:  array_like (float); shape=(nframe, 4, qm+1, nmol)
-		First derivatives of intrinsic surface wrt x and y at xmol, ymol
-	int_ddxddy_mol:  array_like (float); shape=(nframe, 4, qm+1, nmol)
-		Second derivatives of intrinsic surface wrt x and y at xmol, ymol
-	frame:  int
-		Trajectory frame to save
-	qm:  int
-		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
-	nmol:  int
-		Number of molecules in simulation
-	mode:  str (optional)
-		Option to append 'a' to hdf5 file or overwrite 'rw' existing data	
-	"""
-
-
-	with tables.open_file('{}/intpos/{}_int_z_mol.hdf5'.format(directory, file_name), mode) as outfile:
-		if mode.lower() == 'a':
-			write_int_z_mol = np.zeros((1, 2, qm+1, nmol))
-			write_int_z_mol[0] = int_z_mol
-			outfile.root.int_z_mol.append(write_int_z_mol)
-		elif mode.lower() == 'r+':
-			outfile.root.int_z_mol[frame] = int_z_mol
-	with tables.open_file('{}/intpos/{}_int_dxdy_mol.hdf5'.format(directory, file_name), mode) as outfile:
-		if mode.lower() == 'a':
-			write_dxdy_mol = np.zeros((1, 4, qm+1, nmol))
-			write_dxdy_mol[0] = int_dxdy_mol
-			outfile.root.int_dxdy_mol.append(write_dxdy_mol)
-		elif mode.lower() == 'r+':
-			outfile.root.int_dxdy_mol[frame] = int_dxdy_mol
-	with tables.open_file('{}/intpos/{}_int_ddxddy_mol.hdf5'.format(directory, file_name), mode) as outfile:
-		if mode.lower() == 'a':
-			write_ddxddy_mol = np.zeros((1, 4, qm+1, nmol))
-			write_ddxddy_mol[0] = int_ddxddy_mol
-			outfile.root.tot_coeff.append(write_ddxddy_mol)
-		elif mode.lower() == 'r+':
-			outfile.root.int_ddxddy_mol[frame] = int_ddxddy_mol
-
-
-def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0, phi, dim, recon, ow_pos=False):
+def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0, phi, dim, recon=False, ow_pos=False):
 	"""
 	create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0, phi, dim, recon, ow_pos)
 
@@ -1656,106 +1359,114 @@ def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0,
 		Weighting factor of minimum surface area term in surface optimisation function
 	dim:  float, array_like; shape=(3)
 		XYZ dimensions of simulation cell
-	recon:  bool
+	recon:  bool (optional)
 		Whether to use surface reconstructe coefficients
 	ow_pos:  bool (optional)
 		Whether to overwrite positions and derivatives (default=False)
 
 	"""
 
-	n_waves = 2 * qm + 1
+	print"\n-- Running Intrinsic Positions and Derivatives Routine ---\n"
 
-	file_name_auv = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
-	if recon: file_name_auv += '_R'
+	n_waves = 2 * qm + 1
+	
+	surf_dir = directory + '/surface'
+	pos_dir = directory + '/intpos'
+	if not os.path.exists(pos_dir): os.mkdir(pos_dir)
+
+	file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
+	if recon: file_name_coeff += '_R'
 
 	file_name_pos = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
 	if recon: file_name_pos += '_R'
 
 	if not os.path.exists('{}/intpos/{}_int_z_mol.hdf5'.format(directory, file_name_pos)):
-		ut.make_earray('{}/intpos/{}_int_z_mol.hdf5'.format(directory, file_name_pos), 
-			['int_z_mol'], tables.Float64Atom(), [(0, 2, qm+1, nmol)])
-		ut.make_earray('{}/intpos/{}_int_dxdy_mol.hdf5'.format(directory, file_name_pos), 
-			['int_dxdy_mol'], tables.Float64Atom(), [(0, 4, qm+1, nmol)])
-		ut.make_earray('{}/intpos/{}_int_ddxddy_mol.hdf5'.format(directory, file_name_pos), 
-			['int_ddxddy_mol'], tables.Float64Atom(), [(0, 4, qm+1, nmol)])
+		ut.make_hdf5(pos_dir, file_name_pos + '_int_z_mol', (2, qm+1, nmol), tables.Float64Atom())
+		ut.make_hdf5(pos_dir, file_name_pos + '_int_dxdy_mol', (4, qm+1, nmol), tables.Float64Atom())
+		ut.make_hdf5(pos_dir, file_name_pos + '_int_ddxddy_mol', (4, qm+1, nmol), tables.Float64Atom())
 		file_check = False
 
 	elif not ow_pos:
 		"Checking number of frames in current distance files"
 		try:
-			tot_int_z_mol = np.zeros((nframe, 2, qm+1, nmol))
-			tot_int_z_mol += load_int_z_mol(directory, file_name_pos, 'all')
-			file_check = True
+			file_check = (ut.shape_check_hdf5(pos_dir, file_name_pos + '_int_z_mol') == (nframe, 2, qm+1, nmol))
+			file_check *= (ut.shape_check_hdf5(pos_dir, file_name_pos + '_int_dxdy_mol') == (nframe, 4, qm+1, nmol))
+			file_check *= (ut.shape_check_hdf5(pos_dir, file_name_pos + '_int_ddxddy_mol') == (nframe, 4, qm+1, nmol))
 		except: file_check = False
 	else: file_check = False
 
-	print file_check
-
 	if not file_check:
 		xmol, ymol, _ = ut.read_mol_positions(directory, file_name, nframe, nframe)
-		tot_coeff = load_coeff(directory, file_name_auv, 'all')
 
 		for frame in xrange(nframe):
 
 			"Checking number of frames in int_z_mol file"
-			with tables.open_file('{}/intpos/{}_int_z_mol.hdf5'.format(directory, file_name_pos), 'r') as infile:
-				max_frame = infile.root.int_z_mol.shape[0]
+			frame_check_int_z_mol = (ut.shape_check_hdf5(pos_dir, file_name_pos + '_int_z_mol')[0] <= frame)
+			frame_check_int_dxdy_mol = (ut.shape_check_hdf5(pos_dir, file_name_pos + '_int_dxdy_mol')[0] <= frame)
+			frame_check_int_ddxddy_mol = (ut.shape_check_hdf5(pos_dir, file_name_pos + '_int_ddxddy_mol')[0] <= frame)
 
-			if max_frame <= frame: mode = 'a'
-			elif ow_pos: mode = 'r+'
-			else: mode = False
+			if frame_check_int_z_mol: mode_int_z_mol = 'a'
+			elif ow_pos: mode_int_z_mol = 'r+'
+			else: mode_int_z_mol = False
 
-			if not mode: pass
+			if frame_check_int_dxdy_mol: mode_int_dxdy_mol = 'a'
+			elif ow_pos: mode_int_dxdy_mol = 'r+'
+			else: mode_int_dxdy_mol = False
+
+			if frame_check_int_ddxddy_mol: mode_int_ddxddy_mol = 'a'
+			elif ow_pos: mode_int_ddxddy_mol = 'r+'
+			else: mode_int_ddxddy_mol = False
+
+			if not mode_int_z_mol and not mode_int_dxdy_mol and not mode_int_ddxddy_mol: pass
 			else:
 				sys.stdout.write("Calculating molecular distances and derivatives: frame {}\r".format(frame))
 				sys.stdout.flush()
+			
+				coeff = ut.load_hdf5(surf_dir, file_name_coeff + '_coeff', frame)
 
-				int_z_mol, int_dxdy_mol, int_ddxddy_mol = make_pos_dxdy(directory, file_name_pos, xmol[frame], ymol[frame], tot_coeff[frame], frame, nmol, dim, qm)
-				save_pos_dxdy(directory, file_name_pos, int_z_mol, int_dxdy_mol, int_ddxddy_mol, frame, qm, nmol, mode)
+				int_z_mol, int_dxdy_mol, int_ddxddy_mol = make_pos_dxdy(directory, file_name_pos, xmol[frame], ymol[frame], coeff, nmol, dim, qm)
+				ut.save_hdf5(pos_dir, file_name_pos + '_int_z_mol', int_z_mol, frame, mode_int_z_mol)
+				ut.save_hdf5(pos_dir, file_name_pos + '_int_dxdy_mol', int_dxdy_mol, frame, mode_int_dxdy_mol)
+				ut.save_hdf5(pos_dir, file_name_pos + '_int_ddxddy_mol', int_ddxddy_mol, frame, mode_int_ddxddy_mol)
 
 
-def make_den_curve():
+def make_den_curve(directory, zmol, int_z_mol, int_dxdy_mol, coeff, nmol, nslice, nz, nnz, qm, dim):
+
+	lslice = dim[2] / nslice
 
 	count_corr_array = np.zeros((qm+1, nslice, nnz))
 	z_nz_array = np.zeros((qm+1, nz, nnz))	
 
-	with tables.open_file('{}/intpos/{}_intz_mol.hdf5'.format(directory, file_name_pos), 'r') as infile:
-		int_z_mol = infile.root.int_z_mol[frame]
-	with tables.open_file('{}/intpos/{}_intdxdy_mol.hdf5'.format(directory, file_name_pos), 'r') as infile:
-		dxdyz_mol = infile.root.dxdyz_mol[frame]
-
 	for qu in xrange(qm+1):
-		sys.stdout.write("PROCESSING {} INTRINSIC DENSITY {}: qm = {} qu = {}\r".format(directory, frame, qm, qu) )
-		sys.stdout.flush()
 
 		temp_count_corr_array = np.zeros((nslice, nnz))
 		temp_z_nz_array = np.zeros((nz, nnz))
 
-		int_z1 = int_z_mol[qu][0]
-		int_z2 = int_z_mol[qu][1]
+		int_z1 = int_z_mol[0][qu]
+		int_z2 = int_z_mol[1][qu]
 
 		z1 = zmol - int_z1
 		z2 = -zmol + int_z2
 
-		dzx1 = dxdyz_mol[qu][0]
-		dzy1 = dxdyz_mol[qu][1]
-		dzx2 = dxdyz_mol[qu][2]
-		dzy2 = dxdyz_mol[qu][3]
+		dzx1 = int_dxdy_mol[0][qu]
+		dzy1 = int_dxdy_mol[1][qu]
+		dzx2 = int_dxdy_mol[2][qu]
+		dzy2 = int_dxdy_mol[3][qu]
 
-		index1_mol = np.array((z1 + DIM[2]/2.) * nslice / DIM[2], dtype=int) % nslice
-		index2_mol = np.array((z2 + DIM[2]/2.) * nslice / DIM[2], dtype=int) % nslice
+		index1_mol = np.array((z1 + dim[2]/2.) * nslice / dim[2], dtype=int) % nslice
+		index2_mol = np.array((z2 + dim[2]/2.) * nslice / dim[2], dtype=int) % nslice
 
-		normal1 = abs(ut.unit_vector([-dzx1, -dzy1, np.ones(nmol)])[2])
-		normal2 = abs(ut.unit_vector([-dzx2, -dzy2, np.ones(nmol)])[2])
+		normal1 = ut.unit_vector(np.array([-dzx1, -dzy1, np.ones(nmol)]))
+		normal2 = ut.unit_vector(np.array([-dzx2, -dzy2, np.ones(nmol)]))
 
-		index1_nz = np.array(normal1 * nnz, dtype=int) % nnz
-		index2_nz = np.array(normal2 * nnz, dtype=int) % nnz
+		index1_nz = np.array(abs(normal1[2]) * nnz, dtype=int) % nnz
+		index2_nz = np.array(abs(normal2[2]) * nnz, dtype=int) % nnz
 
 		temp_count_corr_array += np.histogram2d(index1_mol, index1_nz, bins=[nslice, nnz], range=[[0, nslice], [0, nnz]])[0]
 		temp_count_corr_array += np.histogram2d(index2_mol, index2_nz, bins=[nslice, nnz], range=[[0, nslice], [0, nnz]])[0]
 
-		index1_mol = np.array(abs(int_z1 - auv1[len(auv1)/2]) * 2 * nz / (nz*lslice), dtype=int) % nz
-		index2_mol = np.array(abs(int_z2 - auv2[len(auv2)/2]) * 2 * nz / (nz*lslice), dtype=int) % nz
+		index1_mol = np.array(abs(int_z1 - coeff[0][len(coeff[0])/2]) * 2 * nz / (nz*lslice), dtype=int) % nz
+		index2_mol = np.array(abs(int_z2 - coeff[1][len(coeff[1])/2]) * 2 * nz / (nz*lslice), dtype=int) % nz
 
 		temp_z_nz_array += np.histogram2d(index1_mol, index1_nz, bins=[nz, nnz], range=[[0, nz], [0, nnz]])[0]
 		temp_z_nz_array += np.histogram2d(index2_mol, index2_nz, bins=[nz, nnz], range=[[0, nz], [0, nnz]])[0]
@@ -1763,104 +1474,27 @@ def make_den_curve():
 		count_corr_array[qu] += temp_count_corr_array
 		z_nz_array[qu] += temp_z_nz_array
 
-	with tables.open_file('{}/intden/{}_countcorr.hdf5'.format(directory, file_name_count), 'a') as outfile:
-		write_count_corr_array[0] = count_corr_array
-		outfile.root.count_corr_array.append(write_count_corr_array)
-	with tables.open_file('{}/intden/{}_n_nz.hdf5'.format(directory, file_name_norm), 'a') as outfile:
-		write_z_nz_array[0] = z_nz_array
-		outfile.root.z_nz_array.append(write_z_nz_array)
-
 	return count_corr_array, z_nz_array
 
 
-def load_den_curve(directory, file_name, frame):
+def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, nslice, nz, nnz, dim, recon=False, ow_count=False):
 	"""
-	load_pos_derivatives(directory, file_name, frame)
-
-	Load intrinsic density and curvature distributions across surface 
-
-	Parameters
-	----------
-
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed
-	frame:  int (optional)
-		Trajectory frame to load
-
-	Returns
-	-------
-
-	count_corr_array:  array_like (float); shape=(nframe, qm+1, nslice, nz)
-
-	z_nz_array:  array_like (float); shape=(nframe, qm+1, nz, nnz)
-	"""
-
-	with tables.open_file('{}/intden/{}_count_corr.hdf5'.format(directory, file_name), 'r') as infile:
-		if frame == 'all': count_corr_array = infile.root.count_corr_array[:]
-		else: count_corr_array = infile.root.count_corr_array[frame]
-	with tables.open_file('{}/intden/{}_z_nz.hdf5'.format(directory, file_name), 'r') as infile:
-		if frame == 'all': z_nz_array = infile.root.z_nz_array[:]
-		else: z_nz_array = infile.root.z_nz_array[frame]
-
-	return count_corr_array, z_nz_array
-
-
-def save_den_curve(directory, file_name, count_corr_array, z_nz_array, frame, qm, nz, nnz, mode='a'):
-	"""
-	save_coeff(directory, file_name, coeff, frame, n_waves, write='a')
-
-	Save surface coefficients from frame in coeff.hdf5 file
-
-	Parameters
-	----------
-
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed
-	count_corr_array:  array_like (float); shape=(nframe, qm+1, nslice, nz)
-
-	z_nz_array:  array_like (float); shape=(nframe, qm+1, nz, nnz)
-
-	frame:  int
-		Trajectory frame to save
-	nz:  int
-		
-	nnz:  int
-
-	mode:  str (optional)
-		Option to append 'a' to hdf5 file or overwrite 'rw' existing data	
-	"""
-
-
-	with tables.open_file('{}/intden/{}_count_corr.hdf5'.format(directory, file_name), mode) as outfile:
-		if mode.lower() == 'a':
-			write_count_corr_array = np.zeros((1, qm+1, nslice, nz))
-			write_count_corr_array[0] = count_corr_array
-			outfile.root.count_corr_array.append(write_count_corr_array)
-		elif mode.lower() == 'r+':
-			outfile.root.count_corr_array[frame] = count_corr_array
-	with tables.open_file('{}/intden/{}_z_nz.hdf5'.format(directory, file_name), mode) as outfile:
-		if mode.lower() == 'a':
-			write_z_nz_array = np.zeros((1, qm+1, nz, nnz))
-			write_z_nz_array[0] = z_nz_array
-			outfile.root.z_nz_array.append(write_z_nz_array)
-		elif mode.lower() == 'r+':
-			outfile.root.z_nz_array[frame] = z_nz_array
-
-
-def create_intrinsic_den_curve_dist(directory, file_name, zmol, coeff, qm, n0, phi, nframe, nslice, nsite, nz, nnz, dim, recon, ow_count):
-	"""
-	intrinsic_z_den_corr(directory, file_name, zmol, auv1, auv2, qm, n0, phi, nframe, nslice, nsite, nz, nnz, DIM, recon, ow_count)
+	create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, nslice, nz, nnz, dim, recon=False, ow_count=False)
 
 	Calculate density and curvature distributions across surface 
 	"""
 
+	print"\n--- Running Intrinsic Density and Curvature Routine --- \n"
+
+	surf_dir = directory + '/surface'
+	pos_dir = directory + '/intpos'
+	den_dir = directory + '/intden'
+	if not os.path.exists(den_dir): os.mkdir(den_dir)
+
 	lslice = dim[2] / nslice
 
 	file_name_pos = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
+	file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
 	file_name_count = '{}_{}_{}_{}_{}_{}'.format(file_name, nslice, qm, n0, int(1./phi + 0.5), nframe)	
 	file_name_norm = '{}_{}_{}_{}_{}_{}'.format(file_name, nz, qm, n0, int(1./phi + 0.5), nframe)
 
@@ -1870,39 +1504,69 @@ def create_intrinsic_den_curve_dist(directory, file_name, zmol, coeff, qm, n0, p
 		file_name_norm += '{}_R'
 
 	if not os.path.exists('{}/intden/{}_count_corr.hdf5'.format(directory, file_name_count)):
-		ut.make_earray('{}/intden/{}_count_corr.hdf5'.format(directory, file_name_count), 
-			['count_corr_array'], tables.Float64Atom(), [(0, qm+1, nslice, nz)])
-		ut.make_earray('{}/intden/{}_z_nz.hdf5'.format(directory, file_name_norm), 
-			['z_nz_array'], tables.Float64Atom(), [(0, qm+1, nz, nnz)])
+		ut.make_hdf5(den_dir, file_name_count + '_count_corr', (qm+1, nslice, nz), tables.Float64Atom())
+		ut.make_hdf5(den_dir, file_name_norm + '_z_nz', (qm+1, nz, nnz), tables.Float64Atom())
 		file_check = False
 
 	elif not ow_count:
 		"Checking number of frames in current distribution files"
 		try:
-			tot_count_corr_array = np.zeros((nframe, qm+1, nslice, nmol))
-			tot_count_corr_array += load_int_z_mol(directory, file_name_pos, 'all')
-			file_check = True
+			file_check = (ut.shape_check_hdf5(den_dir, file_name_count + '_count_corr') == (nframe, 2, qm+1, nmol))
+			file_check *= (ut.shape_check_hdf5(den_dir, file_name_norm + '_z_nz') == (nframe, 2, qm+1, nmol))
 		except: file_check = False
-	else: file_check = False
+	else:file_check = False
 
 	if not file_check:
+		_, _, zmol = ut.read_mol_positions(directory, file_name, nframe, nframe)
+		COM = ut.read_com_positions(directory, file_name, nframe, nframe)
+		nmol = zmol.shape[1]
+		com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
+		zmol = zmol - com_tile
+
 		for frame in xrange(nframe):
 
-			"Checking number of frames in int_z_mol file"
-			with tables.open_file('{}/intden/{}_count_corr.hdf5'.format(directory, file_name_count), 'r') as infile:
-				max_frame = infile.root.count_corr_array.shape[0]
+			"Checking number of frames in hdf5 files"
+			frame_check_count_corr = (ut.shape_check_hdf5(den_dir, file_name_count + '_count_corr')[0] <= frame)
+			frame_check_z_nz = (ut.shape_check_hdf5(den_dir, file_name_norm + '_z_nz')[0] <= frame)
 
-			if max_frame <= frame: mode = 'a'
-			elif ow_count: mode = 'r+'
-			else: mode = False
+			if frame_check_count_corr: mode_count_corr = 'a'
+			elif ow_count: mode_count_corr = 'r+'
+			else: mode_count_corr = False
 
-			if not mode: pass
+			if frame_check_z_nz: mode_z_nz = 'a'
+			elif ow_count: mode_z_nz = 'r+'
+			else: mode_z_nz = False
+
+			if not mode_count_corr and not mode_z_nz:pass
 			else:
 				sys.stdout.write("Calculating position and curvature distributions: frame {}\r".format(frame))
 				sys.stdout.flush()
 
-				int_z_mol, int_dxdy_mol, int_ddxddy_mol = make_den_curve()
-				save_den_curve(directory, file_name, count_corr_array, z_nz_array, frame, qm, nz, nnz, mode)
+				coeff = ut.load_hdf5(surf_dir, file_name_coeff + '_coeff', frame)
+				int_z_mol = ut.load_hdf5(pos_dir, file_name_pos + '_int_z_mol', frame)
+				int_dxdy_mol = ut.load_hdf5(pos_dir, file_name_pos + '_int_dxdy_mol', frame)
+
+				count_corr_array, z_nz_array = make_den_curve(directory, zmol[frame], int_z_mol, int_dxdy_mol, coeff, nmol, nslice, nz, nnz, qm, dim)
+				ut.save_hdf5(den_dir, file_name_count + '_count_corr', count_corr_array, frame, mode_count_corr)
+				ut.save_hdf5(den_dir, file_name_norm + '_z_nz', z_nz_array, frame, mode_z_nz)
+
+
+def intrinsic_density_dist(directory, file_name, nslice, qm, n0, phi, nframe, sample):
+
+	den_dir = directory +'/intden'
+	file_name_count = '{}_{}_{}_{}_{}_{}'.format(file_name, nslice, qm, n0, int(1./phi + 0.5), nframe)
+
+	count_corr_array = ut.load_hdf5(den_dir, file_name_count + '_count_corr', 'all')
+
+	count = np.rollaxis(count_corr_array, 0, 3)
+	int_density = np.sum(count, axis=(2, 3))
+
+	import matplotlib.pyplot as plt
+
+	for dist in int_density:
+		plt.plot(dist)
+	plt.show()
+
 
 
 

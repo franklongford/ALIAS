@@ -141,6 +141,8 @@ except:
 
 lslice = 0.05 * mol_sigma
 nslice = int(dim[2] / lslice)
+nz = 100
+nnz = 100
 npi = 50
 
 q_max = 2 * np.pi / mol_sigma
@@ -149,7 +151,6 @@ qm = int(q_max / q_min)
 
 print "\n------STARTING INTRINSIC SAMPLING-------\n"
 
-if not os.path.exists("{}/surface".format(data_dir)): os.mkdir("{}/surface".format(data_dir))
 
 print "Max wavelength = {:12.4f} sigma   Min wavelength = {:12.4f} sigma".format(q_max, q_min)
 print "Max frequency qm = {:6d}".format(qm)
@@ -167,20 +168,21 @@ except:
 try:
 	if bool(raw_input("\nUse surface pivot number found in checkfile? {} pivots (Y/N): ".format(checkfile['n0'])).upper() == 'Y'):
 		n0 = checkfile['n0']
-	elif bool(raw_input("\nManually enter in new surface pivot number? (search will commence otherwise): (Y/N)").upper() == 'Y'):
+	else: raise Exception
+except:
+	if bool(raw_input("\nManually enter in new surface pivot number? (search will commence otherwise): (Y/N)").upper() == 'Y'):
 		n0 = int(raw_input("\nEnter number of surface pivots: "))
 		checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
-	else: raise Exception
-except: 
-	print "\n-------OPTIMISING SURFACE DENSITY-------\n"
+	else:
+		print "\n-------OPTIMISING SURFACE DENSITY-------\n"
 
-	start_ns = 1.15
-	step_ns = 0.05
+		start_ns = 1.15
+		step_ns = 0.05
 
-	print "Using initial pivot number = {}, step size = {}".format(int(dim[0] * dim[1] * start_ns / mol_sigma**2), int(dim[0] * dim[1] * step_ns / mol_sigma**2))
+		print "Using initial pivot number = {}, step size = {}".format(int(dim[0] * dim[1] * start_ns / mol_sigma**2), int(dim[0] * dim[1] * step_ns / mol_sigma**2))
 
-	ns, n0 = ism.optimise_ns(data_dir, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns)
-	checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
+		ns, n0 = ism.optimise_ns(data_dir, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns)
+		checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
 
 QM = range(1, qm+1)
 print "\nResolution parameters:"
@@ -189,26 +191,13 @@ print "-" * 14 * 5
 for qu in QM: print "{:12d} | {:12.4f} | {:12.4f}".format(qu, q_max / (qu*q_min), mol_sigma * q_max / (10*qu*q_min))
 print ""
 
-if not os.path.exists("{}/intpos".format(data_dir)): os.mkdir("{}/intpos".format(data_dir))
-
 ow_coeff = bool(raw_input("OVERWRITE ACOEFF? (Y/N): ").upper() == 'Y')
 ow_recon = bool(raw_input("OVERWRITE RECON ACOEFF? (Y/N): ").upper() == 'Y')
 ow_pos = bool(raw_input("OVERWRITE POSITIONS? (Y/N): ").upper() == 'Y')
+ow_count = bool(raw_input("OVERWRITE DENSITY COUNT? (Y/N): ").upper() == 'Y')
 
 ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=True, ow_coeff=ow_coeff, ow_recon=ow_recon)
-ism.create_intrinsic_positions_dxdyz(data_dir, file_name, nmol, nframe, qm, n0, phi, dim, False, ow_pos)
+ism.create_intrinsic_positions_dxdyz(data_dir, file_name, nmol, nframe, qm, n0, phi, dim, recon=False, ow_pos=ow_pos)
+ism.create_intrinsic_den_curve_dist(data_dir, file_name, qm, n0, phi, nframe, nslice, nz, nnz, dim, recon=False, ow_count=ow_count)
 
-"""
-ow_intden = False
-ow_count = False
-
-ow_pos = bool(raw_input("OVERWRITE POSITIONS? (Y/N): ").upper() == 'Y')
-ow_intden = bool(raw_input("OVERWRITE INTRINSIC DENSITY? (Y/N): ").upper() == 'Y')
-if ow_intden: ow_count = bool(raw_input("OVERWRITE INTRINSIC COUNT? (Y/N): ").upper() == 'Y')
-ow_effden = bool(raw_input("OVERWRITE EFFECTIVE DENSITY? (Y/N): ").upper() == 'Y')
-
-pos_1, pos_2 = ism.intrinsic_profile(data_dir, file_name, T, nframe, natom, nmol, nsite, AT, M, mol_sigma, mol_com, dim, nslice, ncube, qm, QM, n0, phi, psi, npi, vlim, ow_coeff, ow_recon, ow_pos, ow_intden, ow_count, ow_effden)
-
-if bool(raw_input("PLOT GRAPHS? (Y/N): ").upper() == 'Y'):
-	graphs.print_graphs_intrinsic_density(data_dir, figure_dir, file_name, nsite, AT, M, nslice, qm, QM, n0, phi, nframe, dim, pos_1, pos_2)
-"""
+ism.intrinsic_density_dist(data_dir, file_name, nslice, qm, n0, phi, nframe, nframe)

@@ -37,6 +37,11 @@ def numpy_remove(list1, list2):
 
 
 def make_checkfile(checkfile_name):
+	"""
+	make_checkfile(checkfile_name)
+
+	Creates
+	"""
 
 	checkfile = {}
 	with file('{}.pkl'.format(checkfile_name), 'wb') as outfile:
@@ -108,15 +113,10 @@ def make_at_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, d
 
 	if not os.path.exists("{}/pos".format(directory)): os.mkdir("{}/pos".format(directory))
 
-	XAT = np.zeros((nframe, natom))
-	YAT = np.zeros((nframe, natom))
-	ZAT = np.zeros((nframe, natom))
+	XMOL = np.zeros((nframe, nmol))
+	YMOL = np.zeros((nframe, nmol))
+	ZMOL = np.zeros((nframe, nmol))
 	COM = np.zeros((nframe, 3))
-
-	if nsite > 1:
-		XMOL = np.zeros((nframe, nmol))
-		YMOL = np.zeros((nframe, nmol))
-		ZMOL = np.zeros((nframe, nmol))
 
 	mol_M = np.array(M * nmol)
 	mol_M /= mol_M.sum()
@@ -129,45 +129,26 @@ def make_at_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, d
 
 		COM[frame, :] = traj.xyz[frame].astype('float64').T.dot(mol_M) * 10
 
-		XAT[frame] += XYZ[frame][0] 
-		YAT[frame] += XYZ[frame][1] 
-		ZAT[frame] += XYZ[frame][2]
-
-		xat = XAT[frame][at_index]
-		yat = YAT[frame][at_index]
-		zat = ZAT[frame][at_index]
+		xat = XYZ[frame][0][at_index]
+		yat = XYZ[frame][1][at_index]
+		zat = XYZ[frame][2][at_index]
 
 		if nsite > 1: XMOL[frame], YMOL[frame], ZMOL[frame] = molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com)
+		else: XMOL[frame], YMOL[frame], ZMOL[frame] = xat, yat, zat
+			
 
 	file_name_pos = file_name + '_{}'.format(nframe)
 
-	print '\nSAVING OUTPUT POSITION FILES\n'
-	with file('{}/pos/{}_xat.npy'.format(directory, file_name_pos), 'w') as outfile:
-		np.save(outfile, XAT)
-	with file('{}/pos/{}_yat.npy'.format(directory, file_name_pos), 'w') as outfile:
-		np.save(outfile, YAT)
-	with file('{}/pos/{}_zat.npy'.format(directory, file_name_pos), 'w') as outfile:
-		np.save(outfile, ZAT)
-	if nsite > 1:
-		with file('{}/pos/{}_xmol.npy'.format(directory, file_name_pos), 'w') as outfile:
-			np.save(outfile, XMOL)
-		with file('{}/pos/{}_ymol.npy'.format(directory, file_name_pos), 'w') as outfile:
-			np.save(outfile, YMOL)
-		with file('{}/pos/{}_zmol.npy'.format(directory, file_name_pos), 'w') as outfile:
-			np.save(outfile, ZMOL)
-		with file('{}/pos/{}_com.npy'.format(directory, file_name_pos), 'w') as outfile:
-			np.save(outfile, COM)
+	print '\nSAVING OUTPUT MOLECULAR POSITION FILES\n'
+	with file('{}/pos/{}_xmol.npy'.format(directory, file_name_pos), 'w') as outfile:
+		np.save(outfile, XMOL)
+	with file('{}/pos/{}_ymol.npy'.format(directory, file_name_pos), 'w') as outfile:
+		np.save(outfile, YMOL)
+	with file('{}/pos/{}_zmol.npy'.format(directory, file_name_pos), 'w') as outfile:
+		np.save(outfile, ZMOL)
+	with file('{}/pos/{}_com.npy'.format(directory, file_name_pos), 'w') as outfile:
+		np.save(outfile, COM)
 
-
-def read_atom_positions(directory, file_name, ntraj, nframe):
-
-	file_name = '{}_{}'.format(file_name, ntraj)
-
-	xat = np.load('{}/pos/{}_xat.npy'.format(directory, file_name), mmap_mode='r')[:nframe]
-	yat = np.load('{}/pos/{}_yat.npy'.format(directory, file_name), mmap_mode='r')[:nframe]
-	zat = np.load('{}/pos/{}_zat.npy'.format(directory, file_name), mmap_mode='r')[:nframe]
-
-	return xat, yat, zat
 
 def read_mol_positions(directory, file_name, ntraj, nframe):
 
@@ -186,13 +167,6 @@ def read_com_positions(directory, file_name, ntraj, nframe):
 	COM = np.load('{}/pos/{}_com.npy'.format(directory, file_name), mmap_mode = 'r')[:nframe]
 
 	return COM
-
-
-def make_earray(file_name, arrays, atom, sizes):
-
-	with tables.open_file(file_name, 'w') as outfile:
-		for i, array in enumerate(arrays):
-			outfile.create_earray(outfile.root, array, atom, sizes[i])
 
 
 def radial_dist(root, directory, data_dir, traj_file, top_file, nsite, M, com, ow_pos):
@@ -282,10 +256,20 @@ def bubblesort(alist, key):
 				key[i] = key[i+1]
 				key[i+1] = temp
 
+def unit_vector(vector, axis=-1):
+
+	vector = np.array(vector)
+	magnitude_2 = np.sum(vector.T**2, axis=axis)
+	u_vector = np.sqrt(vector**2 / magnitude_2) * np.sign(vector)
+
+	return u_vector
+
 
 def normalise(A):
+
 	max_A = np.max(A)
 	min_A = np.min(A)
+
 	return (np.array(A) - min_A) / (max_A - min_A)
 
 
@@ -505,5 +489,145 @@ def gaussian_smoothing(arrays, centres, deltas, DIM, nslice):
 				except IndexError: pass
 	return cw_arrays
 
+
+def shape_check_hdf5(directory, file_name):
+	"""
+	shape_check_hdf5(directory, file_name, nframe)
+
+	General purpose algorithm to check the shape the dataset in a hdf5 file 
+
+	Parameters
+	----------
+
+	directory:  str
+		File path of directory of alias analysis.
+	file_name:  str
+		File name of trajectory being analysed
+
+	Returns
+	-------
+
+	shape_hdf5:  int, tuple
+		Shape of object dataset in hdf5 file
+	"""
+
+	with tables.open_file('{}/{}.hdf5'.format(directory, file_name), 'r') as infile:
+		shape_hdf5 = infile.root.dataset.shape
+
+	return shape_hdf5
+
+
+def make_earray(file_name, arrays, atom, sizes):
+	"""
+	make_earray(file_name, arrays, atom, sizes)
+
+	General purpose algorithm to create an empty earray
+
+	Parameters
+	----------
+
+	file_name:  str
+		File name
+	arrays:  str, list
+		List of references for arrays in data table
+	atom:  type
+		Type of data in earray
+	sizes:  int, tuple
+		Shape of arrays in data set
+	"""
+
+
+	with tables.open_file(file_name, 'w') as outfile:
+		for i, array in enumerate(arrays):
+			outfile.create_earray(outfile.root, array, atom, sizes[i])
+
+
+def make_hdf5(directory, file_name, shape, datatype):
+	"""
+	make_hdf5(directory, file_name, array, shape)
+
+	General purpose algorithm to create an empty hdf5 file
+
+	Parameters
+	----------
+
+	directory:  str
+		File path of directory of alias analysis.
+	file_name:  str
+		File name of trajectory being analysed
+	shape:  int, tuple
+		Shape of dataset in hdf5 file
+	datatype:  type
+		Data type of dataset
+	"""
+
+	shape = (0,) + shape
+
+	make_earray('{}/{}.hdf5'.format(directory, file_name), ['dataset'], datatype, [shape])
+
+
+def load_hdf5(directory, file_name, frame='all'):
+	"""
+	load_hdf5(directory, file_name, frame='all')
+
+	General purpose algorithm to load an array from a hdf5 file
+
+	Parameters
+	----------
+
+	directory:  str
+		File path of directory of alias analysis.
+	file_name:  str
+		File name of trajectory being analysed
+	frame:  int (optional)
+		Trajectory frame to load
+
+	Returns
+	-------
+
+	array:  array_like (float);
+		Data array to be loaded, same shape as object 'dataset' in hdf5 file
+	"""
+
+	with tables.open_file('{}/{}.hdf5'.format(directory, file_name), 'r') as infile:
+		if frame == 'all': array = infile.root.dataset[:]
+		else: array = infile.root.dataset[frame]
+
+	return array
+
+
+def save_hdf5(directory, file_name, array, frame, mode='a'):
+	"""
+	save_hdf5(directory, file_name, array, dataset, frame, mode='a')
+
+	General purpose algorithm to save an array from a single frame a hdf5 file
+
+	Parameters
+	----------
+
+	directory:  str
+		File path of directory of alias analysis.
+	file_name:  str
+		File name of trajectory being analysed
+	array:  array_like (float);
+		Data array to be saved, must be same shape as object 'dataset' in hdf5 file
+	frame:  int
+		Trajectory frame to save
+	mode:  str (optional)
+		Option to append 'a' to hdf5 file or overwrite 'r+' existing data	
+	"""
+
+	if not mode: return
+
+	shape = (1,) + array.shape
+
+	with tables.open_file('{}/{}.hdf5'.format(directory, file_name), mode) as outfile:
+		assert outfile.root.dataset.shape[1:] == shape[1:]
+		if mode.lower() == 'a':
+			write_array = np.zeros(shape)
+			write_array[0] = array
+			outfile.root.dataset.append(write_array)
+		elif mode.lower() == 'r+':
+			outfile.root.dataset[frame] = write_array
 
 
