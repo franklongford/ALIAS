@@ -40,7 +40,7 @@ def make_checkfile(checkfile_name):
 	"""
 	make_checkfile(checkfile_name)
 
-	Creates
+	Creates checkfile for analysis, storing key paramtere
 	"""
 
 	checkfile = {}
@@ -48,11 +48,39 @@ def make_checkfile(checkfile_name):
 		pickle.dump(checkfile, outfile, pickle.HIGHEST_PROTOCOL)
 
 def read_checkfile(checkfile_name):
+	"""
+	read_checkfile(checkfile_name)
+
+	Reads checkfile to lookup stored key paramters
+
+	"""
 
 	with file('{}.pkl'.format(checkfile_name), 'rb') as infile:
         	return pickle.load(infile)
 
 def update_checkfile(checkfile_name, symb, obj):
+	"""
+	update_checkfile(checkfile_name, symb, obj)
+
+	Updates checkfile parameter
+
+	Parameters
+	----------
+
+	checkfile_name:  str
+			Checkfile path + name
+	symb:  str
+			Key for checkfile dictionary of object obj
+	obj:
+			Parameter to be saved
+
+	Returns
+	-------
+
+	checkfile:  dict
+			Dictionary of key parameters
+
+	"""
 
 	with file('{}.pkl'.format(checkfile_name), 'rb') as infile:
         	checkfile = pickle.load(infile)
@@ -64,27 +92,41 @@ def update_checkfile(checkfile_name, symb, obj):
 
 def get_sim_param(traj_dir, top_dir, traj_file, top_file):
 	"""
+	get_sim_param(traj_dir, top_dir, traj_file, top_file)
+
 	Returns selected parameters of input trajectory and topology file using mdtraj
 	
-	Keyword arguments:
-	top_dir -- Directory of topology file
-	traj_dir -- Directory of trajectory file
-	traj_file -- Trajectory file name
-	top_file -- Topology file name
+	Parameters
+	----------
 
-	Output:
-	traj -- mdtraj trajectory object
-	MOL -- List of residue types in simulation cell
-	nframe -- Number of frames sampled in traj_file
-	dim -- Simulation cell dimensions (angstroms)
+	top_dir:  str
+			Directory of topology file
+	traj_dir:  str
+			Directory of trajectory file
+	traj_file:  str
+			Trajectory file name
+	top_file:  str
+			Topology file name
+
+	Returns
+	-------
+
+	traj:  mdtraj obj
+			Mdtraj trajectory object
+	mol:  str, list
+			List of residue types in simulation cell
+	nframe:  int
+			Number of frames sampled in traj_file
+	dim:  float, array_like; shape=(3):
+			Simulation cell dimensions (angstroms)
 	"""
 
 	traj = md.load('{}/{}'.format(traj_dir, traj_file), top='{}/{}'.format(top_dir, top_file))
-	MOL = list(set([molecule.name for molecule in traj.topology.residues]))
+	mol = list(set([molecule.name for molecule in traj.topology.residues]))
 	nframe = int(traj.n_frames)
 	dim = np.array(traj.unitcell_lengths[0]) * 10
 
-	return traj, MOL, nframe, dim
+	return traj, mol, nframe, dim
 
 
 def molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com):
