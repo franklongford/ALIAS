@@ -470,7 +470,7 @@ def save_hdf5(directory, file_name, array, frame, mode='a'):
 			outfile.root.dataset[frame] = array
 
 
-def save_npy(directory, file_name, array, frame=False, mode='w'):
+def save_npy(directory, file_name, array, frames=[], mode='w+'):
 	"""
 	save_npy(directory, file_name, array, frame, mode='w')
 
@@ -488,12 +488,12 @@ def save_npy(directory, file_name, array, frame=False, mode='w'):
 	frame:  int (optional)
 		Trajectory frame to save
 	mode:  str (optional)
-		Option to append write 'w', or read-write 'rw'	
+		Option to append write 'w+', or read-write 'r+'	
 	"""
 
 	outfile = np.memmap('{}/{}.npy'.format(directory, file_name), dtype=array.dtype, mode=mode, shape=array.shape)
-	if not frame: outfile[:] = array[:]
-	else: outfile[frame] = array
+	if len(frames) == 0: outfile[:] = array[:]
+	else: outfile[frames] = array
 
 
 def load_npy(directory, file_name, frames=[]):
@@ -519,7 +519,7 @@ def load_npy(directory, file_name, frames=[]):
 		Data array to be loaded
 	"""
 
-	if len(frame) == 0: array = np.load('{}_{}.npy'.format(directory, file_name), mmap_mode = 'r')
-	else: array = np.load('{}_{}.npy'.format(directory, file_name), mmap_mode = 'r')[frames]
-
+	if len(frames) == 0: array = np.memmap('{}/{}.npy'.format(directory, file_name), mode='r')
+	else: array = np.memmap('{}/{}.npy'.format(directory, file_name), mode='r')[frames]
 	return array
+
