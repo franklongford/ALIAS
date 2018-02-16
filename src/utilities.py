@@ -130,8 +130,11 @@ def get_sim_param(traj_dir, top_dir, traj_file, top_file):
 
 
 def molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com):
-	"RETURNS X Y Z ARRAYS OF MOLECULAR POSITIONS" 
-	
+	"""
+	molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com)
+
+	Returns XYZ arrays of molecular positions" 
+	"""
 	if mol_com == 'COM':
 		"USE CENTRE OF MASS AS MOLECULAR POSITION"
 		xmol = np.sum(np.reshape(xat * mol_M, (nmol, nsite)), axis=1) 
@@ -148,9 +151,12 @@ def molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com):
 	return xmol, ymol, zmol
 
 
-def make_at_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol, mol_com):
-	
+def make_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol, mol_com):
+	"""
+	make_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol, mol_com)
 
+	Generates molecular positions and centre of mass for each frame
+	"""
 	print "\n-----------CREATING POSITIONAL FILES------------\n"
 
 	if not os.path.exists("{}/pos".format(directory)): os.mkdir("{}/pos".format(directory))
@@ -211,54 +217,6 @@ def read_com_positions(directory, file_name, ntraj, nframe):
 	return COM
 
 
-def radial_dist(root, directory, data_dir, traj_file, top_file, nsite, M, com, ow_pos):
-
-	traj_file = raw_input("Enter cube trajectory file: ")
-	file_end = max([0] + [pos for pos, char in enumerate(traj_file) if char == '/'])
-	directory = traj_file[:file_end]
-	traj_file = traj_file[file_end+1:]
-	data_dir = directory + '/data'
-
-	print directory, data_dir, traj_file
-
-	traj = md.load('{}/{}'.format(directory, traj_file), top='{}/{}'.format(root, top_file))
-	natom = int(traj.n_atoms)
-	nmol = int(traj.n_residues)
-	ntraj = int(traj.n_frames)
-	DIM = np.array(traj.unitcell_lengths[0]) * 10
-
-	lslice = 0.01
-	max_r = np.min(DIM) / 2.
-	nslice = int(max_r / lslice)
-
-	new_XYZ = np.zeros((ntraj, natom, 3))
-
-	XYZ = np.moveaxis(traj.xyz, 1, 2) * 10
-
-	file_name = '{}_{}_{}'.format(top_file.split('.')[0], ntraj, com)
-	if not os.path.exists('{}/pos/{}_zmol.npy'.format(data_dir, file_name)): make_at_mol_com(traj, traj_file, data_dir, '{}_{}_{}'.format(top_file.split('.')[0], ntraj, com), natom, nmol, ntraj, DIM, nsite, M, com)
-
-	xmol, ymol, zmol = read_mol_positions(data_dir, top_file.split('.')[0], ntraj, ntraj, com)
-
-	new_XYZ = np.stack((xmol, ymol, zmol), axis=2) / 10
-
-	new_XYZ = np.pad(new_XYZ, ((0, 0), (0, natom-nmol), (0, 0)), 'constant', constant_values=0)
-
-	traj.xyz = new_XYZ
-	
-	pairs = []
-	for i in xrange(nmol): 
-		for j in xrange(i): pairs.append([i, j])
-
-	r, g_r = md.compute_rdf(traj[:10], pairs = pairs, bin_width = lslice/10, r_range = (0, max_r/10))
-	plt.plot(r*10, g_r)
-
-	mol_sigma = 2**(1./6) * g_r.argmax() * lslice
-
-	print "r_max = {}    molecular sigma = {}".format(g_r.argmax()*lslice, mol_sigma)
-	plt.show()
-
-
 def model_mdtraj():
 
 	natom = int(traj.n_atoms)
@@ -272,21 +230,13 @@ def model_mdtraj():
 	return nsite, AT, M, sigma_m
 
 
-def centre_mass(xat, yat, zat, nsite, M):
-	"Returns the coordinates of the centre of mass"
-
-	nmol = len(xat) / nsite
-	mol_M = np.array(M * nmol)
-
-	xR = np.sum(xat * mol_M) / (nmol * np.sum(M))
-	yR = np.sum(yat * mol_M) / (nmol * np.sum(M))
-	zR = np.sum(zat * mol_M) / (nmol * np.sum(M))
-
-	return xR, yR, zR
-
-
 def bubblesort(alist, key):
-	"Sorts arrays 'alist' and 'key' by order of elements of 'key'"
+	"""
+	bubblesort(alist, key)
+
+	Sorts arrays 'alist' and 'key' by order of elements of 'key'
+	"""
+
 	for passnum in range(len(alist)-1,0,-1):
 		for i in range(passnum):
 			if key[i]>key[i+1]:
@@ -313,33 +263,6 @@ def normalise(A):
 	min_A = np.min(A)
 
 	return (np.array(A) - min_A) / (max_A - min_A)
-
-
-def get_histograms(root, nimage, nslice, Vslice):
-	proc = subprocess.Popen('ls {}/DATA/INTDEN/*DEN.txt'.format(root), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	out, err = proc.communicate()
-	files = out.split()
-	length = len(root) + 6
-	size = 0
-	
-	for i in xrange(len(files)):
-		temp = files[i]
-		temp = temp[length:-1]
-		temp = temp.split('_')
-		if int(temp[3]) > size and int(temp[3]) < nimage: 
-			size = int(temp[3])
-			k = i
-	
-	if size == 0: return 0, np.zeros(nslice), np.zeros(nslice), np.zeros(nslice)
-
-	with file(files[k], 'r') as infile:
-		av_mass_den, av_atom_den, av_mol_den= np.loadtxt(infile)
-	
-	mass_count = av_mass_den * size * Vslice * con.N_A * (1E-8)**3
-	atom_count = [int(av_atom_den[j] * size * Vslice) for j in xrange(nslice)]
-	mol_count = [int(av_mol_den[j] * size * Vslice) for j in xrange(nslice)]
-	
-	return size, mass_count, atom_count, mol_count
 
 
 def get_fourier(auv, nm):
@@ -369,137 +292,11 @@ def get_fourier(auv, nm):
         return f
 
 
-
-def sum_auv_2(auv, nm, qm):
-
-	if qm == 0:	
-		j = (2 * nm + 1) * nm + nm 
-		return auv[j]
-
-	sum_2 = 0
-	for u in xrange(-qm, qm+1):
-                for v in xrange(-qm, qm+1):
-			j = (2 * nm + 1) * (u + nm) + (v + nm)
-
-			if abs(u) + abs(v) == 0 : sum_2 += auv[j]
-			else: sum_2 += 1/4. * check_uv(u, v) * auv[j]
-
-	return sum_2
-
-
-def load_pt(directory, ntraj):
-
-	proc = subprocess.Popen('ls {}/*PT.npy'.format(directory), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	out, err = proc.communicate()
-	pt_files = out.split()
-
-	length = len(directory) + 1
-	pt_st = []
-	ntb = 0
-	k = 0
-	
-	for i in xrange(len(pt_files)):
-		temp = pt_files[i][length:-4].split('_')
-		if int(temp[1]) == ntraj and int(temp[2]) >= ntb: 
-			k = i
-			ntb = int(temp[2])
-			
-	try: 
-		if os.path.exists(pt_files[k]):
-			with file(pt_files[k], 'r') as infile:
-				pt_st = np.load(infile)
-
-	except IndexError: pass
-
-	return pt_st, ntb
-
-
-def block_error(A, ntb, s_ntb=2):
-	
-	var2 = [np.var(a) for a in A]
-
-	pt = [[] for a in A]
-
-	for tb in range(s_ntb, ntb):
-		stdev1 = [np.var(blocks) for blocks in blocksav(A, tb)]
-		for i in range(len(A)): pt[i].append(stdev1[i] * tb / var2[i])
-
-	return pt
-
-
-def blocksav(A, tb):
-	nb = len(A[0])/tb
-	blocks = np.zeros((len(A), nb))
-	for i in range(nb):
-		for j in range(len(A)):
-			blocks[j][i] += np.mean(A[j][i*tb: (i+1)*tb])
-	return blocks
-
-
-def get_corr_time(pt, ntb):
-
-	x = 1. / np.arange(2, ntb)
-	y = 1. / np.array(pt)
-
-        m, intercept, _, _, _ = stats.linregress(x,y)
-
-	return 1. / intercept
-
-def autocorr(A):
-	
-	n = len(A)
-	var = np.var(A)
-	A -= np.mean(A)
-	result = np.correlate(A, A, mode='full')[-n:]
-	return result / (np.arange(n, 0, -1) * var)
-
-
-def get_block_error_auv(auv2_1, auv2_2, directory, model, csize, ntraj, ntb, ow_ntb):
-
-	if os.path.exists('{}/DATA/ACOEFF/{}_{}_{}_{}_PT.npy'.format(directory, model.lower(), csize, ntraj, ntb)) and not ow_ntb:
-		with file('{}/DATA/ACOEFF/{}_{}_{}_{}_PT.npy'.format(directory, model.lower(), csize, ntraj, ntb), 'r') as infile:
-			pt_auv1, pt_auv2 = np.load(infile)
-	else: 
-		old_pt_auv1, old_ntb = load_pt('{}/DATA/ACOEFF'.format(directory), ntraj)
-		if old_ntb == 0 or ow_ntb: 
-			pt_auv1 = block_error(auv2_1, ntb)
-			pt_auv2 = block_error(auv2_2, ntb)
-		elif old_ntb > ntb:
-			with file('{}/DATA/ACOEFF/{}_{}_{}_{}_PT.npy'.format(directory, model.lower(), csize, ntraj, old_ntb), 'r') as infile:
-                        	pt_auv1, pt_auv2 = np.load(infile)
-			pt_auv1 = pt_auv1[:ntb]
-			pt_auv2 = pt_auv2[:ntb]
-		elif old_ntb < ntb:
-			with file('{}/DATA/ACOEFF/{}_{}_{}_{}_PT.npy'.format(directory, model.lower(), csize, ntraj, old_ntb), 'r') as infile:
-                        	pt_auv1, pt_auv2 = np.load(infile)
-
-			pt_auv1 = np.concatenate((pt_auv1, block_error(auv2_1, ntb, old_ntb)))
-                	pt_auv2 = np.concatenate((pt_auv2, block_error(auv2_2, ntb, old_ntb)))	
-		
-		with file('{}/DATA/ACOEFF/{}_{}_{}_{}_PT.npy'.format(directory, model.lower(), csize, ntraj, ntb), 'w') as outfile:
-        		np.savetxt(outfile, (pt_auv1, pt_auv2))
-
-        M = len(auv2_1)
-
-	plt.figure(2)
-	plt.plot(pt_auv1)
-	plt.plot(pt_auv2)
-	plt.show()
-
-	corr_time_auv1 = get_corr_time(pt_auv1, ntb)
-	corr_time_auv2 = get_corr_time(pt_auv2, ntb)
-
-	print corr_time_auv1, np.sqrt(corr_time_auv1 / M), np.std(auv2_1)
-
-        m_err_auv1 = (np.std(auv2_1) * np.sqrt(corr_time_auv1 / M))
-	m_err_auv2 = (np.std(auv2_2) * np.sqrt(corr_time_auv2 / M))
-
-        return m_err_auv1, m_err_auv2
-
-
 def linear(x, m, c): return m*x + c
 
+
 def gaussian(x, mean, std): return np.exp(-(x-mean)**2 / (2 * std**2)) / (SQRT2 * std * SQRTPI)
+
 
 def laplace(x, mean, std): return np.exp(-abs(x-mean) / std ) / (2 * std)
 
@@ -670,6 +467,35 @@ def save_hdf5(directory, file_name, array, frame, mode='a'):
 			write_array[0] = array
 			outfile.root.dataset.append(write_array)
 		elif mode.lower() == 'r+':
-			outfile.root.dataset[frame] = write_array
+			outfile.root.dataset[frame] = array
 
+
+def save_npy(directory, file_name, array, frame, mode='w'):
+	"""
+	save_npy(directory, file_name, array, frame, mode='w')
+
+	General purpose algorithm to save an array to a npy file
+
+	Parameters
+	----------
+
+	directory:  str
+		File path of directory of alias analysis.
+	file_name:  str
+		File name of trajectory being analysed
+	array:  array_like (float);
+		Data array to be saved, must be same shape as object 'dataset' in hdf5 file
+	frame:  int
+		Trajectory frame to save
+	mode:  str (optional)
+		Option to append 'a' to hdf5 file or overwrite 'r+' existing data	
+	"""
+
+	outfile = np.memmap('{}_{}.npy'.format(directory, file_name), dtype=array.dtype, mode=mode, shape=array.shape)
+	outfile[:] = array[:]
+
+	with open('{}_{}.npy'.format(directory, file_name), 'w') as outfile:
+		np.save(outfile, array)
+
+	COM = np.load('{}/pos/{}_com.npy'.format(directory, file_name), mmap_mode = 'r')[:nframe]
 

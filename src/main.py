@@ -62,10 +62,6 @@ if not os.path.exists(alias_dir): os.mkdir(alias_dir)
 if not os.path.exists(data_dir): os.mkdir(data_dir)
 if not os.path.exists(figure_dir): os.mkdir(figure_dir)
 
-checkfile_name = '{}/{}_chk'.format(alias_dir, traj_file.split('.')[0])
-if not os.path.exists('{}.pkl'.format(checkfile_name)): ut.make_checkfile(checkfile_name)
-checkfile = ut.read_checkfile(checkfile_name)
-
 print "Loading trajectory file {}".format(sys.argv[1])
 
 traj, MOL, nframe, dim = ut.get_sim_param(traj_dir, top_dir, traj_file, top_file)
@@ -86,6 +82,15 @@ at_index = [atom.index for atom in atoms]
 nsite = molecules[0].n_atoms
 natom = len(atoms)
 nmol = len(molecules)
+
+checkfile_name = '{}/{}_chk'.format(alias_dir, traj_file.split('.')[0])
+if not os.path.exists('{}.pkl'.format(checkfile_name)): 
+	ut.make_checkfile(checkfile_name)
+	checkfile = ut.update_checkfile(checkfile_name, 'dim', dim)
+	checkfile = ut.update_checkfile(checkfile_name, 'mol', mol)
+	checkfile = ut.update_checkfile(checkfile_name, 'nmol', nmol)
+	checkfile = ut.update_checkfile(checkfile_name, 'nframe', nframe)
+checkfile = ut.read_checkfile(checkfile_name)
 
 print "{} {} residues found, each containing {} atoms".format(nmol, mol, nsite)
 print "Atomic sites: {}".format(AT)
@@ -141,8 +146,6 @@ except:
 
 lslice = 0.05 * mol_sigma
 nslice = int(dim[2] / lslice)
-nz = 100
-nnz = 100
 npi = 50
 
 q_max = 2 * np.pi / mol_sigma
@@ -197,7 +200,7 @@ ow_pos = bool(raw_input("OVERWRITE POSITIONS? (Y/N): ").upper() == 'Y')
 ow_count = bool(raw_input("OVERWRITE DENSITY COUNT? (Y/N): ").upper() == 'Y')
 
 ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=True, ow_coeff=ow_coeff, ow_recon=ow_recon)
-ism.create_intrinsic_positions_dxdyz(data_dir, file_name, nmol, nframe, qm, n0, phi, dim, recon=False, ow_pos=ow_pos)
-ism.create_intrinsic_den_curve_dist(data_dir, file_name, qm, n0, phi, nframe, nslice, nz, nnz, dim, recon=False, ow_count=ow_count)
 
-ism.intrinsic_density_dist(data_dir, file_name, nslice, qm, n0, phi, nframe, nframe)
+for recon in [False, True]:
+	ism.create_intrinsic_positions_dxdyz(data_dir, file_name, nmol, nframe, qm, n0, phi, dim, recon=recon, ow_pos=ow_pos)
+	ism.create_intrinsic_den_curve_dist(data_dir, file_name, qm, n0, phi, nframe, nslice, dim, recon=recon, ow_count=ow_count)

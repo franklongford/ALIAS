@@ -151,11 +151,11 @@ def LU_decomposition(A, b):
 	return coeff
 
 
-def make_zeta_list(xmol, ymol, dim, mol_list, coeff, qm):
+def make_zeta_list(xmol, ymol, dim, mol_list, coeff, qm, qu):
 	"""
 	zeta_list(xmol, ymol, dim, mol_list, coeff, qm)
 
-	Calculate dz (zeta) between molecular sites and intrinsic surface for highest resolution"
+	Calculate dz (zeta) between molecular sites and intrinsic surface for resolution qu"
 
 	Parameters
 	----------
@@ -181,7 +181,7 @@ def make_zeta_list(xmol, ymol, dim, mol_list, coeff, qm):
 	
 	"""
 
-	zeta_list = chi(xmol[mol_list], ymol[mol_list], coeff, qm, qm, dim)
+	zeta_list = chi(xmol[mol_list], ymol[mol_list], coeff, qm, qu, dim)
    
 	return zeta_list
 
@@ -450,8 +450,8 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
                         print "ENDING SEARCH"
 
 		"Calculate distance between molecular z positions and intrinsic surface"
-		if build_surf1: zeta_list1 = make_zeta_list(xmol, ymol, dim, mol_list1, coeff[0], qm)
-		if build_surf2: zeta_list2 = make_zeta_list(xmol, ymol, dim, mol_list2, coeff[1], qm)
+		if build_surf1: zeta_list1 = make_zeta_list(xmol, ymol, dim, mol_list1, coeff[0], qm, qm)
+		if build_surf2: zeta_list2 = make_zeta_list(xmol, ymol, dim, mol_list2, coeff[1], qm, qm)
 
 		"Search for more molecular pivot sites"
                 while finding_pivots:
@@ -1366,7 +1366,7 @@ def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0,
 
 	"""
 
-	print"\n-- Running Intrinsic Positions and Derivatives Routine ---\n"
+	print"\n--- Running Intrinsic Positions and Derivatives Routine ---\n"
 
 	n_waves = 2 * qm + 1
 	
@@ -1375,12 +1375,12 @@ def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0,
 	if not os.path.exists(pos_dir): os.mkdir(pos_dir)
 
 	file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
-	if recon: file_name_coeff += '_R'
-
 	file_name_pos = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
-	if recon: file_name_pos += '_R'
+	if recon: 
+		file_name_coeff += '_R'
+		file_name_pos += '_R'
 
-	if not os.path.exists('{}/intpos/{}_int_z_mol.hdf5'.format(directory, file_name_pos)):
+	if not os.path.exists('{}/{}_int_z_mol.hdf5'.format(pos_dir, file_name_pos)):
 		ut.make_hdf5(pos_dir, file_name_pos + '_int_z_mol', (2, qm+1, nmol), tables.Float64Atom())
 		ut.make_hdf5(pos_dir, file_name_pos + '_int_dxdy_mol', (4, qm+1, nmol), tables.Float64Atom())
 		ut.make_hdf5(pos_dir, file_name_pos + '_int_ddxddy_mol', (4, qm+1, nmol), tables.Float64Atom())
@@ -1430,17 +1430,20 @@ def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0,
 				ut.save_hdf5(pos_dir, file_name_pos + '_int_ddxddy_mol', int_ddxddy_mol, frame, mode_int_ddxddy_mol)
 
 
-def make_den_curve(directory, zmol, int_z_mol, int_dxdy_mol, coeff, nmol, nslice, nz, nnz, qm, dim):
+def make_den_curve(directory, zmol, int_z_mol, int_dxdy_mol, coeff, nmol, nslice, nz, qm, dim):
+	"""
+	make_den_curve(directory, zmol, int_z_mol, int_dxdy_mol, coeff, nmol, nslice, nz, qm, dim)
+
+	Creates density and curvature distributions normal to surface
+	"""
 
 	lslice = dim[2] / nslice
 
-	count_corr_array = np.zeros((qm+1, nslice, nnz))
-	z_nz_array = np.zeros((qm+1, nz, nnz))	
+	count_corr_array = np.zeros((qm+1, nslice, nz))
 
 	for qu in xrange(qm+1):
 
-		temp_count_corr_array = np.zeros((nslice, nnz))
-		temp_z_nz_array = np.zeros((nz, nnz))
+		temp_count_corr_array = np.zeros((nslice, nz))
 
 		int_z1 = int_z_mol[0][qu]
 		int_z2 = int_z_mol[1][qu]
@@ -1459,29 +1462,48 @@ def make_den_curve(directory, zmol, int_z_mol, int_dxdy_mol, coeff, nmol, nslice
 		normal1 = ut.unit_vector(np.array([-dzx1, -dzy1, np.ones(nmol)]))
 		normal2 = ut.unit_vector(np.array([-dzx2, -dzy2, np.ones(nmol)]))
 
-		index1_nz = np.array(abs(normal1[2]) * nnz, dtype=int) % nnz
-		index2_nz = np.array(abs(normal2[2]) * nnz, dtype=int) % nnz
+		index1_nz = np.array(abs(normal1[2]) * nz, dtype=int) % nz
+		index2_nz = np.array(abs(normal2[2]) * nz, dtype=int) % nz
 
-		temp_count_corr_array += np.histogram2d(index1_mol, index1_nz, bins=[nslice, nnz], range=[[0, nslice], [0, nnz]])[0]
-		temp_count_corr_array += np.histogram2d(index2_mol, index2_nz, bins=[nslice, nnz], range=[[0, nslice], [0, nnz]])[0]
-
-		index1_mol = np.array(abs(int_z1 - coeff[0][len(coeff[0])/2]) * 2 * nz / (nz*lslice), dtype=int) % nz
-		index2_mol = np.array(abs(int_z2 - coeff[1][len(coeff[1])/2]) * 2 * nz / (nz*lslice), dtype=int) % nz
-
-		temp_z_nz_array += np.histogram2d(index1_mol, index1_nz, bins=[nz, nnz], range=[[0, nz], [0, nnz]])[0]
-		temp_z_nz_array += np.histogram2d(index2_mol, index2_nz, bins=[nz, nnz], range=[[0, nz], [0, nnz]])[0]
+		temp_count_corr_array += np.histogram2d(index1_mol, index1_nz, bins=[nslice, nz], range=[[0, nslice], [0, nz]])[0]
+		temp_count_corr_array += np.histogram2d(index2_mol, index2_nz, bins=[nslice, nz], range=[[0, nslice], [0, nz]])[0]
 
 		count_corr_array[qu] += temp_count_corr_array
-		z_nz_array[qu] += temp_z_nz_array
 
-	return count_corr_array, z_nz_array
+	return count_corr_array
 
 
-def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, nslice, nz, nnz, dim, recon=False, ow_count=False):
+def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, nslice, dim, nz=100, recon=False, ow_count=False):
 	"""
-	create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, nslice, nz, nnz, dim, recon=False, ow_count=False)
+	create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, nslice, dim, nz=100, nnz=100, recon=False, ow_count=False)
 
-	Calculate density and curvature distributions across surface 
+	Calculate density and curvature distributions across surface
+
+	Parameters
+	----------
+
+	directory:  str
+		File path of directory of alias analysis.
+	file_name:  str
+		File name of trajectory being analysed.
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	n0:  int
+		Maximum number of molecular pivots in intrinsic surface
+	phi:  float
+		Weighting factor of minimum surface area term in surface optimisation function
+	nframe:  int
+		Number of frames in simulation trajectory
+	nslice: int
+		Number of bins in density histogram along axis normal to surface
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+	nz: int (optional)
+		Number of bins in curvature histogram along axis normal to surface (default=100)
+	recon:  bool (optional)
+		Whether to use surface reconstructe coefficients (default=False)
+	ow_count:  bool (optional)
+		Whether to overwrite density and curvature distributions (default=False)
 	"""
 
 	print"\n--- Running Intrinsic Density and Curvature Routine --- \n"
@@ -1495,24 +1517,20 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 
 	file_name_pos = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
 	file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
-	file_name_count = '{}_{}_{}_{}_{}_{}'.format(file_name, nslice, qm, n0, int(1./phi + 0.5), nframe)	
-	file_name_norm = '{}_{}_{}_{}_{}_{}'.format(file_name, nz, qm, n0, int(1./phi + 0.5), nframe)
+	file_name_count = '{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)	
 
 	if recon:
 		file_name_pos += '_R'
-		file_name_count += '{}_R'
-		file_name_norm += '{}_R'
+		file_name_count += '_R'
+		file_name_coeff += '_R'
 
 	if not os.path.exists('{}/intden/{}_count_corr.hdf5'.format(directory, file_name_count)):
 		ut.make_hdf5(den_dir, file_name_count + '_count_corr', (qm+1, nslice, nz), tables.Float64Atom())
-		ut.make_hdf5(den_dir, file_name_norm + '_z_nz', (qm+1, nz, nnz), tables.Float64Atom())
 		file_check = False
 
 	elif not ow_count:
 		"Checking number of frames in current distribution files"
-		try:
-			file_check = (ut.shape_check_hdf5(den_dir, file_name_count + '_count_corr') == (nframe, 2, qm+1, nmol))
-			file_check *= (ut.shape_check_hdf5(den_dir, file_name_norm + '_z_nz') == (nframe, 2, qm+1, nmol))
+		try: file_check = (ut.shape_check_hdf5(den_dir, file_name_count + '_count_corr') == (nframe, qm+1, nslice, nz))
 		except: file_check = False
 	else:file_check = False
 
@@ -1527,17 +1545,12 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 
 			"Checking number of frames in hdf5 files"
 			frame_check_count_corr = (ut.shape_check_hdf5(den_dir, file_name_count + '_count_corr')[0] <= frame)
-			frame_check_z_nz = (ut.shape_check_hdf5(den_dir, file_name_norm + '_z_nz')[0] <= frame)
 
 			if frame_check_count_corr: mode_count_corr = 'a'
 			elif ow_count: mode_count_corr = 'r+'
 			else: mode_count_corr = False
 
-			if frame_check_z_nz: mode_z_nz = 'a'
-			elif ow_count: mode_z_nz = 'r+'
-			else: mode_z_nz = False
-
-			if not mode_count_corr and not mode_z_nz:pass
+			if not mode_count_corr:pass
 			else:
 				sys.stdout.write("Calculating position and curvature distributions: frame {}\r".format(frame))
 				sys.stdout.flush()
@@ -1546,27 +1559,47 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 				int_z_mol = ut.load_hdf5(pos_dir, file_name_pos + '_int_z_mol', frame)
 				int_dxdy_mol = ut.load_hdf5(pos_dir, file_name_pos + '_int_dxdy_mol', frame)
 
-				count_corr_array, z_nz_array = make_den_curve(directory, zmol[frame], int_z_mol, int_dxdy_mol, coeff, nmol, nslice, nz, nnz, qm, dim)
+				count_corr_array = make_den_curve(directory, zmol[frame], int_z_mol, int_dxdy_mol, coeff, nmol, nslice, nz, qm, dim)
 				ut.save_hdf5(den_dir, file_name_count + '_count_corr', count_corr_array, frame, mode_count_corr)
-				ut.save_hdf5(den_dir, file_name_norm + '_z_nz', z_nz_array, frame, mode_z_nz)
 
 
-def intrinsic_density_dist(directory, file_name, nslice, qm, n0, phi, nframe, sample):
+def intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, nframe, nsample, nz = 100, recon=False, ow_dist=False):
 
 	den_dir = directory +'/intden'
-	file_name_count = '{}_{}_{}_{}_{}_{}'.format(file_name, nslice, qm, n0, int(1./phi + 0.5), nframe)
+	file_name_count = '{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)
+	if recon: file_name_count += '_R'
 
-	count_corr_array = ut.load_hdf5(den_dir, file_name_count + '_count_corr', 'all')
+	int_den_curve_matrix = np.zeros((qm+1, nslice, nz))
+	int_density = np.zeros((qm+1, nslice))
+	int_curvature = np.zeros((qm+1, nz))
 
-	count = np.rollaxis(count_corr_array, 0, 3)
-	int_density = np.sum(count, axis=(2, 3))
+	print "\n--- Loading in Density and Curvature Distributions ---\n"
 
-	import matplotlib.pyplot as plt
+	lslice = dim[2] / nslice
+	Vslice = dim[0] * dim[1] * lslice
 
-	for dist in int_density:
-		plt.plot(dist)
-	plt.show()
+	for frame in xrange(nsample):
+		sys.stdout.write("Frame {}\r".format(frame))
+		sys.stdout.flush()
 
+		count_corr_array = ut.load_hdf5(den_dir, file_name_count + '_count_corr', frame)
+
+		int_den_curve_matrix += count_corr_array / (nsample * Vslice)
+		int_density += np.mean(count_corr_array, axis=2) / (Vslice * nsample)
+		int_curvature += np.mean(np.moveaxis(count_corr_array, 1, 2), axis=2) / (Vslice * nsample)
+
+	file_name_count = '{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nsample)
+	file_name_den = '{}_{}_{}_{}_{}_{}'.format(file_name, nslice, qm, n0, int(1./phi + 0.5), nsample)
+	file_name_curve = '{}_{}_{}_{}_{}_{}'.format(file_name, nz, qm, n0, int(1./phi + 0.5), nsample)
+
+	if recon: 
+		file_name_count += '_R'
+		file_name_den += '_R'
+		file_name_curve += '_R'
+
+	with open(
+	
+	return int_den_curve_matrix, int_density, int_curvature
 
 
 
