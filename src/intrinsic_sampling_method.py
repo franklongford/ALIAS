@@ -1597,7 +1597,6 @@ def intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, nfra
 		file_name_den += '_R'
 		file_name_curve += '_R'
 
-	with open(
 	
 	return int_den_curve_matrix, int_density, int_curvature
 

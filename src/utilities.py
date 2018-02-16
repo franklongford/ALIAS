@@ -470,7 +470,7 @@ def save_hdf5(directory, file_name, array, frame, mode='a'):
 			outfile.root.dataset[frame] = array
 
 
-def save_npy(directory, file_name, array, frame, mode='w'):
+def save_npy(directory, file_name, array, frame=False, mode='w'):
 	"""
 	save_npy(directory, file_name, array, frame, mode='w')
 
@@ -484,18 +484,42 @@ def save_npy(directory, file_name, array, frame, mode='w'):
 	file_name:  str
 		File name of trajectory being analysed
 	array:  array_like (float);
-		Data array to be saved, must be same shape as object 'dataset' in hdf5 file
-	frame:  int
+		Data array to be saved
+	frame:  int (optional)
 		Trajectory frame to save
 	mode:  str (optional)
-		Option to append 'a' to hdf5 file or overwrite 'r+' existing data	
+		Option to append write 'w', or read-write 'rw'	
 	"""
 
-	outfile = np.memmap('{}_{}.npy'.format(directory, file_name), dtype=array.dtype, mode=mode, shape=array.shape)
-	outfile[:] = array[:]
+	outfile = np.memmap('{}/{}.npy'.format(directory, file_name), dtype=array.dtype, mode=mode, shape=array.shape)
+	if not frame: outfile[:] = array[:]
+	else: outfile[frame] = array
 
-	with open('{}_{}.npy'.format(directory, file_name), 'w') as outfile:
-		np.save(outfile, array)
 
-	COM = np.load('{}/pos/{}_com.npy'.format(directory, file_name), mmap_mode = 'r')[:nframe]
+def load_npy(directory, file_name, frames=[]):
+	"""
+	load_npy(directory, file_name, array, frame='all')
 
+	General purpose algorithm to load an array from a npy file
+
+	Parameters
+	----------
+
+	directory:  str
+		File path of directory of alias analysis.
+	file_name:  str
+		File name of trajectory being analysed
+	frame:  int, list (optional)
+		Trajectory frames to load
+
+	Returns
+	-------
+
+	array:  array_like (float);
+		Data array to be loaded
+	"""
+
+	if len(frame) == 0: array = np.load('{}_{}.npy'.format(directory, file_name), mmap_mode = 'r')
+	else: array = np.load('{}_{}.npy'.format(directory, file_name), mmap_mode = 'r')[frames]
+
+	return array
