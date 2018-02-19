@@ -7,7 +7,7 @@ simulation configurations
 ********************************************************************
 Created 24/11/16 by Frank Longford
 
-Last modified 14/12/18 by Frank Longford
+Last modified 19/2/18 by Frank Longford
 """
 
 import numpy as np
@@ -16,8 +16,6 @@ import scipy as sp
 import utilities as ut
 
 import os, sys, time, tables
-
-sqrt_2 = np.sqrt(2.)
 
 
 def check_uv(u, v):
@@ -28,7 +26,7 @@ def check_uv(u, v):
 	
 	"""
 
-	if abs(u) + abs(v) == 0: return 1.
+	if abs(u) + abs(v) == 0: return 0.
 	elif u * v == 0: return 2.
 	else: return 1.
 
@@ -676,9 +674,10 @@ def surface_reconstruction(coeff, pivot, xmol, ymol, zmol, dim, qm, n0, phi, psi
 
 	end_setup1 = time.time()
 
-	print "{:^74s} | {:^21s} | {:^43s}".format('TIMINGS (s)', 'PSI', 'VAR(H)' )
-	print ' {:20s} {:20s} {:20s} {:10s} | {:10s} {:10s} | {:10s} {:10s} {:10s} {:10s}'.format('Matrix Formation', 'LU Decomposition', 'Var Estimation', 'TOTAL', 'surf1', 'surf2', 'surf1', 'piv1', 'surf2', 'piv2')
-	print "_" * 165
+	print "{:^74s} | {:^21s} | {:^43s} | {:^21s}".format('TIMINGS (s)', 'PSI', 'VAR(H)', 'INT AREA' )
+	print ' {:20s} {:20s} {:20s} {:10s} | {:10s} {:10s} | {:10s} {:10s} {:10s} {:10s} | {:10s} {:10s}'.format('Matrix Formation', 'LU Decomposition', 
+				'Var Estimation', 'TOTAL', 'surf1', 'surf2', 'surf1', 'piv1', 'surf2', 'piv2','surf1', 'surf2')
+	print "_" * 168
 
 	"Calculate variance of curvature across entire surface from coefficients"
 
@@ -693,10 +692,13 @@ def surface_reconstruction(coeff, pivot, xmol, ymol, zmol, dim, qm, n0, phi, psi
 	coeff2_matrix = np.tile(coeff[1], (n_waves**2, 1))
 	H_var_piv2 = np.sum(coeff2_matrix * coeff2_matrix.T * ffuv2 * curve_diag / n0)
 
+	area1 = intrinsic_area(coeff[0], qm, qm, dim)
+	area2 = intrinsic_area(coeff[1], qm, qm, dim) 
+
 	end_setup2 = time.time()
 
-	print ' {:20.3f} {:20.3f} {:20.3f} {:10.3f} | {:10.6f} {:10.6f} | {:10.3f} {:10.3f} {:10.3f} {:10.3f}'.format(end_setup1-start, 
-			0, end_setup2-end_setup1, end_setup2-start, 0, 0, H_var_coeff1, H_var_piv1, H_var_coeff2, H_var_piv2)
+	print ' {:20.3f} {:20.3f} {:20.3f} {:10.3f} | {:10.6f} {:10.6f} | {:10.3f} {:10.3f} {:10.3f} {:10.3f} | {:10.3f} {:10.3f}'.format(end_setup1-start, 
+			0, end_setup2-end_setup1, end_setup2-start, 0, 0, H_var_coeff1, H_var_piv1, H_var_coeff2, H_var_piv2, area1, area2)
 
 	coeff_recon = np.zeros(coeff.shape)
 	reconstructing = True
@@ -730,14 +732,16 @@ def surface_reconstruction(coeff, pivot, xmol, ymol, zmol, dim, qm, n0, phi, psi
 		if recon_1:
 			coeff1_matrix_recon = np.tile(coeff_recon[0], (n_waves**2, 1))
 			H_var_piv1_recon = np.sum(coeff1_matrix_recon * coeff1_matrix_recon.T * ffuv1 * curve_diag / n0)
+			area1 = intrinsic_area(coeff_recon[0], qm, qm, dim)
 		if recon_2:
 			coeff2_matrix_recon = np.tile(coeff_recon[1], (n_waves**2, 1))
 			H_var_piv2_recon = np.sum(coeff2_matrix_recon * coeff2_matrix_recon.T * ffuv2 * curve_diag / n0)
+			area2 = intrinsic_area(coeff_recon[1], qm, qm, dim) 
 
 		end3 = time.time()
 
-		print ' {:20.3f} {:20.3f} {:20.3f} {:10.3f} | {:10.6f} {:10.6f} | {:10.3f} {:10.3f} {:10.3f} {:10.3f}'.format(end1 - start1, 
-				end2 - end1, end3 - end2, end3 - start1, psi1, psi2, H_var_coeff1, H_var_coeff1_recon, H_var_coeff2, H_var_coeff2_recon)
+		print ' {:20.3f} {:20.3f} {:20.3f} {:10.3f} | {:10.6f} {:10.6f} | {:10.3f} {:10.3f} {:10.3f} {:10.3f} | {:10.3f} {:10.3f}'.format(end1 - start1, 
+				end2 - end1, end3 - end2, end3 - start1, psi1, psi2, H_var_coeff1, H_var_coeff1_recon, H_var_coeff2, H_var_coeff2_recon, area1, area2)
 
 		if abs(H_var_piv1_recon - H_var_coeff1_recon) <= var_lim: recon_1 = False
 		else: 
@@ -1517,7 +1521,7 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 
 	file_name_pos = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
 	file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
-	file_name_count = '{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)	
+	file_name_count = '{}_{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)	
 
 	if recon:
 		file_name_pos += '_R'
@@ -1563,42 +1567,107 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 				ut.save_hdf5(den_dir, file_name_count + '_count_corr', count_corr_array, frame, mode_count_corr)
 
 
-def intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, nframe, nsample, nz = 100, recon=False, ow_dist=False):
+def av_intrinsic_dist(directory, file_name, dim, nslice, qm, n0, phi, nframe, nsample, nz = 100, recon=False, ow_dist=False):
+	"""
+	av_intrinsic_dist(directory, file_name, dim, nslice, qm, n0, phi, nframe, nsample, nz = 100, recon=False, ow_dist=False)
 
+	Summate average density and curvature distributions
+
+	Parameters
+	----------
+
+	directory:  str
+		File path of directory of alias analysis.
+	file_name:  str
+		File name of trajectory being analysed.
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+	nslice: int
+		Number of bins in density histogram along axis normal to surface
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	n0:  int
+		Maximum number of molecular pivots in intrinsic surface
+	phi:  float
+		Weighting factor of minimum surface area term in surface optimisation function
+	nframe:  int
+		Number of frames in simulation trajectory
+	nsample:  int
+		Number of frames to average over
+	nz: int (optional)
+		Number of bins in curvature histogram along axis normal to surface (default=100)
+	recon:  bool (optional)
+		Whether to use surface reconstructe coefficients (default=False)
+	ow_dist:  bool (optional)
+		Whether to overwrite average density and curvature distributions (default=False)
+
+	Returns
+	-------
+
+	int_den_curve_matrix:  float, array_like; shape=(qm+1, nslice, nz)
+		Average intrinsic density-curvature distribution for each resolution across nsample frames
+	int_density:  float, array_like; shape=(qm+1, nslice)
+		Average intrinsic density distribution for each resolution across nsample frames
+	int_curvature:  float, array_like; shape=(qm+1, nz)
+		Average intrinsic surface curvature distribution for each resolution across nsample frames
+
+	"""
+	
 	den_dir = directory +'/intden'
-	file_name_count = '{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)
+	file_name_count = '{}_{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)
+
 	if recon: file_name_count += '_R'
 
-	int_den_curve_matrix = np.zeros((qm+1, nslice, nz))
-	int_density = np.zeros((qm+1, nslice))
-	int_curvature = np.zeros((qm+1, nz))
+	if not os.path.exists('{}/{}.npy'.format(den_dir, file_name_count + '_int_den_curve')):
 
-	print "\n--- Loading in Density and Curvature Distributions ---\n"
+		int_den_curve_matrix = np.zeros((qm+1, nslice, nz))
 
-	lslice = dim[2] / nslice
-	Vslice = dim[0] * dim[1] * lslice
+		print "\n--- Loading in Density and Curvature Distributions ---\n"
 
-	for frame in xrange(nsample):
-		sys.stdout.write("Frame {}\r".format(frame))
-		sys.stdout.flush()
+		lslice = dim[2] / nslice
+		Vslice = dim[0] * dim[1] * lslice
 
-		count_corr_array = ut.load_hdf5(den_dir, file_name_count + '_count_corr', frame)
+		for frame in xrange(nsample):
+			sys.stdout.write("Frame {}\r".format(frame))
+			sys.stdout.flush()
 
-		int_den_curve_matrix += count_corr_array / (nsample * Vslice)
-		int_density += np.mean(count_corr_array, axis=2) / (Vslice * nsample)
-		int_curvature += np.mean(np.moveaxis(count_corr_array, 1, 2), axis=2) / (Vslice * nsample)
+			count_corr_array = ut.load_hdf5(den_dir, file_name_count + '_count_corr', frame)
+			int_den_curve_matrix += count_corr_array / (nsample * Vslice)
 
-	file_name_count = '{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nsample)
-	file_name_den = '{}_{}_{}_{}_{}_{}'.format(file_name, nslice, qm, n0, int(1./phi + 0.5), nsample)
-	file_name_curve = '{}_{}_{}_{}_{}_{}'.format(file_name, nz, qm, n0, int(1./phi + 0.5), nsample)
+		ut.save_npy(directory + '/intden', file_name_count + '_int_den_curve', int_den_curve_matrix)
 
-	if recon: 
-		file_name_count += '_R'
-		file_name_den += '_R'
-		file_name_curve += '_R'
+	else:
+		int_den_curve_matrix = ut.load_npy(directory + '/intden', file_name_count + '_int_den_curve', (qm+1, nslice, nz))
 
-	
+	int_density = np.mean(int_den_curve_matrix, axis=2)
+	int_curvature = np.mean(np.moveaxis(int_den_curve_matrix, 1, 2), axis=2)
+
 	return int_den_curve_matrix, int_density, int_curvature
 
+
+def gamma_q_coeff(coeff_2, qm, qu, DIM, T, q2_set):
+
+	gamma_list = []
+	gamma_hist = np.zeros(len(q2_set))
+	gamma_count = np.zeros(len(q2_set))
+
+	dim = np.array(DIM) * 1E-10
+
+	for u in xrange(-qu, qu+1):
+		for v in xrange(-qu, qu+1):
+			j = (2 * qm + 1) * (u + qm) + (v + qm)
+			dot_prod = np.pi**2 * (u**2 * dim[1] / dim[0] + v**2 * dim[0] / dim[1])
+			set_index = np.round(u**2*dim[1]/dim[0] + v**2*dim[0]/dim[1], 4)
+
+			if set_index != 0:
+				gamma = 1. / (ut.check_uv(u, v) * auv_2[j] * 1E-20 * dot_prod)
+				gamma_list.append(gamma)
+				gamma_hist[q2_set == set_index] += gamma
+				gamma_count[q2_set == set_index] += 1
+
+	for i in xrange(len(q2_set)):
+		if gamma_count[i] != 0: gamma_hist[i] *= 1. / gamma_count[i]
+
+	return gamma_hist * con.k * 1E3 * T
 
 

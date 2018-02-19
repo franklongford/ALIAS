@@ -9,7 +9,7 @@ Created 24/11/2016 by Frank Longford
 
 Contributors: Frank Longford, Sam Munday
 
-Last modified 14/12/18 by Frank Longford
+Last modified 19/2/18 by Frank Longford
 """
 
 import numpy as np
@@ -19,8 +19,6 @@ from scipy import stats
 import scipy.constants as con
 
 import mdtraj as md
-
-import matplotlib.pyplot as plt
 
 SQRT2 = np.sqrt(2.)
 SQRTPI = np.sqrt(np.pi)
@@ -133,7 +131,36 @@ def molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com):
 	"""
 	molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com)
 
-	Returns XYZ arrays of molecular positions" 
+	Returns XYZ arrays of molecular positions"
+
+	Parameters
+	----------
+
+	xat:  float, array_like; shape=(natom)
+		Coordinates of atoms in x dimension
+	yat:  float, array_like; shape=(natom)
+		Coordinates of atoms in y dimension
+	zat:  float, array_like; shape=(natom)
+		Coordinates of atoms in z dimension
+	nmol:  int
+		Number of molecules in simulation
+	nsite:  int
+		Number of atomic sites per molecule
+	mol_M:  float, array_like; shape=(natom)
+		Masses of atomic sites in g mol-1
+	mol_com:
+		Mode of calculation: if 'COM', centre of mass is used, otherwise atomic site index is used
+
+	Returns
+	-------
+
+	xmol:  float, array_like; shape=(nmol)
+		Coordinates of molecules in x dimension
+	ymol:  float, array_like; shape=(nmol)
+		Coordinates of molecules in y dimension
+	zmol:  float, array_like; shape=(nmol)
+		Coordinates of molecules in z dimension
+
 	"""
 	if mol_com == 'COM':
 		"USE CENTRE OF MASS AS MOLECULAR POSITION"
@@ -151,19 +178,102 @@ def molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com):
 	return xmol, ymol, zmol
 
 
-def make_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol, mol_com):
+def save_npy(directory, file_name, array, frames=[], mode='w'):
 	"""
-	make_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol, mol_com)
+	save_npy(directory, file_name, array, frame, mode='w')
+
+	General purpose algorithm to save an array to a npy file
+
+	Parameters
+	----------
+
+	directory:  str
+		File path of directory of alias analysis.
+	file_name:  str
+		File name of trajectory being analysed
+	array:  array_like (float);
+		Data array to be saved
+	frames:  int (optional)
+		Trajectory frame to save
+	mode:  str (optional)
+		Option to append write 'w', or read-write 'r+'	
+	"""
+
+	with file('{}/{}.npy'.format(directory, file_name), mode) as outfile:
+		if len(frames) == 0: np.save(outfile, array)
+		else: np.save(outfile[frames], array)
+
+
+def load_npy(directory, file_name, shape, frames=[]):
+	"""
+	load_npy(directory, file_name, array, frame='all')
+
+	General purpose algorithm to load an array from a npy file
+
+	Parameters
+	----------
+
+	directory:  str
+		File path of directory of alias analysis.
+	file_name:  str
+		File name of trajectory being analysed
+	frame:  int, list (optional)
+		Trajectory frames to load
+
+	Returns
+	-------
+
+	array:  array_like (float);
+		Data array to be loaded
+	"""
+
+	if len(frames) == 0: array = np.load('{}/{}.npy'.format(directory, file_name), mmap_mode='r')
+	else: array = np.load('{}/{}.npy'.format(directory, file_name), mmap_mode='r')[frames]
+
+	return array
+
+
+def make_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol_com):
+	"""
+	make_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol_com)
 
 	Generates molecular positions and centre of mass for each frame
+
+	Parameters
+	----------
+
+	traj:  mdtraj obj
+		Mdtraj trajectory object
+	directory:  str
+		File path of directory of alias analysis.
+	file_name:  str
+		File name of trajectory being analysed
+	natom:  int
+		Number of atoms in simulation
+	nmol:  int
+		Number of molecules in simulation
+	at_index:  int, array_like; shape=(nsite*nmol)
+		Indicies of atoms that are in molecules selected to determine intrinsic surface
+	nframe:  int
+		Number of frames in simulation trajectory
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+	nsite:  int
+		Number of atomic sites in molecule
+	M:  float, array_like; shape=(nsite)
+		Masses of atomic sites in molecule
+	mol_com:
+		Mode of calculation: if 'COM', centre of mass is used, otherwise atomic site index is used
+
 	"""
 	print "\n-----------CREATING POSITIONAL FILES------------\n"
 
-	if not os.path.exists("{}/pos".format(directory)): os.mkdir("{}/pos".format(directory))
+	pos_dir = directory + '/pos'
+	if not os.path.exists(pos_dir): os.mkdir(pos_dir)
 
-	XMOL = np.zeros((nframe, nmol))
-	YMOL = np.zeros((nframe, nmol))
-	ZMOL = np.zeros((nframe, nmol))
+	xmol = np.zeros((nframe, nmol))
+	ymol = np.zeros((nframe, nmol))
+	zmol = np.zeros((nframe, nmol))
 	COM = np.zeros((nframe, 3))
 
 	mol_M = np.array(M * nmol)
@@ -181,21 +291,16 @@ def make_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, dim,
 		yat = XYZ[frame][1][at_index]
 		zat = XYZ[frame][2][at_index]
 
-		if nsite > 1: XMOL[frame], YMOL[frame], ZMOL[frame] = molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com)
-		else: XMOL[frame], YMOL[frame], ZMOL[frame] = xat, yat, zat
-			
-
+		if nsite > 1: xmol[frame], ymol[frame], zmol[frame] = molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com)
+		else: xmol[frame], ymol[frame], zmol[frame] = xat, yat, zat
+		
 	file_name_pos = file_name + '_{}'.format(nframe)
 
 	print '\nSAVING OUTPUT MOLECULAR POSITION FILES\n'
-	with file('{}/pos/{}_xmol.npy'.format(directory, file_name_pos), 'w') as outfile:
-		np.save(outfile, XMOL)
-	with file('{}/pos/{}_ymol.npy'.format(directory, file_name_pos), 'w') as outfile:
-		np.save(outfile, YMOL)
-	with file('{}/pos/{}_zmol.npy'.format(directory, file_name_pos), 'w') as outfile:
-		np.save(outfile, ZMOL)
-	with file('{}/pos/{}_com.npy'.format(directory, file_name_pos), 'w') as outfile:
-		np.save(outfile, COM)
+	save_npy(pos_dir, file_name_pos + '_xmol', xmol)
+	save_npy(pos_dir, file_name_pos + '_ymol', ymol)
+	save_npy(pos_dir, file_name_pos + '_zmol', zmol)
+	save_npy(pos_dir, file_name_pos + '_com', COM)
 
 
 def read_mol_positions(directory, file_name, ntraj, nframe):
@@ -217,19 +322,6 @@ def read_com_positions(directory, file_name, ntraj, nframe):
 	return COM
 
 
-def model_mdtraj():
-
-	natom = int(traj.n_atoms)
-	nmol = int(traj.n_residues)
-	nsite = natom / nmol
-
-	AT = [atom.name for atom in traj.topology.atoms][:nsite]
-	M = [atom.mass for atom in traj.topology.atoms][:nsite] 
-	sigma_m = float(raw_input("Enter molecular radius (Angstroms): "))
-
-	return nsite, AT, M, sigma_m
-
-
 def bubblesort(alist, key):
 	"""
 	bubblesort(alist, key)
@@ -249,6 +341,11 @@ def bubblesort(alist, key):
 				key[i+1] = temp
 
 def unit_vector(vector, axis=-1):
+	"""
+	unit_vector(vector, axis=-1)
+
+	Returns unit vector of vector
+	"""
 
 	vector = np.array(vector)
 	magnitude_2 = np.sum(vector.T**2, axis=axis)
@@ -257,48 +354,71 @@ def unit_vector(vector, axis=-1):
 	return u_vector
 
 
-def normalise(A):
+def normalise(array):
+	"""
+	normalise(array)
 
-	max_A = np.max(A)
-	min_A = np.min(A)
+	Returns an array normalised by the range of values in input array
+	"""
+	array = np.array(array)
+	max_array = np.max(array)
+	min_array = np.min(array)
 
-	return (np.array(A) - min_A) / (max_A - min_A)
-
-
-def get_fourier(auv, nm):
-
-        f = np.zeros(len(auv), dtype=complex)
-
-        for u in xrange(-nm,nm+1):
-                for v in xrange(-nm, nm+1):
-                        index = (2 * nm + 1) * (u + nm) + (v + nm)
-
-                        j1 = (2 * nm + 1) * (abs(u) + nm) + (abs(v) + nm)
-                        j2 = (2 * nm + 1) * (-abs(u) + nm) + (abs(v) + nm)
-                        j3 = (2 * nm + 1) * (abs(u) + nm) + (-abs(v) + nm)
-                        j4 = (2 * nm + 1) * (-abs(u) + nm) + (-abs(v) + nm)
-
-			if abs(u) + abs(v) == 0: f[index] = auv[j1]
-
-                        elif v == 0: f[index] = (auv[j1] - np.sign(u) * 1j * auv[j2]) / 2.
-                        elif u == 0: f[index] = (auv[j1] - np.sign(v) * 1j * auv[j3]) / 2.
-
-                        elif u < 0 and v < 0: f[index] = (auv[j1] + 1j * (auv[j2] + auv[j3]) - auv[j4]) / 4.
-                        elif u > 0 and v > 0: f[index] = (auv[j1] - 1j * (auv[j2] + auv[j3]) - auv[j4]) / 4.
-
-                        elif u < 0: f[index] = (auv[j1] + 1j * (auv[j2] - auv[j3]) + auv[j4]) / 4.
-                        elif v < 0: f[index] = (auv[j1] - 1j * (auv[j2] - auv[j3]) + auv[j4]) / 4.
-
-        return f
+	return (array - min_array) / (max_array - min_array)
 
 
-def linear(x, m, c): return m*x + c
+def get_fourier_coeff(coeff, qm):
+	"""
+	get_fourier(coeff, nm)
+
+	Returns Fouier coefficients for Fouier series representing intrinsic surface from linear algebra coefficients
+
+	Parameters
+	----------
+
+	coeff:	float, array_like; shape=(n_waves**2)
+		Optimised linear algebra surface coefficients
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	
+	Returns
+	-------
+
+	f_coeff:  float, array_like; shape=(n_waves**2)
+		Optimised Fouier surface coefficients
+	
+	"""
+
+	n_waves = 2 * qm + 1
+        f_coeff = np.zeros(n_waves**2, dtype=complex)
+
+        for u in xrange(-qm,qm+1):
+                for v in xrange(-qm, qm+1):
+                        index = n_waves * (u + qm) + (v + qm)
+
+                        j1 = n_waves * (abs(u) + qm) + (abs(v) + qm)
+                        j2 = n_waves * (-abs(u) + qm) + (abs(v) + qm)
+                        j3 = n_waves * (abs(u) + qm) + (-abs(v) + qm)
+                        j4 = n_waves * (-abs(u) + qm) + (-abs(v) + qm)
+
+			if abs(u) + abs(v) == 0: f_coeff[index] = coeff[j1]
+
+                        elif v == 0: f_coeff[index] = (coeff[j1] - np.sign(u) * 1j * coeff[j2]) / 2.
+                        elif u == 0: f_coeff[index] = (coeff[j1] - np.sign(v) * 1j * coeff[j3]) / 2.
+
+                        elif u < 0 and v < 0: f_coeff[index] = (coeff[j1] + 1j * (coeff[j2] + coeff[j3]) - coeff[j4]) / 4.
+                        elif u > 0 and v > 0: f_coeff[index] = (coeff[j1] - 1j * (coeff[j2] + coeff[j3]) - coeff[j4]) / 4.
+
+                        elif u < 0: f_coeff[index] = (coeff[j1] + 1j * (coeff[j2] - coeff[j3]) + coeff[j4]) / 4.
+                        elif v < 0: f_coeff[index] = (coeff[j1] - 1j * (coeff[j2] - coeff[j3]) + coeff[j4]) / 4.
+
+        return f_coeff
+
+
+def linear(x, m, c): return m * x + c
 
 
 def gaussian(x, mean, std): return np.exp(-(x-mean)**2 / (2 * std**2)) / (SQRT2 * std * SQRTPI)
-
-
-def laplace(x, mean, std): return np.exp(-abs(x-mean) / std ) / (2 * std)
 
 
 def gaussian_smoothing(arrays, centres, deltas, DIM, nslice):
@@ -307,11 +427,20 @@ def gaussian_smoothing(arrays, centres, deltas, DIM, nslice):
 
 	stds = np.sqrt(np.array(deltas))
 	lslice = DIM[2] / nslice
+
 	Z1 = np.linspace(0, DIM[2], nslice)
 	max_std = np.max(stds)
 	length = int(max_std / lslice) * 12
 	ZG = np.arange(-lslice*length/2, lslice*length/2 + lslice/2, lslice)
 	P_arrays = [[gaussian(z, 0, STD) for z in ZG ] for STD in stds]
+	
+	print P_arrays.shape. P_arrays[0]
+
+	P_arrays = [sp.signal.gaussian(length, STD) for STD in stds]
+
+	print P_arrays.shape. P_arrays[0]
+
+	sys.exit()
 
 	#print ""
 	#print max_std * 12, length, ZG[0], ZG[-1], lslice*length/2, ZG[1] - ZG[0], lslice
@@ -327,33 +456,6 @@ def gaussian_smoothing(arrays, centres, deltas, DIM, nslice):
 				try: cw_arrays[i][n1] += array[indexes[i]] * P_arrays[i][n2] * lslice
 				except IndexError: pass
 	return cw_arrays
-
-
-def shape_check_hdf5(directory, file_name):
-	"""
-	shape_check_hdf5(directory, file_name, nframe)
-
-	General purpose algorithm to check the shape the dataset in a hdf5 file 
-
-	Parameters
-	----------
-
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed
-
-	Returns
-	-------
-
-	shape_hdf5:  int, tuple
-		Shape of object dataset in hdf5 file
-	"""
-
-	with tables.open_file('{}/{}.hdf5'.format(directory, file_name), 'r') as infile:
-		shape_hdf5 = infile.root.dataset.shape
-
-	return shape_hdf5
 
 
 def make_earray(file_name, arrays, atom, sizes):
@@ -470,11 +572,11 @@ def save_hdf5(directory, file_name, array, frame, mode='a'):
 			outfile.root.dataset[frame] = array
 
 
-def save_npy(directory, file_name, array, frames=[], mode='w+'):
+def shape_check_hdf5(directory, file_name):
 	"""
-	save_npy(directory, file_name, array, frame, mode='w')
+	shape_check_hdf5(directory, file_name, nframe)
 
-	General purpose algorithm to save an array to a npy file
+	General purpose algorithm to check the shape the dataset in a hdf5 file 
 
 	Parameters
 	----------
@@ -483,43 +585,19 @@ def save_npy(directory, file_name, array, frames=[], mode='w+'):
 		File path of directory of alias analysis.
 	file_name:  str
 		File name of trajectory being analysed
-	array:  array_like (float);
-		Data array to be saved
-	frame:  int (optional)
-		Trajectory frame to save
-	mode:  str (optional)
-		Option to append write 'w+', or read-write 'r+'	
-	"""
-
-	outfile = np.memmap('{}/{}.npy'.format(directory, file_name), dtype=array.dtype, mode=mode, shape=array.shape)
-	if len(frames) == 0: outfile[:] = array[:]
-	else: outfile[frames] = array
-
-
-def load_npy(directory, file_name, frames=[]):
-	"""
-	load_npy(directory, file_name, array, frame='all')
-
-	General purpose algorithm to load an array from a npy file
-
-	Parameters
-	----------
-
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed
-	frame:  int, list (optional)
-		Trajectory frames to load
 
 	Returns
 	-------
 
-	array:  array_like (float);
-		Data array to be loaded
+	shape_hdf5:  int, tuple
+		Shape of object dataset in hdf5 file
 	"""
 
-	if len(frames) == 0: array = np.memmap('{}/{}.npy'.format(directory, file_name), mode='r')
-	else: array = np.memmap('{}/{}.npy'.format(directory, file_name), mode='r')[frames]
-	return array
+	with tables.open_file('{}/{}.hdf5'.format(directory, file_name), 'r') as infile:
+		shape_hdf5 = infile.root.dataset.shape
+
+	return shape_hdf5
+
+
+
 

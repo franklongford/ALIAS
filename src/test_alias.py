@@ -31,16 +31,12 @@ def test_unit_vector():
 	u_vector = ut.unit_vector(vector)
 
 	assert np.sum(u_vector - np.array([-0.42857143,  0.28571429,  0.85714286])) <= 1E-5
-	#assert np.sum(u_vector * magnitude - np.array(vector)) <= 1E-5
 
 	vector_array = [[3, 2, 6], [1, 2, 5], [4, 2, 5], [-7, -1, 2]]
-
-	#vunit = np.vectorize(ut.unit_vector)
 
 	u_vector_array = ut.unit_vector(vector_array)
 
 	assert np.array(vector_array).shape == u_vector_array.shape
-	#assert np.sum(u_vector_array * magnitude - np.array(vector_array)) <= 1E-5
 
 
 def test_sim_param():

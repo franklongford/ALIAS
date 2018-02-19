@@ -8,29 +8,28 @@ Created 24/11/2016 by Frank Longford
 
 Contributors: Frank Longford
 
-Last modified 14/12/18 by Frank Longford
+Last modified 19/2/18 by Frank Longford
+
+
+Parameters
+----------
+
+traj_file:  str
+	Trajectory file name
+top_file:  str
+	Topology file name
+
+Returns
+-------
+
+
 """
-import matplotlib
-#matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-
 import numpy as np
-import scipy as sp
-import scipy.constants as con
-import scipy.integrate as spin
-from scipy import stats
-from scipy import constants as con
-from scipy.optimize import curve_fit, leastsq
-from scipy.interpolate import bisplrep, bisplev, splprep, splev
-
-import subprocess, time, sys, os, math, copy, gc, tables
-
+import sys, os
 import mdtraj as md
 
 import utilities as ut
 import intrinsic_sampling_method as ism
-import graphs as graphs
-
 
 print ' '+ '_' * 43
 print "|                   __ __             ____  |"
@@ -123,7 +122,7 @@ except:
 
 file_name = "{}_{}_{}".format(traj_file.split('.')[0], mol, mol_com)
 if not os.path.exists('{}/pos/{}_{}_com.npy'.format(data_dir, file_name, nframe)):
-	ut.make_at_mol_com(traj, data_dir, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol, mol_com) 
+	ut.make_mol_com(traj, data_dir, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol_com) 
 
 del traj
 
@@ -179,7 +178,7 @@ except:
 	else:
 		print "\n-------OPTIMISING SURFACE DENSITY-------\n"
 
-		start_ns = 1.15
+		start_ns = 0.75
 		step_ns = 0.05
 
 		print "Using initial pivot number = {}, step size = {}".format(int(dim[0] * dim[1] * start_ns / mol_sigma**2), int(dim[0] * dim[1] * step_ns / mol_sigma**2))
