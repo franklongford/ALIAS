@@ -19,9 +19,6 @@ traj_file:  str
 top_file:  str
 	Topology file name
 
-Returns
--------
-
 
 """
 import numpy as np
@@ -162,7 +159,7 @@ try:
 		phi = checkfile['phi']
 	else: raise Exception
 except: 
-	if bool(raw_input("\nUse recommended weighting coefficient for surface area minimisation: phi = 1E-8? (Y/N): ").upper() == 'Y'):
+	if bool(raw_input("\nUse recommended weighting coefficient for surface area minimisation: phi = 5E-8? (Y/N): ").upper() == 'Y'):
 		phi = 5E-8
 	else: phi = float(raw_input("\nManually enter weighting coefficient: "))
 	checkfile = ut.update_checkfile(checkfile_name, 'phi', phi)

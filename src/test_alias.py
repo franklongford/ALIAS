@@ -60,3 +60,20 @@ def test_checkfile():
 
 	assert len(checkfile['M']) == 4
 	assert np.sum(np.array(checkfile['M']) - 18.016) <= 1E-5
+
+
+def test_load_save():
+
+	test_data = np.arange(50)
+
+	ut.save_npy(alias_dir, 'test_load_save', test_data)
+	load_data = ut.load_npy(alias_dir, 'test_load_save')
+
+	assert np.sum(test_data - load_data) <= 1E-5
+
+	new_test_data = test_data[:10]
+	load_data = ut.load_npy(alias_dir, 'test_load_save', frames=range(10))
+
+	assert np.sum(new_test_data - load_data) <= 1E-5
+
+	

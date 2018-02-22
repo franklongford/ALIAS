@@ -178,9 +178,9 @@ def molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com):
 	return xmol, ymol, zmol
 
 
-def save_npy(directory, file_name, array, frames=[], mode='w'):
+def save_npy(directory, file_name, array):
 	"""
-	save_npy(directory, file_name, array, frame, mode='w')
+	save_npy(directory, file_name, array)
 
 	General purpose algorithm to save an array to a npy file
 
@@ -193,20 +193,15 @@ def save_npy(directory, file_name, array, frames=[], mode='w'):
 		File name of trajectory being analysed
 	array:  array_like (float);
 		Data array to be saved
-	frames:  int (optional)
-		Trajectory frame to save
-	mode:  str (optional)
-		Option to append write 'w', or read-write 'r+'	
 	"""
 
-	with file('{}/{}.npy'.format(directory, file_name), mode) as outfile:
-		if len(frames) == 0: np.save(outfile, array)
-		else: np.save(outfile[frames], array)
+	with file('{}/{}.npy'.format(directory, file_name), 'w') as outfile:
+		np.save(outfile, array)
 
 
-def load_npy(directory, file_name, shape, frames=[]):
+def load_npy(directory, file_name, frames=[]):
 	"""
-	load_npy(directory, file_name, array, frame='all')
+	load_npy(directory, file_name, frames=[])
 
 	General purpose algorithm to load an array from a npy file
 
@@ -217,7 +212,7 @@ def load_npy(directory, file_name, shape, frames=[]):
 		File path of directory of alias analysis.
 	file_name:  str
 		File name of trajectory being analysed
-	frame:  int, list (optional)
+	frames:  int, list (optional)
 		Trajectory frames to load
 
 	Returns
@@ -301,25 +296,6 @@ def make_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, dim,
 	save_npy(pos_dir, file_name_pos + '_ymol', ymol)
 	save_npy(pos_dir, file_name_pos + '_zmol', zmol)
 	save_npy(pos_dir, file_name_pos + '_com', COM)
-
-
-def read_mol_positions(directory, file_name, ntraj, nframe):
-
-	file_name = '{}_{}'.format(file_name, ntraj)
-
-	xmol = np.load('{}/pos/{}_xmol.npy'.format(directory, file_name), mmap_mode='r')[:nframe]
-	ymol = np.load('{}/pos/{}_ymol.npy'.format(directory, file_name), mmap_mode='r')[:nframe]
-	zmol = np.load('{}/pos/{}_zmol.npy'.format(directory, file_name), mmap_mode='r')[:nframe]
-
-	return xmol, ymol, zmol
-
-def read_com_positions(directory, file_name, ntraj, nframe):
-
-	file_name = '{}_{}'.format(file_name, ntraj)
-
-	COM = np.load('{}/pos/{}_com.npy'.format(directory, file_name), mmap_mode = 'r')[:nframe]
-
-	return COM
 
 
 def bubblesort(alist, key):
@@ -421,41 +397,56 @@ def linear(x, m, c): return m * x + c
 def gaussian(x, mean, std): return np.exp(-(x-mean)**2 / (2 * std**2)) / (SQRT2 * std * SQRTPI)
 
 
-def gaussian_smoothing(arrays, centres, deltas, DIM, nslice):
+def gaussian_convolution(arrays, centres, deltas, dim, nslice):
+	"""
+	gaussian_convolution(arrays, centres, deltas, dim, nslice)
 
-	cw_arrays = np.zeros((len(arrays), len(arrays[0])))
+	Convolution of distributions 'arrays' using a normal probability distribution with mean=centres and variance=deltas
+
+	Parameters
+	----------
+
+	arrays:  float, array_like; shape=(n_arrays, n_dist)
+		Set of arrays to convolute
+	centres: float, array_like; shape=(n_arrays)	
+		Set of mean values for normal probability distributions
+	deltas: float, array_like; shape=(n_arrays)	
+		Set of variances for normal probability distributions
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+	nslice: int
+		Number of bins in density histogram along axis normal to surface
+
+	Returns
+	-------
+
+	conv_arrays:  float, array_like; shape=(n_arrays, n_dist)
+		Set of convoluted arrays
+
+	"""
+
+	conv_arrays = np.zeros(arrays.shape)
 
 	stds = np.sqrt(np.array(deltas))
-	lslice = DIM[2] / nslice
+	lslice = dim[2] / nslice
 
-	Z1 = np.linspace(0, DIM[2], nslice)
+	Z1 = np.linspace(0, dim[2], nslice)
 	max_std = np.max(stds)
 	length = int(max_std / lslice) * 12
 	ZG = np.arange(-lslice*length/2, lslice*length/2 + lslice/2, lslice)
 	P_arrays = [[gaussian(z, 0, STD) for z in ZG ] for STD in stds]
 	
-	print P_arrays.shape. P_arrays[0]
-
-	P_arrays = [sp.signal.gaussian(length, STD) for STD in stds]
-
-	print P_arrays.shape. P_arrays[0]
-
-	sys.exit()
-
-	#print ""
-	#print max_std * 12, length, ZG[0], ZG[-1], lslice*length/2, ZG[1] - ZG[0], lslice
-
 	for n1, z1 in enumerate(Z1):
 		for n2, z2 in enumerate(ZG):
 			sys.stdout.write("PERFORMING GAUSSIAN SMOOTHING {0:.1%} COMPLETE \r".format(float(n1 * nslice + n2) / nslice**2) )
 			sys.stdout.flush()
 
-			indexes = [int((z1 - z2 - z0) / DIM[2] * nslice) % nslice for z0 in centres]
+			indexes = [int((z1 - z2 - z0) / dim[2] * nslice) % nslice for z0 in centres]
 
 			for i, array in enumerate(arrays):
-				try: cw_arrays[i][n1] += array[indexes[i]] * P_arrays[i][n2] * lslice
+				try: conv_arrays[i][n1] += array[indexes[i]] * P_arrays[i][n2] * lslice
 				except IndexError: pass
-	return cw_arrays
+	return conv_arrays
 
 
 def make_earray(file_name, arrays, atom, sizes):

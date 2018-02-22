@@ -11,7 +11,7 @@ Last modified 19/2/18 by Frank Longford
 """
 
 import numpy as np
-import scipy as sp
+import scipy as sp, scipy.constants as con
 
 import utilities as ut
 
@@ -179,7 +179,7 @@ def make_zeta_list(xmol, ymol, dim, mol_list, coeff, qm, qu):
 	
 	"""
 
-	zeta_list = chi(xmol[mol_list], ymol[mol_list], coeff, qm, qu, dim)
+	zeta_list = xi(xmol[mol_list], ymol[mol_list], coeff, qm, qu, dim)
    
 	return zeta_list
 
@@ -391,7 +391,7 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 
 	n_waves = 2*qm+1
 
-	"Form the diagonal chi^2 terms"
+	"Form the diagonal xi^2 terms"
 	u = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
         v = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
 
@@ -483,17 +483,17 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 	return coeff, pivot
 
 
-def H_var_coeff(coeff, qm, qu, dim):
+def H_var_coeff(coeff_2, qm, qu, dim):
 	"""
-	H_var_coeff(coeff, qm, qu, dim)
+	H_var_coeff(coeff_2, qm, qu, dim)
 
 	Variance of mean curvature H across surface determined by coeff at resolution qu
 
 	Parameters
 	----------
 
-	coeff:	float, array_like; shape=(n_waves**2)
-		Optimised surface coefficients
+	coeff_2:  float, array_like; shape=(n_waves**2)
+		Square of optimised surface coefficients
 	qm:  int
 		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
 	qu:  int
@@ -516,7 +516,7 @@ def H_var_coeff(coeff, qm, qu, dim):
 	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
 	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
 
-	H_var = 4 * np.pi**4 * vcheck(u_array, v_array) * coeff**2
+	H_var = 4 * np.pi**4 * vcheck(u_array, v_array) * coeff_2
 	H_var *= (u_array**4 / dim[0]**4 + v_array**4 / dim[1]**4 + 2 * u_array**2 * v_array**2 / (dim[0]**2 * dim[1]**2))
 	H_var *= (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
 
@@ -576,7 +576,7 @@ def H_var_piv(xmol, ymol, coeff, pivot, qm, qu, dim):
 	curve_diag = 16 * np.pi**4 * (u_matrix**2 * u_matrix.T**2 / dim[0]**4 + v_matrix**2 * v_matrix.T**2 / dim[1]**4 +
 				     (u_matrix**2 * v_matrix.T**2 + u_matrix.T**2 * v_matrix**2) / (dim[0]**2 * dim[1]**2))
 
-	"Form the diagonal chi^2 terms and b vector solutions"
+	"Form the diagonal xi^2 terms and b vector solutions"
         fuv = np.zeros((n_waves**2, n0))
         for j in xrange(n_waves**2):
                 fuv[j] = wave_function(xmol[pivot], int(j/n_waves)-qm, dim[0]) * wave_function(ymol[pivot], int(j%n_waves)-qm, dim[1])
@@ -639,7 +639,7 @@ def surface_reconstruction(coeff, pivot, xmol, ymol, zmol, dim, qm, n0, phi, psi
 
 	start = time.time()	
 
-	"Form the diagonal chi^2 terms and b vector solutions"
+	"Form the diagonal xi^2 terms and b vector solutions"
 	A = np.zeros((2, n_waves**2, n_waves**2))
 	fuv1 = np.zeros((n_waves**2, n0))
         fuv2 = np.zeros((n_waves**2, n0))
@@ -769,9 +769,9 @@ def surface_reconstruction(coeff, pivot, xmol, ymol, zmol, dim, qm, n0, phi, psi
 	return coeff_recon
 
 
-def chi(x, y, coeff, qm, qu, dim):
+def xi(x, y, coeff, qm, qu, dim):
 	"""
-	chi(x, y, coeff, qm, qu, dim)
+	xi(x, y, coeff, qm, qu, dim)
 
 	Function returning position of intrinsic surface at position (x,y)
 
@@ -794,24 +794,24 @@ def chi(x, y, coeff, qm, qu, dim):
 	Returns
 	-------
 
-	chi_z:  float
+	xi_z:  float
 		Position of intrinsic surface in z dimension
 
 	"""
 	
-	chi_z = 0
+	xi_z = 0
 
 	for u in xrange(-qu, qu+1):
 		for v in xrange(-qu, qu+1):
 			j = (2 * qm + 1) * (u + qm) + (v + qm)
-			chi_z += wave_function(x, u, dim[0]) * wave_function(y, v, dim[1]) * coeff[j]
+			xi_z += wave_function(x, u, dim[0]) * wave_function(y, v, dim[1]) * coeff[j]
 
-	return chi_z
+	return xi_z
 
 
-def dxy_dchi(x, y, coeff, qm, qu, dim):
+def dxy_dxi(x, y, coeff, qm, qu, dim):
 	"""
-	dxy_dchi(x, y, qm, qu, coeff, dim)
+	dxy_dxi(x, y, qm, qu, coeff, dim)
 
 	Function returning derivatives of intrinsic surface at position (x,y) wrt x and y
 
@@ -834,26 +834,26 @@ def dxy_dchi(x, y, coeff, qm, qu, dim):
 	Returns
 	-------
 
-	dx_dchi:  float
+	dx_dxi:  float
 		Derivative of intrinsic surface in x dimension
-	dy_dchi:  float
+	dy_dxi:  float
 		Derivative of intrinsic surface in y dimension
 	
 	"""
-	dx_dchi = 0
-	dy_dchi = 0
+	dx_dxi = 0
+	dy_dxi = 0
 	for u in xrange(-qu, qu+1):
 		for v in xrange(-qu, qu+1):
 			j = (2 * qm + 1) * (u + qm) + (v + qm)
-			dx_dchi += d_wave_function(x, u, dim[0]) * wave_function(y, v, dim[1]) * coeff[j]
-			dy_dchi += wave_function(x, u, dim[0]) * d_wave_function(y, v, dim[1]) * coeff[j]
+			dx_dxi += d_wave_function(x, u, dim[0]) * wave_function(y, v, dim[1]) * coeff[j]
+			dy_dxi += wave_function(x, u, dim[0]) * d_wave_function(y, v, dim[1]) * coeff[j]
 
-	return dx_dchi, dy_dchi
+	return dx_dxi, dy_dxi
 
 
-def ddxy_ddchi(x, y, coeff, qm, qu, dim):
+def ddxy_ddxi(x, y, coeff, qm, qu, dim):
 	"""
-	ddxy_ddchi(x, y, coeff, qm, qu, dim)
+	ddxy_ddxi(x, y, coeff, qm, qu, dim)
 
 	Function returning second derivatives of intrinsic surface at position (x,y) wrt x and y
 	
@@ -876,21 +876,21 @@ def ddxy_ddchi(x, y, coeff, qm, qu, dim):
 	Returns
 	-------
 
-	ddx_ddchi:  float
+	ddx_ddxi:  float
 		Second derivative of intrinsic surface in x dimension
-	ddy_ddchi:  float
+	ddy_ddxi:  float
 		Second derivative of intrinsic surface in y dimension
 	
 	"""
-	ddx_ddchi = 0
-	ddy_ddchi = 0
+	ddx_ddxi = 0
+	ddy_ddxi = 0
 	for u in xrange(-qu, qu+1):
 		for v in xrange(-qu, qu+1):
 			j = (2 * qm + 1) * (u + qm) + (v + qm)
-			ddx_ddchi += dd_wave_function(x, u, dim[0]) * wave_function(y, v, dim[1]) * coeff[j]
-			ddy_ddchi += wave_function(x, u, dim[0]) * dd_wave_function(y, v, dim[1]) * coeff[j]
+			ddx_ddxi += dd_wave_function(x, u, dim[0]) * wave_function(y, v, dim[1]) * coeff[j]
+			ddy_ddxi += wave_function(x, u, dim[0]) * dd_wave_function(y, v, dim[1]) * coeff[j]
 
-	return ddx_ddchi, ddy_ddchi
+	return ddx_ddxi, ddy_ddxi
 
 
 def H_xy(x, y, coeff, qm, qu, dim):
@@ -918,9 +918,9 @@ def H_xy(x, y, coeff, qm, qu, dim):
 	Returns
 	-------
 
-	dx_dchi:  float
+	dx_dxi:  float
 		Derivative of intrinsic surface in x dimension
-	dy_dchi:  float
+	dy_dxi:  float
 		Derivative of intrinsic surface in y dimension
 	"""
 
@@ -984,8 +984,11 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 	max_r = 1.5 * mol_sigma
 	tau = 0.5 * mol_sigma
 
-	xmol, ymol, zmol = ut.read_mol_positions(directory, file_name, nframe, nframe_ns)
-	COM = ut.read_com_positions(directory, file_name, nframe, nframe_ns)
+	xmol = ut.load_npy(directory + '/pos', file_name + '_xmol', frames=range(nframes_ns))
+	ymol = ut.load_npy(directory + '/pos', file_name + '_ymol', frames=range(nframes_ns))
+	zmol = ut.load_npy(directory + '/pos', file_name + '_zmol', frames=range(nframes_ns))
+	COM = ut.load_npy(directory + '/pos', file_name + '_com', frames=range(nframes_ns))
+
 	com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
 	zmol = zmol - com_tile
 
@@ -1177,8 +1180,10 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 
 	if not file_check:
 		print "IMPORTING GLOBAL POSITION DISTRIBUTIONS\n"
-		xmol, ymol, zmol = ut.read_mol_positions(directory, file_name, nframe, nframe)
-		COM = ut.read_com_positions(directory, file_name, nframe, nframe)
+		xmol = ut.load_npy(directory + '/pos', file_name + '_xmol')
+		ymol = ut.load_npy(directory + '/pos', file_name + '_ymol')
+		zmol = ut.load_npy(directory + '/pos', file_name + '_zmol')
+		COM = ut.load_npy(directory + '/pos', file_name + '_com')
 		nmol = xmol.shape[1]
 		com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
 
@@ -1439,6 +1444,37 @@ def make_den_curve(directory, zmol, int_z_mol, int_dxdy_mol, coeff, nmol, nslice
 	make_den_curve(directory, zmol, int_z_mol, int_dxdy_mol, coeff, nmol, nslice, nz, qm, dim)
 
 	Creates density and curvature distributions normal to surface
+
+	Parameters
+	----------
+
+	directory:  str
+		File path of directory of alias analysis.
+	zmol:  float, array_like; shape=(nmol)
+		Molecular coordinates in z dimension
+	int_z_mol:  array_like (float); shape=(nframe, 2, qm+1, nmol)
+		Molecular distances from intrinsic surface
+	int_dxdy_mol:  array_like (float); shape=(nframe, 4, qm+1, nmol)
+		First derivatives of intrinsic surface wrt x and y at xmol, ymol
+	coeff:	float, array_like; shape=(n_waves**2)
+		Optimised surface coefficients
+	nmol:  int
+		Number of molecules in simulation
+	nslice: int
+		Number of bins in density histogram along axis normal to surface
+	nz: int (optional)
+		Number of bins in curvature histogram along axis normal to surface (default=100)
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+
+	Returns
+	-------
+
+	count_corr_array:  int, array_like; shape=(qm+1, nslice, nz)
+		Number histogram binned by molecular position along z axis and mean curvature H across qm resolutions 
+
 	"""
 
 	lslice = dim[2] / nslice
@@ -1539,8 +1575,8 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 	else:file_check = False
 
 	if not file_check:
-		_, _, zmol = ut.read_mol_positions(directory, file_name, nframe, nframe)
-		COM = ut.read_com_positions(directory, file_name, nframe, nframe)
+		zmol = ut.load_npy(directory + '/pos', file_name + '_zmol')
+		COM = ut.load_npy(directory + '/pos', file_name + '_com')
 		nmol = zmol.shape[1]
 		com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
 		zmol = zmol - com_tile
@@ -1639,19 +1675,134 @@ def av_intrinsic_dist(directory, file_name, dim, nslice, qm, n0, phi, nframe, ns
 	else:
 		int_den_curve_matrix = ut.load_npy(directory + '/intden', file_name_count + '_int_den_curve', (qm+1, nslice, nz))
 
-	int_density = np.mean(int_den_curve_matrix, axis=2)
-	int_curvature = np.mean(np.moveaxis(int_den_curve_matrix, 1, 2), axis=2)
+	int_density = np.sum(int_den_curve_matrix, axis=2) / 2.
+	int_curvature = np.sum(np.moveaxis(int_den_curve_matrix, 1, 2), axis=2) / 2.
 
 	return int_den_curve_matrix, int_density, int_curvature
 
 
-def gamma_q_coeff(coeff_2, qm, qu, DIM, T, q2_set):
+def get_frequency_set(qm, dim):
+	"""
+	get_frequency_set(qm, dim)
 
-	gamma_list = []
+	Returns set of unique frequencies in Fouier series
+
+	Parameters
+	----------
+
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+
+	Returns
+	-------
+	
+	q_set:  float, array_like
+		Set of unique frequencies
+	q2_set:  float, array_like
+		Set of unique frequencies to bin coefficients to
+	"""
+
+	q_set = []
+	q2_set = []
+
+	for u in xrange(-qm, qm):
+		for v in xrange(-qm, qm):
+			q = 4 * np.pi**2 * (u**2 / dim[0]**2 + v**2/dim[1]**2)
+			q2 = u**2 * dim[1]/dim[0] + v**2 * dim[0]/dim[1]
+
+			if q2 not in q2_set:
+				q_set.append(q)
+				q2_set.append(np.round(q2, 4))
+
+	q_set = np.sqrt(np.sort(q_set, axis=None))
+	q2_set = np.sort(q2_set, axis=None)
+
+	return q_set, q2_set
+
+
+def power_spectrum_coeff(coeff_2, qm, qu, dim):
+	"""
+	power_spectrum_coeff(coeff_2, qm, qu, dim)
+
+	Returns power spectrum of average surface coefficients, corresponding to the frequencies in q2_set
+
+	Parameters
+	----------
+	
+	coeff_2:  float, array_like; shape=(n_waves**2)
+		Square of optimised surface coefficients
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	qu:  int
+		Upper limit of wave frequencies in Fouier Sum representing intrinsic surface
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+
+	Returns
+	-------
+	q_set:  float, array_like
+		Set of frequencies for power spectrum histogram
+	p_spec_hist:  float, array_like
+		Power spectrum histogram of Fouier series coefficients
+	
+	"""
+
+	q_set, q2_set = get_frequency_set(qm, dim)
+
+	p_spec_hist = np.zeros(len(q2_set))
+	p_spec_count = np.zeros(len(q2_set))
+
+	for u in xrange(-qu, qu+1):
+		for v in xrange(-qu, qu+1):
+			j = (2 * qm + 1) * (u + qm) + (v + qm)
+			set_index = np.round(u**2*dim[1]/dim[0] + v**2*dim[0]/dim[1], 4)
+
+			if set_index != 0:
+				p_spec = coeff_2[j] * check_uv(u, v) / 4.
+				p_spec_hist[q2_set == set_index] += p_spec
+				p_spec_count[q2_set == set_index] += 1
+
+	for i in xrange(len(q2_set)):
+		if p_spec_count[i] != 0: p_spec_hist[i] *= 1. / p_spec_count[i]
+
+	return q_set, p_spec_hist
+
+
+def surface_tension_coeff(coeff_2, qm, qu, dim, T):
+	"""
+	surface_tension_coeff(coeff_2, qm, qu, dim, T)
+
+	Returns spectrum of surface tension, corresponding to the frequencies in q2_set
+
+	Parameters
+	----------
+	
+	coeff_2:  float, array_like; shape=(n_waves**2)
+		Square of optimised surface coefficients
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	qu:  int
+		Upper limit of wave frequencies in Fouier Sum representing intrinsic surface
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+	T:  float
+		Average temperature of simulation (K)
+
+	Returns
+	-------
+	q_set:  float, array_like
+		Set of frequencies for power spectrum histogram
+	gamma_hist:  float, array_like
+		Surface tension histogram of Fouier series frequencies
+	
+	"""
+
+	q_set, q2_set = get_frequency_set(qm, dim)
+
 	gamma_hist = np.zeros(len(q2_set))
 	gamma_count = np.zeros(len(q2_set))
-
-	dim = np.array(DIM) * 1E-10
 
 	for u in xrange(-qu, qu+1):
 		for v in xrange(-qu, qu+1):
@@ -1660,14 +1811,21 @@ def gamma_q_coeff(coeff_2, qm, qu, DIM, T, q2_set):
 			set_index = np.round(u**2*dim[1]/dim[0] + v**2*dim[0]/dim[1], 4)
 
 			if set_index != 0:
-				gamma = 1. / (ut.check_uv(u, v) * auv_2[j] * 1E-20 * dot_prod)
-				gamma_list.append(gamma)
+				gamma = 1. / (check_uv(u, v) * coeff_2[j] * 1E-20 * dot_prod)
 				gamma_hist[q2_set == set_index] += gamma
 				gamma_count[q2_set == set_index] += 1
 
 	for i in xrange(len(q2_set)):
-		if gamma_count[i] != 0: gamma_hist[i] *= 1. / gamma_count[i]
+		if gamma_count[i] != 0: gamma_hist[i] *= con.k * 1E3 * T / gamma_count[i]
 
-	return gamma_hist * con.k * 1E3 * T
+	return q_set, gamma_hist 
 
+
+def cw_gamma_sr(q, gamma, kappa): return gamma + kappa * q**2
+
+
+def cw_gamma_lr(q, gamma, kappa0, l0): return gamma + q**2 * (kappa0 + l0 * np.log(q))
+
+
+def cw_gamma_dft(q, gamma, kappa, eta0, eta1): return gamma + eta0 * q + kappa * q**2 + eta1 * q**3
 
