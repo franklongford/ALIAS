@@ -27,6 +27,7 @@ import mdtraj as md
 
 import utilities as ut
 import intrinsic_sampling_method as ism
+import intrinsic_analysis as ia
 
 print ' '+ '_' * 43
 print "|                   __ __             ____  |"
