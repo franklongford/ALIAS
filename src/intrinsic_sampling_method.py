@@ -5,9 +5,11 @@ Performs intrinsic sampling analysis on a set of interfacial
 simulation configurations
 
 ********************************************************************
-Created 24/11/16 by Frank Longford
+Created 24/11/2016 by Frank Longford
 
-Last modified 19/2/18 by Frank Longford
+Contributors: Frank Longford
+
+Last modified 22/2/2018 by Frank Longford
 """
 
 import numpy as np
