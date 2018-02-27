@@ -16,7 +16,7 @@ Extra functions included for Surface Reconstruction routine by Longford 2018.
 Installation:
 -------------
 
-run python setup.py install
+python setup.py install
 
 
 Instructions:

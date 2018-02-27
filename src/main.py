@@ -8,7 +8,7 @@ Created 24/11/2016 by Frank Longford
 
 Contributors: Frank Longford
 
-Last modified 22/2/2018 by Frank Longford
+Last modified 27/2/2018 by Frank Longford
 
 
 Parameters
@@ -35,7 +35,7 @@ print "|     /\     |        |       /\     /      |"
 print "|    /  \    |        |      /  \    \___   |"
 print "|   /___ \   |        |     /___ \       \  |"
 print "|  /      \  |____  __|__  /      \  ____/  |"
-print '|'+ '_' * 43 + '|' + '  v1.1'
+print '|'+ '_' * 43 + '|' + '  v1.2.0.dev1'
 print ""
 print "    Air-Liquid Interface Analysis Suite"
 print ""
@@ -52,9 +52,9 @@ file_end = max([0] + [pos for pos, char in enumerate(top_file) if char == '/'])
 top_dir = top_file[:file_end]
 top_file = top_file[file_end+1:]
 
-alias_dir = traj_dir + '/alias_analysis'
-data_dir = alias_dir + '/data'
-figure_dir = alias_dir + '/figures'
+alias_dir = traj_dir + '/alias_analysis/'
+data_dir = alias_dir + '/data/'
+figure_dir = alias_dir + '/figures/'
 if not os.path.exists(alias_dir): os.mkdir(alias_dir)
 if not os.path.exists(data_dir): os.mkdir(data_dir)
 if not os.path.exists(figure_dir): os.mkdir(figure_dir)
@@ -80,7 +80,7 @@ nsite = molecules[0].n_atoms
 natom = len(atoms)
 nmol = len(molecules)
 
-checkfile_name = '{}/{}_chk'.format(alias_dir, traj_file.split('.')[0])
+checkfile_name = alias_dir + traj_file.split('.')[0] + '_chk'
 if not os.path.exists('{}.pkl'.format(checkfile_name)): 
 	ut.make_checkfile(checkfile_name)
 	checkfile = ut.update_checkfile(checkfile_name, 'dim', dim)
@@ -119,8 +119,7 @@ except:
 	checkfile = ut.update_checkfile(checkfile_name, 'mol_com', mol_com)
 
 file_name = "{}_{}_{}".format(traj_file.split('.')[0], mol, mol_com)
-if not os.path.exists('{}/pos/{}_{}_com.npy'.format(data_dir, file_name, nframe)):
-	ut.make_mol_com(traj, data_dir, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol_com) 
+ut.make_mol_com(traj, data_dir, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol_com) 
 
 del traj
 
@@ -201,3 +200,5 @@ ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, n0, phi, mol_sigma, 
 for recon in [False, True]:
 	ism.create_intrinsic_positions_dxdyz(data_dir, file_name, nmol, nframe, qm, n0, phi, dim, recon=recon, ow_pos=ow_pos)
 	ism.create_intrinsic_den_curve_dist(data_dir, file_name, qm, n0, phi, nframe, nslice, dim, recon=recon, ow_count=ow_count)
+
+print"\n---- ENDING PROGRAM ----\n"

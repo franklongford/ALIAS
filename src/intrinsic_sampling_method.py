@@ -9,7 +9,7 @@ Created 24/11/2016 by Frank Longford
 
 Contributors: Frank Longford
 
-Last modified 22/2/2018 by Frank Longford
+Last modified 27/2/2018 by Frank Longford
 """
 
 import numpy as np
@@ -229,7 +229,7 @@ def pivot_selection(zmol, mol_sigma, n0, mol_list, zeta_list, piv_n, tau):
 	dz_new_piv = zeta[zeta <= tau]
 
 	"Order pivots by zeta (shortest to longest)"
-	ut.bubblesort(new_piv, dz_new_piv)
+	ut.bubble_sort(new_piv, dz_new_piv)
 
 	"Add new pivots to pivoy list and check whether max n0 pivots are selected"
 	piv_n = np.append(piv_n, new_piv)
@@ -871,7 +871,10 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 
 	"""
 
-	if not os.path.exists("{}/surface".format(directory)): os.mkdir("{}/surface".format(directory))
+	pos_dir = directory + 'pos/'
+	surf_dir = directory + 'surface/'
+
+	if not os.path.exists(surf_dir): os.mkdir(surf_dir)
 
 	mol_ex_1 = []
 	mol_ex_2 = []
@@ -880,11 +883,11 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 	n_waves = 2 * qm + 1
 	max_r = 1.5 * mol_sigma
 	tau = 0.5 * mol_sigma
-
-	xmol = ut.load_npy(directory + '/pos', file_name + '_{}_xmol'.format(nframe), frames=range(nframes_ns))
-	ymol = ut.load_npy(directory + '/pos', file_name + '_{}_ymol'.format(nframe), frames=range(nframes_ns))
-	zmol = ut.load_npy(directory + '/pos', file_name + '_{}_zmol'.format(nframe), frames=range(nframes_ns))
-	COM = ut.load_npy(directory + '/pos', file_name + '_{}_com'.format(nframe), frames=range(nframes_ns))
+	
+	xmol = ut.load_npy(pos_dir + file_name + '_{}_xmol'.format(nframe), frames=range(nframe_ns))
+	ymol = ut.load_npy(pos_dir + file_name + '_{}_ymol'.format(nframe), frames=range(nframe_ns))
+	zmol = ut.load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe), frames=range(nframe_ns))
+	COM = ut.load_npy(pos_dir + file_name + '_{}_com'.format(nframe), frames=range(nframe_ns))
 
 	com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
 	zmol = zmol - com_tile
@@ -892,8 +895,6 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 	if nframe < nframe_ns: nframe_ns = nframe
 	ns = start_ns
 	optimising = True
-
-	surf_dir = directory + '/surface'
 
 	while optimising:
 
@@ -906,13 +907,13 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 		file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
 
 		if not os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_coeff)):
-			ut.make_hdf5(surf_dir, file_name_coeff + '_coeff', (2, n_waves**2), tables.Float64Atom())
-			ut.make_hdf5(surf_dir, file_name_coeff + '_pivot', (2, n0), tables.Int64Atom())
+			ut.make_hdf5(surf_dir + file_name_coeff + '_coeff', (2, n_waves**2), tables.Float64Atom())
+			ut.make_hdf5(surf_dir + file_name_coeff + '_pivot', (2, n0), tables.Int64Atom())
 
 		for frame in xrange(nframe_ns):
 			"Checking number of frames in coeff and pivot files"
-			frame_check_coeff = (ut.shape_check_hdf5(surf_dir, file_name_coeff + '_coeff')[0] <= frame)
-			frame_check_pivot = (ut.shape_check_hdf5(surf_dir, file_name_coeff + '_pivot')[0] <= frame)
+			frame_check_coeff = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_coeff')[0] <= frame)
+			frame_check_pivot = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_pivot')[0] <= frame)
 
 			if frame_check_coeff: mode_coeff = 'a'
 			elif ow_coeff: mode_coeff = 'r+'
@@ -923,14 +924,14 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 			else: mode_pivot = False
 
 			if not mode_coeff and not mode_pivot:
-				pivot = ut.load_hdf5(surf_dir, file_name_coeff + '_pivot', frame)
+				pivot = ut.load_hdf5(surf_dir + file_name_coeff + '_pivot', frame)
 			else:
 				sys.stdout.write("Optimising Intrinsic Surface coefficients: frame {}\n".format(frame))
 				sys.stdout.flush()
 
 				coeff, pivot = build_surface(xmol[frame], ymol[frame], zmol[frame], dim, mol_sigma, qm, n0, phi, tau, max_r)
-				ut.save_hdf5(surf_dir, file_name_coeff + '_coeff', coeff, frame, mode_coeff)
-				ut.save_hdf5(surf_dir, file_name_coeff + '_pivot', pivot, frame, mode_pivot)
+				ut.save_hdf5(surf_dir + file_name_coeff + '_coeff', coeff, frame, mode_coeff)
+				ut.save_hdf5(surf_dir + file_name_coeff + '_pivot', pivot, frame, mode_pivot)
 
 			tot_piv_n1[frame] += pivot[0]
 			tot_piv_n2[frame] += pivot[1]
@@ -957,8 +958,8 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 		if ns != opt_ns:
 			n0 = int(dim[0] * dim[1] * ns / mol_sigma**2)
 			file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
-			os.remove('{}/surface/{}_coeff.hdf5'.format(directory, file_name_coeff))
-			os.remove('{}/surface/{}_pivot.hdf5'.format(directory, file_name_coeff))
+			os.remove(surf_dir + file_name_coeff + '_coeff.hdf5')
+			os.remove(surf_dir + file_name_coeff + '_pivot.hdf5')
 
 	return opt_ns, opt_n0
 
@@ -1041,9 +1042,11 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 
 	print"\n-- Running Intrinsic Surface Routine ---\n"
 
-	if not os.path.exists("{}/surface".format(directory)): os.mkdir("{}/surface".format(directory))
+	surf_dir = directory + 'surface/'
+	pos_dir = directory + 'pos/'
 
-	surf_dir = directory + '/surface'
+	if not os.path.exists(surf_dir): os.mkdir(surf_dir)
+
 	file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
 	n_waves = 2 * qm + 1
 	max_r = 1.5 * mol_sigma
@@ -1052,14 +1055,14 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 
 	"Make coefficient and pivot files"
 	if not os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_coeff)):
-		ut.make_hdf5(surf_dir, file_name_coeff + '_coeff', (2, n_waves**2), tables.Float64Atom())
-		ut.make_hdf5(surf_dir, file_name_coeff + '_pivot', (2, n0), tables.Int64Atom())
+		ut.make_hdf5(surf_dir + file_name_coeff + '_coeff', (2, n_waves**2), tables.Float64Atom())
+		ut.make_hdf5(surf_dir + file_name_coeff + '_pivot', (2, n0), tables.Int64Atom())
 		file_check = False
 	elif not ow_coeff:
 		"Checking number of frames in current coefficient files"
 		try:
-			file_check = (ut.shape_check_hdf5(surf_dir, file_name_coeff + '_coeff') == (nframe, 2, n_waves**2))
-			file_check *= (ut.shape_check_hdf5(surf_dir, file_name_coeff + '_pivot') == (nframe, 2, n0))
+			file_check = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_coeff') == (nframe, 2, n_waves**2))
+			file_check *= (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_pivot') == (nframe, 2, n0))
 		except: file_check = False
 	else: file_check = False
 
@@ -1067,20 +1070,20 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 		psi = phi * dim[0] * dim[1]
 		"Make recon coefficient file"
 		if not os.path.exists('{}/surface/{}_R_coeff.hdf5'.format(directory, file_name_coeff)):
-			ut.make_hdf5(surf_dir, file_name_coeff + '_R_coeff', (2, n_waves**2), tables.Float64Atom())
+			ut.make_hdf5(surf_dir + file_name_coeff + '_R_coeff', (2, n_waves**2), tables.Float64Atom())
 			file_check = False
 		elif not ow_recon:
 			"Checking number of frames in current recon coefficient files"
-			try: file_check = (ut.shape_check_hdf5(surf_dir, file_name_coeff + '_R_coeff') == (nframe, 2, n_waves**2))
+			try: file_check = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_R_coeff') == (nframe, 2, n_waves**2))
 			except: file_check = False
 		else: file_check = False
 
 	if not file_check:
 		print "IMPORTING GLOBAL POSITION DISTRIBUTIONS\n"
-		xmol = ut.load_npy(directory + '/pos', file_name + '_{}_xmol'.format(nframe))
-		ymol = ut.load_npy(directory + '/pos', file_name + '_{}_ymol'.format(nframe))
-		zmol = ut.load_npy(directory + '/pos', file_name + '_{}_zmol'.format(nframe))
-		COM = ut.load_npy(directory + '/pos', file_name + '_{}_com'.format(nframe))
+		xmol = ut.load_npy(pos_dir + file_name + '_{}_xmol'.format(nframe))
+		ymol = ut.load_npy(pos_dir + file_name + '_{}_ymol'.format(nframe))
+		zmol = ut.load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe))
+		COM = ut.load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
 		nmol = xmol.shape[1]
 		com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
 
@@ -1090,8 +1093,8 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 
 		for frame in xrange(nframe):
 			"Checking number of frames in coeff and pivot files"
-			frame_check_coeff = (ut.shape_check_hdf5(surf_dir, file_name_coeff + '_coeff')[0] <= frame)
-			frame_check_pivot = (ut.shape_check_hdf5(surf_dir, file_name_coeff + '_pivot')[0] <= frame)
+			frame_check_coeff = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_coeff')[0] <= frame)
+			frame_check_pivot = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_pivot')[0] <= frame)
 
 			if frame_check_coeff: mode_coeff = 'a'
 			elif ow_coeff: mode_coeff = 'r+'
@@ -1107,11 +1110,11 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 				sys.stdout.flush()
 
 				coeff, pivot = build_surface(xmol[frame], ymol[frame], zmol[frame], dim, mol_sigma, qm, n0, phi, tau, max_r)
-				ut.save_hdf5(surf_dir, file_name_coeff + '_coeff', coeff, frame, mode_coeff)
-				ut.save_hdf5(surf_dir, file_name_coeff + '_pivot', pivot, frame, mode_pivot)
+				ut.save_hdf5(surf_dir + file_name_coeff + '_coeff', coeff, frame, mode_coeff)
+				ut.save_hdf5(surf_dir + file_name_coeff + '_pivot', pivot, frame, mode_pivot)
 
 			if recon:
-				frame_check_coeff = (ut.shape_check_hdf5(surf_dir, file_name_coeff + '_R_coeff')[0] <= frame)
+				frame_check_coeff = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_R_coeff')[0] <= frame)
 
 				if frame_check_coeff: mode_coeff = 'a'
 				elif ow_coeff: mode_coeff = 'r+'
@@ -1122,10 +1125,10 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 					sys.stdout.write("Reconstructing Intrinsic Surface coefficients: frame {}\r".format(frame))
 					sys.stdout.flush()
 
-					coeff = ut.load_hdf5(surf_dir, file_name_coeff + '_coeff', frame)
-					pivot = ut.load_hdf5(surf_dir, file_name_coeff + '_pivot', frame)
+					coeff = ut.load_hdf5(surf_dir + file_name_coeff + '_coeff', frame)
+					pivot = ut.load_hdf5(surf_dir + file_name_coeff + '_pivot', frame)
 					coeff_R = surface_reconstruction(coeff, pivot, xmol[frame], ymol[frame], zmol[frame], dim, qm, n0, phi, psi)
-					ut.save_hdf5(surf_dir, file_name_coeff + '_R_coeff', coeff_R, frame, mode_coeff)
+					ut.save_hdf5(surf_dir + file_name_coeff + '_R_coeff', coeff_R, frame, mode_coeff)
 
 
 def make_pos_dxdy(directory, file_name_pos, xmol, ymol, coeff, nmol, dim, qm):
@@ -1276,9 +1279,10 @@ def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0,
 
 	n_waves = 2 * qm + 1
 	
-	surf_dir = directory + '/surface'
-	pos_dir = directory + '/intpos'
-	if not os.path.exists(pos_dir): os.mkdir(pos_dir)
+	surf_dir = directory + 'surface/'
+	pos_dir = directory + 'pos/'
+	intpos_dir = directory + 'intpos/'
+	if not os.path.exists(intpos_dir): os.mkdir(intpos_dir)
 
 	file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
 	file_name_pos = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
@@ -1286,30 +1290,31 @@ def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0,
 		file_name_coeff += '_R'
 		file_name_pos += '_R'
 
-	if not os.path.exists('{}/{}_int_z_mol.hdf5'.format(pos_dir, file_name_pos)):
-		ut.make_hdf5(pos_dir, file_name_pos + '_int_z_mol', (2, qm+1, nmol), tables.Float64Atom())
-		ut.make_hdf5(pos_dir, file_name_pos + '_int_dxdy_mol', (4, qm+1, nmol), tables.Float64Atom())
-		ut.make_hdf5(pos_dir, file_name_pos + '_int_ddxddy_mol', (4, qm+1, nmol), tables.Float64Atom())
+	if not os.path.exists('{}/{}_int_z_mol.hdf5'.format(intpos_dir, file_name_pos)):
+		ut.make_hdf5(intpos_dir + file_name_pos + '_int_z_mol', (2, qm+1, nmol), tables.Float64Atom())
+		ut.make_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol', (4, qm+1, nmol), tables.Float64Atom())
+		ut.make_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol', (4, qm+1, nmol), tables.Float64Atom())
 		file_check = False
 
 	elif not ow_pos:
 		"Checking number of frames in current distance files"
 		try:
-			file_check = (ut.shape_check_hdf5(pos_dir, file_name_pos + '_int_z_mol') == (nframe, 2, qm+1, nmol))
-			file_check *= (ut.shape_check_hdf5(pos_dir, file_name_pos + '_int_dxdy_mol') == (nframe, 4, qm+1, nmol))
-			file_check *= (ut.shape_check_hdf5(pos_dir, file_name_pos + '_int_ddxddy_mol') == (nframe, 4, qm+1, nmol))
+			file_check = (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_z_mol') == (nframe, 2, qm+1, nmol))
+			file_check *= (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol') == (nframe, 4, qm+1, nmol))
+			file_check *= (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol') == (nframe, 4, qm+1, nmol))
 		except: file_check = False
 	else: file_check = False
 
 	if not file_check:
-		xmol, ymol, _ = ut.read_mol_positions(directory, file_name, nframe, nframe)
+		xmol = ut.load_npy(pos_dir + file_name + '_{}_xmol'.format(nframe), frames=range(nframe))
+		ymol = ut.load_npy(pos_dir + file_name + '_{}_ymol'.format(nframe), frames=range(nframe))
 
 		for frame in xrange(nframe):
 
 			"Checking number of frames in int_z_mol file"
-			frame_check_int_z_mol = (ut.shape_check_hdf5(pos_dir, file_name_pos + '_int_z_mol')[0] <= frame)
-			frame_check_int_dxdy_mol = (ut.shape_check_hdf5(pos_dir, file_name_pos + '_int_dxdy_mol')[0] <= frame)
-			frame_check_int_ddxddy_mol = (ut.shape_check_hdf5(pos_dir, file_name_pos + '_int_ddxddy_mol')[0] <= frame)
+			frame_check_int_z_mol = (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_z_mol')[0] <= frame)
+			frame_check_int_dxdy_mol = (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol')[0] <= frame)
+			frame_check_int_ddxddy_mol = (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol')[0] <= frame)
 
 			if frame_check_int_z_mol: mode_int_z_mol = 'a'
 			elif ow_pos: mode_int_z_mol = 'r+'
@@ -1328,12 +1333,12 @@ def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0,
 				sys.stdout.write("Calculating molecular distances and derivatives: frame {}\r".format(frame))
 				sys.stdout.flush()
 			
-				coeff = ut.load_hdf5(surf_dir, file_name_coeff + '_coeff', frame)
+				coeff = ut.load_hdf5(surf_dir + file_name_coeff + '_coeff', frame)
 
 				int_z_mol, int_dxdy_mol, int_ddxddy_mol = make_pos_dxdy(directory, file_name_pos, xmol[frame], ymol[frame], coeff, nmol, dim, qm)
-				ut.save_hdf5(pos_dir, file_name_pos + '_int_z_mol', int_z_mol, frame, mode_int_z_mol)
-				ut.save_hdf5(pos_dir, file_name_pos + '_int_dxdy_mol', int_dxdy_mol, frame, mode_int_dxdy_mol)
-				ut.save_hdf5(pos_dir, file_name_pos + '_int_ddxddy_mol', int_ddxddy_mol, frame, mode_int_ddxddy_mol)
+				ut.save_hdf5(intpos_dir + file_name_pos + '_int_z_mol', int_z_mol, frame, mode_int_z_mol)
+				ut.save_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol', int_dxdy_mol, frame, mode_int_dxdy_mol)
+				ut.save_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol', int_ddxddy_mol, frame, mode_int_ddxddy_mol)
 
 
 def make_den_curve(directory, zmol, int_z_mol, int_dxdy_mol, coeff, nmol, nslice, nz, qm, dim):
@@ -1445,10 +1450,11 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 
 	print"\n--- Running Intrinsic Density and Curvature Routine --- \n"
 
-	surf_dir = directory + '/surface'
-	pos_dir = directory + '/intpos'
-	den_dir = directory + '/intden'
-	if not os.path.exists(den_dir): os.mkdir(den_dir)
+	surf_dir = directory + 'surface/'
+	pos_dir = directory + 'pos/'
+	intpos_dir = directory + 'intpos/'
+	intden_dir = directory + 'intden/'
+	if not os.path.exists(intden_dir): os.mkdir(intden_dir)
 
 	lslice = dim[2] / nslice
 
@@ -1461,19 +1467,19 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 		file_name_count += '_R'
 		file_name_coeff += '_R'
 
-	if not os.path.exists('{}/intden/{}_count_corr.hdf5'.format(directory, file_name_count)):
-		ut.make_hdf5(den_dir, file_name_count + '_count_corr', (qm+1, nslice, nz), tables.Float64Atom())
+	if not os.path.exists(intden_dir + file_name_count + '_count_corr.hdf5'):
+		ut.make_hdf5(intden_dir + file_name_count + '_count_corr', (qm+1, nslice, nz), tables.Float64Atom())
 		file_check = False
 
 	elif not ow_count:
 		"Checking number of frames in current distribution files"
-		try: file_check = (ut.shape_check_hdf5(den_dir, file_name_count + '_count_corr') == (nframe, qm+1, nslice, nz))
+		try: file_check = (ut.shape_check_hdf5(intden_dir + file_name_count + '_count_corr') == (nframe, qm+1, nslice, nz))
 		except: file_check = False
 	else:file_check = False
 
 	if not file_check:
-		zmol = ut.load_npy(directory + '/pos', file_name + '_{}_zmol'.format(nframe))
-		COM = ut.load_npy(directory + '/pos', file_name + '_{}_com'.format(nframe))
+		zmol = ut.load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe))
+		COM = ut.load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
 		nmol = zmol.shape[1]
 		com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
 		zmol = zmol - com_tile
@@ -1481,7 +1487,7 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 		for frame in xrange(nframe):
 
 			"Checking number of frames in hdf5 files"
-			frame_check_count_corr = (ut.shape_check_hdf5(den_dir, file_name_count + '_count_corr')[0] <= frame)
+			frame_check_count_corr = (ut.shape_check_hdf5(intden_dir + file_name_count + '_count_corr') <= frame)
 
 			if frame_check_count_corr: mode_count_corr = 'a'
 			elif ow_count: mode_count_corr = 'r+'
@@ -1492,12 +1498,12 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 				sys.stdout.write("Calculating position and curvature distributions: frame {}\r".format(frame))
 				sys.stdout.flush()
 
-				coeff = ut.load_hdf5(surf_dir, file_name_coeff + '_coeff', frame)
-				int_z_mol = ut.load_hdf5(pos_dir, file_name_pos + '_int_z_mol', frame)
-				int_dxdy_mol = ut.load_hdf5(pos_dir, file_name_pos + '_int_dxdy_mol', frame)
+				coeff = ut.load_hdf5(surf_dir + file_name_coeff + '_coeff', frame)
+				int_z_mol = ut.load_hdf5(intpos_dir + file_name_pos + '_int_z_mol', frame)
+				int_dxdy_mol = ut.load_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol', frame)
 
 				count_corr_array = make_den_curve(directory, zmol[frame], int_z_mol, int_dxdy_mol, coeff, nmol, nslice, nz, qm, dim)
-				ut.save_hdf5(den_dir, file_name_count + '_count_corr', count_corr_array, frame, mode_count_corr)
+				ut.save_hdf5(intden_dir + file_name_count + '_count_corr', count_corr_array, frame, mode_count_corr)
 
 
 

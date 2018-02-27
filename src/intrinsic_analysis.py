@@ -9,7 +9,7 @@ Created 22/2/2018 by Frank Longford
 
 Contributors: Frank Longford
 
-Last modified 22/2/2018 by Frank Longford
+Last modified 27/2/2018 by Frank Longford
 """
 
 import numpy as np
@@ -70,12 +70,13 @@ def av_intrinsic_dist(directory, file_name, dim, nslice, qm, n0, phi, nframe, ns
 
 	"""
 	
-	den_dir = directory +'/intden'
+	intden_dir = directory + 'intden/'
+
 	file_name_count = '{}_{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)
 
 	if recon: file_name_count += '_R'
 
-	if not os.path.exists('{}/{}.npy'.format(den_dir, file_name_count + '_int_den_curve')):
+	if not os.path.exists(intden_dir + file_name_count + '_int_den_curve.npy'):
 
 		int_den_curve_matrix = np.zeros((qm+1, nslice, nz))
 
@@ -88,13 +89,13 @@ def av_intrinsic_dist(directory, file_name, dim, nslice, qm, n0, phi, nframe, ns
 			sys.stdout.write("Frame {}\r".format(frame))
 			sys.stdout.flush()
 
-			count_corr_array = ut.load_hdf5(den_dir, file_name_count + '_count_corr', frame)
+			count_corr_array = ut.load_hdf5(intden_dir + file_name_count + '_count_corr', frame)
 			int_den_curve_matrix += count_corr_array / (nsample * Vslice)
 
-		ut.save_npy(directory + '/intden', file_name_count + '_int_den_curve', int_den_curve_matrix)
+		ut.save_npy(intden_dir + file_name_count + '_int_den_curve', int_den_curve_matrix)
 
 	else:
-		int_den_curve_matrix = ut.load_npy(directory + '/intden', file_name_count + '_int_den_curve', (qm+1, nslice, nz))
+		int_den_curve_matrix = ut.load_npy(intden_dir + file_name_count + '_int_den_curve')
 
 	int_density = np.sum(int_den_curve_matrix, axis=2) / 2.
 	int_curvature = np.sum(np.moveaxis(int_den_curve_matrix, 1, 2), axis=2) / 2.

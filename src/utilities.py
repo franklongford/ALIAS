@@ -9,7 +9,7 @@ Created 24/11/2016 by Frank Longford
 
 Contributors: Frank Longford
 
-Last modified 22/2/2018 by Frank Longford
+Last modified 27/2/2018 by Frank Longford
 """
 
 import numpy as np
@@ -42,7 +42,7 @@ def make_checkfile(checkfile_name):
 	"""
 
 	checkfile = {}
-	with file('{}.pkl'.format(checkfile_name), 'wb') as outfile:
+	with file(checkfile_name + '.pkl', 'wb') as outfile:
 		pickle.dump(checkfile, outfile, pickle.HIGHEST_PROTOCOL)
 
 def read_checkfile(checkfile_name):
@@ -53,7 +53,7 @@ def read_checkfile(checkfile_name):
 
 	"""
 
-	with file('{}.pkl'.format(checkfile_name), 'rb') as infile:
+	with file(checkfile_name + '.pkl', 'rb') as infile:
         	return pickle.load(infile)
 
 def update_checkfile(checkfile_name, symb, obj):
@@ -80,10 +80,10 @@ def update_checkfile(checkfile_name, symb, obj):
 
 	"""
 
-	with file('{}.pkl'.format(checkfile_name), 'rb') as infile:
+	with file(checkfile_name + '.pkl', 'rb') as infile:
         	checkfile = pickle.load(infile)
 	checkfile[symb] = obj
-	with file('{}.pkl'.format(checkfile_name), 'wb') as outfile:
+	with file(checkfile_name + '.pkl', 'wb') as outfile:
         	pickle.dump(checkfile, outfile, pickle.HIGHEST_PROTOCOL)
 	return checkfile
 
@@ -164,9 +164,9 @@ def molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com):
 	"""
 	if mol_com == 'COM':
 		"USE CENTRE OF MASS AS MOLECULAR POSITION"
-		xmol = np.sum(np.reshape(xat * mol_M, (nmol, nsite)), axis=1) 
-		ymol = np.sum(np.reshape(yat * mol_M, (nmol, nsite)), axis=1)
-		zmol = np.sum(np.reshape(zat * mol_M, (nmol, nsite)), axis=1)
+		xmol = np.sum(np.reshape(xat * mol_M, (nmol, nsite)), axis=1) * nmol / mol_M.sum()
+		ymol = np.sum(np.reshape(yat * mol_M, (nmol, nsite)), axis=1) * nmol / mol_M.sum()
+		zmol = np.sum(np.reshape(zat * mol_M, (nmol, nsite)), axis=1) * nmol / mol_M.sum()
 	
 	else:
 		"USE SINGLE ATOM AS MOLECULAR POSITION"
@@ -178,40 +178,36 @@ def molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com):
 	return xmol, ymol, zmol
 
 
-def save_npy(directory, file_name, array):
+def save_npy(file_path, array):
 	"""
-	save_npy(directory, file_name, array)
+	save_npy(file_path, array)
 
 	General purpose algorithm to save an array to a npy file
 
 	Parameters
 	----------
 
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed
+	file_path:  str
+		Path name of npy file
 	array:  array_like (float);
 		Data array to be saved
 	"""
 
-	with file('{}/{}.npy'.format(directory, file_name), 'w') as outfile:
+	with file(file_path + '.npy', 'w') as outfile:
 		np.save(outfile, array)
 
 
-def load_npy(directory, file_name, frames=[]):
+def load_npy(file_path, frames=[]):
 	"""
-	load_npy(directory, file_name, frames=[])
+	load_npy(file_path, frames=[])
 
 	General purpose algorithm to load an array from a npy file
 
 	Parameters
 	----------
 
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed
+	file_path:  str
+		Path name of npy file
 	frames:  int, list (optional)
 		Trajectory frames to load
 
@@ -222,8 +218,8 @@ def load_npy(directory, file_name, frames=[]):
 		Data array to be loaded
 	"""
 
-	if len(frames) == 0: array = np.load('{}/{}.npy'.format(directory, file_name), mmap_mode='r')
-	else: array = np.load('{}/{}.npy'.format(directory, file_name), mmap_mode='r')[frames]
+	if len(frames) == 0: array = np.load(file_path + '.npy', mmap_mode='r')
+	else: array = np.load(file_path + '.npy', mmap_mode='r')[frames]
 
 	return array
 
@@ -263,54 +259,56 @@ def make_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, dim,
 	"""
 	print "\n-----------CREATING POSITIONAL FILES------------\n"
 
-	pos_dir = directory + '/pos'
+	pos_dir = directory + 'pos/'
 	if not os.path.exists(pos_dir): os.mkdir(pos_dir)
 
-	xmol = np.zeros((nframe, nmol))
-	ymol = np.zeros((nframe, nmol))
-	zmol = np.zeros((nframe, nmol))
-	COM = np.zeros((nframe, 3))
-
-	mol_M = np.array(M * nmol)
-	mol_M /= mol_M.sum()
-
-	XYZ = np.moveaxis(traj.xyz, 1, 2) * 10
-
-	for frame in xrange(nframe):
-		sys.stdout.write("PROCESSING {} out of {} IMAGES\r".format(frame, nframe) )
-		sys.stdout.flush()
-
-		COM[frame, :] = traj.xyz[frame].astype('float64').T.dot(mol_M) * 10
-
-		xat = XYZ[frame][0][at_index]
-		yat = XYZ[frame][1][at_index]
-		zat = XYZ[frame][2][at_index]
-
-		if nsite > 1: xmol[frame], ymol[frame], zmol[frame] = molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com)
-		else: xmol[frame], ymol[frame], zmol[frame] = xat, yat, zat
-		
 	file_name_pos = file_name + '_{}'.format(nframe)
+	if not os.path.exists(pos_dir + file_name_pos + '_xmol.npy'):
 
-	print '\nSAVING OUTPUT MOLECULAR POSITION FILES\n'
-	save_npy(pos_dir, file_name_pos + '_xmol', xmol)
-	save_npy(pos_dir, file_name_pos + '_ymol', ymol)
-	save_npy(pos_dir, file_name_pos + '_zmol', zmol)
-	save_npy(pos_dir, file_name_pos + '_com', COM)
+		xmol = np.zeros((nframe, nmol))
+		ymol = np.zeros((nframe, nmol))
+		zmol = np.zeros((nframe, nmol))
+		COM = np.zeros((nframe, 3))
+
+		mol_M = np.array(M * nmol)
+
+		XYZ = np.moveaxis(traj.xyz, 1, 2) * 10
+
+		for frame in xrange(nframe):
+			sys.stdout.write("PROCESSING {} out of {} IMAGES\r".format(frame, nframe) )
+			sys.stdout.flush()
+
+			COM[frame, :] = traj.xyz[frame].astype('float64').T.dot(mol_M / mol_M.sum()) * 10
+
+			xat = XYZ[frame][0][at_index]
+			yat = XYZ[frame][1][at_index]
+			zat = XYZ[frame][2][at_index]
+
+			if nsite > 1: xmol[frame], ymol[frame], zmol[frame] = molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com)
+			else: xmol[frame], ymol[frame], zmol[frame] = xat, yat, zat
+		
+		file_name_pos = file_name + '_{}'.format(nframe)
+
+		print '\nSAVING OUTPUT MOLECULAR POSITION FILES\n'
+		save_npy(pos_dir + file_name_pos + '_xmol', xmol)
+		save_npy(pos_dir + file_name_pos + '_ymol', ymol)
+		save_npy(pos_dir + file_name_pos + '_zmol', zmol)
+		save_npy(pos_dir + file_name_pos + '_com', COM)
 
 
-def bubblesort(alist, key):
+def bubble_sort(array, key):
 	"""
-	bubblesort(alist, key)
+	bubble_sort(array, key)
 
-	Sorts arrays 'alist' and 'key' by order of elements of 'key'
+	Sorts array and key by order of elements of key
 	"""
 
-	for passnum in range(len(alist)-1,0,-1):
+	for passnum in range(len(array)-1, 0, -1):
 		for i in range(passnum):
-			if key[i]>key[i+1]:
-				temp = alist[i]
-				alist[i] = alist[i+1]
-				alist[i+1] = temp
+			if key[i] > key[i+1]:
+				temp = array[i]
+				array[i] = array[i+1]
+				array[i+1] = temp
 
 				temp = key[i]
 				key[i] = key[i+1]
@@ -329,19 +327,6 @@ def unit_vector(vector, axis=-1):
 	u_vector = np.sqrt(vector**2 / magnitude_2) * np.sign(vector)
 
 	return u_vector
-
-
-def normalise(array):
-	"""
-	normalise(array)
-
-	Returns an array normalised by the range of values in input array
-	"""
-	array = np.array(array)
-	max_array = np.max(array)
-	min_array = np.min(array)
-
-	return (array - min_array) / (max_array - min_array)
 
 
 def get_fourier_coeff(coeff, qm):
@@ -460,7 +445,7 @@ def make_earray(file_name, arrays, atom, sizes):
 	----------
 
 	file_name:  str
-		File name
+		Name of file
 	arrays:  str, list
 		List of references for arrays in data table
 	atom:  type
@@ -475,7 +460,7 @@ def make_earray(file_name, arrays, atom, sizes):
 			outfile.create_earray(outfile.root, array, atom, sizes[i])
 
 
-def make_hdf5(directory, file_name, shape, datatype):
+def make_hdf5(file_path, shape, datatype):
 	"""
 	make_hdf5(directory, file_name, array, shape)
 
@@ -484,10 +469,8 @@ def make_hdf5(directory, file_name, shape, datatype):
 	Parameters
 	----------
 
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed
+	file_path:  str
+		Path name of hdf5 file
 	shape:  int, tuple
 		Shape of dataset in hdf5 file
 	datatype:  type
@@ -496,22 +479,20 @@ def make_hdf5(directory, file_name, shape, datatype):
 
 	shape = (0,) + shape
 
-	make_earray('{}/{}.hdf5'.format(directory, file_name), ['dataset'], datatype, [shape])
+	make_earray(file_path + '.hdf5', ['dataset'], datatype, [shape])
 
 
-def load_hdf5(directory, file_name, frame='all'):
+def load_hdf5(file_path, frame='all'):
 	"""
-	load_hdf5(directory, file_name, frame='all')
+	load_hdf5(file_path, frame='all')
 
 	General purpose algorithm to load an array from a hdf5 file
 
 	Parameters
 	----------
 
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed
+	file_path:  str
+		Path name of hdf5 file
 	frame:  int (optional)
 		Trajectory frame to load
 
@@ -522,26 +503,24 @@ def load_hdf5(directory, file_name, frame='all'):
 		Data array to be loaded, same shape as object 'dataset' in hdf5 file
 	"""
 
-	with tables.open_file('{}/{}.hdf5'.format(directory, file_name), 'r') as infile:
+	with tables.open_file(file_path + '.hdf5', 'r') as infile:
 		if frame == 'all': array = infile.root.dataset[:]
 		else: array = infile.root.dataset[frame]
 
 	return array
 
 
-def save_hdf5(directory, file_name, array, frame, mode='a'):
+def save_hdf5(file_path, array, frame, mode='a'):
 	"""
-	save_hdf5(directory, file_name, array, dataset, frame, mode='a')
+	save_hdf5(file_path, array, dataset, frame, mode='a')
 
 	General purpose algorithm to save an array from a single frame a hdf5 file
 
 	Parameters
 	----------
 
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed
+	file_path:  str
+		Path name of hdf5 file
 	array:  array_like (float);
 		Data array to be saved, must be same shape as object 'dataset' in hdf5 file
 	frame:  int
@@ -554,7 +533,7 @@ def save_hdf5(directory, file_name, array, frame, mode='a'):
 
 	shape = (1,) + array.shape
 
-	with tables.open_file('{}/{}.hdf5'.format(directory, file_name), mode) as outfile:
+	with tables.open_file(file_path + '.hdf5', mode) as outfile:
 		assert outfile.root.dataset.shape[1:] == shape[1:]
 		if mode.lower() == 'a':
 			write_array = np.zeros(shape)
@@ -564,19 +543,17 @@ def save_hdf5(directory, file_name, array, frame, mode='a'):
 			outfile.root.dataset[frame] = array
 
 
-def shape_check_hdf5(directory, file_name):
+def shape_check_hdf5(file_path):
 	"""
-	shape_check_hdf5(directory, file_name, nframe)
+	shape_check_hdf5(file_path)
 
 	General purpose algorithm to check the shape the dataset in a hdf5 file 
 
 	Parameters
 	----------
 
-	directory:  str
-		File path of directory of alias analysis.
-	file_name:  str
-		File name of trajectory being analysed
+	file_path:  str
+		Path name of hdf5 file
 
 	Returns
 	-------
@@ -585,7 +562,7 @@ def shape_check_hdf5(directory, file_name):
 		Shape of object dataset in hdf5 file
 	"""
 
-	with tables.open_file('{}/{}.hdf5'.format(directory, file_name), 'r') as infile:
+	with tables.open_file(file_path + '.hdf5', 'r') as infile:
 		shape_hdf5 = infile.root.dataset.shape
 
 	return shape_hdf5
