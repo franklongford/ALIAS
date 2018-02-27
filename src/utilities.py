@@ -568,5 +568,41 @@ def shape_check_hdf5(file_path):
 	return shape_hdf5
 
 
+def view_surface(coeff, qm, qu, piv_x, piv_y, piv_z, nxy, dim):
+
+	import matplotlib.pyplot as plt
+	from mpl_toolkits.mplot3d import Axes3D
+	
+	import intrinsic_sampling_method as ism
+
+	surface = np.zeros((nxy, nxy))
+	X = np.linspace(0, dim[0], nxy)
+	Y = np.linspace(0, dim[1], nxy)
+
+	vcheck = np.vectorize(ism.check_uv)
+
+	n_waves = 2 * qm + 1
+	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
+	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+	wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+	Delta = 1. / 4 * np.sum(coeff**2 * wave_check * vcheck(u_array, v_array))
+
+	for i, x in enumerate(X): surface[i] += ism.xi(np.ones(nxy) * x, Y, coeff, qm, qu, dim)
+
+	surface = np.moveaxis(surface, 0, 1)
+
+	fig = plt.figure(figsize=(15,15))
+	ax = fig.gca(projection='3d')
+	ax.set_xlabel(r'$x$ (\AA)')
+	ax.set_ylabel(r'$y$ (\AA)')
+	ax.set_zlabel(r'$z$ (\AA)')
+	ax.set_xlim3d(0, dim[0])
+	ax.set_ylim3d(0, dim[1])
+	ax.set_zlim3d(-Delta*4, Delta*4)		
+	X_grid, Y_grid = np.meshgrid(X, Y)
+	ax.plot_wireframe(X_grid, Y_grid, surface, color='r')
+	ax.scatter(piv_x, piv_y, piv_z, color='b')
+	plt.show()
+
 
 

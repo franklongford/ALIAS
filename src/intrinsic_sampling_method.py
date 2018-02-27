@@ -279,9 +279,9 @@ def intrinsic_area(coeff, qm, qu, dim):
 	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
 	wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
 
-	u_array = u_array[np.argwhere(wave_check)[0]]
-	v_array = v_array[np.argwhere(wave_check)[0]]
-	coeff_2 = coeff[np.argwhere(wave_check)[0]]**2
+	u_array = u_array[np.argwhere(wave_check).flatten()]
+	v_array = v_array[np.argwhere(wave_check).flatten()]
+	coeff_2 = coeff[np.argwhere(wave_check).flatten()]**2
 
 	int_A = np.pi**2  * vcheck(u_array, v_array) * (u_array**2 / dim[0]**2 + v_array**2 / dim[1]**2) * coeff_2
 	int_A = 1 + 0.5 * np.sum(int_A)
@@ -751,21 +751,21 @@ def xi(x, y, coeff, qm, qu, dim):
 	n_waves = 2 * qm + 1
 	nmol = len(x)
 	
-	if qu > 3:
+	if qu > 3 or nmol > 50:
 
 		u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
 		v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
 		wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+		indices = np.argwhere(wave_check).flatten()
 
-		u_array = u_array[np.argwhere(wave_check)[0]]
-		v_array = v_array[np.argwhere(wave_check)[0]]
-		coeff = coeff[np.argwhere(wave_check)[0]]
+		u_array = u_array[indices]
+		v_array = v_array[indices]
+		coeff = coeff[indices]
 
 		if np.isscalar(x): xi_z = np.sum(wave_function_array(x, u_array, dim[0]) * wave_function_array(y, v_array, dim[1]) * coeff)
 		else:
 			xi_z = np.zeros(nmol)
 			for i in xrange(nmol): xi_z[i] = np.sum(wave_function_array(x[i], u_array, dim[0]) * wave_function_array(y[i], v_array, dim[1]) * coeff)
-
 	else:
 
 		xi_z = 0
@@ -812,7 +812,7 @@ def dxy_dxi(x, y, coeff, qm, qu, dim):
 	n_waves = 2 * qm + 1
 	nmol = len(x)
 
-	if qu > 3:
+	if qu > 3 or nmol > 50:
 
 		u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
 		v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
@@ -879,7 +879,7 @@ def ddxy_ddxi(x, y, coeff, qm, qu, dim):
 	n_waves = 2 * qm + 1
 	nmol = len(x)
 
-	if qu > 3:
+	if qu > 3 or nmol > 50:
 
 		u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
 		v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
@@ -960,6 +960,8 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 
 	mol_ex_1 = []
 	mol_ex_2 = []
+	av_pos_1 = []
+	av_pos_2 = []
 	NS = []
 
 	n_waves = 2 * qm + 1
@@ -978,13 +980,18 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 	ns = start_ns
 	optimising = True
 
+	import matplotlib.pyplot as plt
+
 	while optimising:
 
 		NS.append(ns)
 		n0 = int(dim[0] * dim[1] * ns / mol_sigma**2)
 
-		tot_piv_n1 = np.zeros((nframe_ns, n0))
-		tot_piv_n2 = np.zeros((nframe_ns, n0))
+		tot_coeff_1 = np.zeros((nframe_ns, n_waves**2))
+		tot_coeff_2 = np.zeros((nframe_ns, n_waves**2))
+
+		tot_piv_n1 = np.zeros((nframe_ns, n0), dtype=int)
+		tot_piv_n2 = np.zeros((nframe_ns, n0), dtype=int)
 
 		file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
 
@@ -998,14 +1005,13 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 			frame_check_pivot = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_pivot')[0] <= frame)
 
 			if frame_check_coeff: mode_coeff = 'a'
-			elif ow_coeff: mode_coeff = 'r+'
 			else: mode_coeff = False
 
 			if frame_check_pivot: mode_pivot = 'a'
-			elif ow_coeff: mode_pivot = 'r+'
 			else: mode_pivot = False
 
 			if not mode_coeff and not mode_pivot:
+				coeff = ut.load_hdf5(surf_dir + file_name_coeff + '_coeff', frame)
 				pivot = ut.load_hdf5(surf_dir + file_name_coeff + '_pivot', frame)
 			else:
 				sys.stdout.write("Optimising Intrinsic Surface coefficients: frame {}\n".format(frame))
@@ -1015,13 +1021,22 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 				ut.save_hdf5(surf_dir + file_name_coeff + '_coeff', coeff, frame, mode_coeff)
 				ut.save_hdf5(surf_dir + file_name_coeff + '_pivot', pivot, frame, mode_pivot)
 
+			tot_coeff_1[frame] += coeff[0]
+			tot_coeff_2[frame] += coeff[1]
+
 			tot_piv_n1[frame] += pivot[0]
 			tot_piv_n2[frame] += pivot[1]
+
+			piv_x = xmol[frame][tot_piv_n1[frame]]
+			piv_y = ymol[frame][tot_piv_n1[frame]]
+			piv_z = zmol[frame][tot_piv_n1[frame]]
 
 		ex_1, ex_2 = mol_exchange(tot_piv_n1, tot_piv_n2, nframe_ns, n0)
 
 		mol_ex_1.append(ex_1)
 		mol_ex_2.append(ex_2)
+		av_pos_1.append(abs(np.mean(np.moveaxis(tot_coeff_1, 0, 1)[(n_waves**2)/2])))
+		av_pos_2.append(abs(np.mean(np.moveaxis(tot_coeff_2, 0, 1)[(n_waves**2)/2])))
 
 		if len(mol_ex_1) > 1:
 			check = np.argmin((np.array(mol_ex_1) + np.array(mol_ex_2)) / 2.) == (len(NS) - 1)
@@ -1029,6 +1044,17 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 			else: 
 				ns += step_ns
 				print "Optimal surface density not found.\nContinuing search using pivot number = {}".format(int(dim[0] * dim[1] * ns / mol_sigma**2))
+			plt.figure(0)
+			plt.plot(NS, mol_ex_1)
+			plt.plot(NS, mol_ex_2)
+			plt.plot(NS, (np.array(mol_ex_1) + np.array(mol_ex_2)) / 2.)
+
+			plt.figure(1)
+			plt.plot(NS, av_pos_1)
+			plt.plot(NS, av_pos_2)
+			plt.plot(NS, (np.array(av_pos_1) + np.array(av_pos_2)) / 2.)
+			plt.show()
+		
 		else: ns += step_ns
 
 	opt_ns = NS[np.argmin((np.array(mol_ex_1) + np.array(mol_ex_2)) / 2.)]
@@ -1122,7 +1148,7 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 
 	"""
 
-	print"\n-- Running Intrinsic Surface Routine ---\n"
+	print"\n--- Running Intrinsic Surface Routine ---\n"
 
 	surf_dir = directory + 'surface/'
 	pos_dir = directory + 'pos/'
