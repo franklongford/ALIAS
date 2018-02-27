@@ -179,11 +179,12 @@ def H_var_coeff(coeff_2, qm, qu, dim):
 	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
 	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
 
-	H_var = 4 * np.pi**4 * vcheck(u_array, v_array) * coeff_2
-	H_var *= (u_array**4 / dim[0]**4 + v_array**4 / dim[1]**4 + 2 * u_array**2 * v_array**2 / (dim[0]**2 * dim[1]**2))
-	H_var *= (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+	H_var_array = 4 * np.pi**4 * vcheck(u_array, v_array) * coeff_2
+	H_var_array *= (u_array**4 / dim[0]**4 + v_array**4 / dim[1]**4 + 2 * u_array**2 * v_array**2 / (dim[0]**2 * dim[1]**2))
+	H_var_array *= (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+	H_var = np.sum(H_var_array) 
 
-	return np.sum(H_var)
+	return H_var
 
 
 def H_var_mol(xmol, ymol, coeff, qm, qu, dim):

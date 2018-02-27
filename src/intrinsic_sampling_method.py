@@ -758,8 +758,8 @@ def xi(x, y, coeff, qm, qu, dim):
 		wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
 
 		u_array = u_array[np.argwhere(wave_check)[0]]
-+		v_array = v_array[np.argwhere(wave_check)[0]]
-+		coeff = coeff[np.argwhere(wave_check)[0]]
+		v_array = v_array[np.argwhere(wave_check)[0]]
+		coeff = coeff[np.argwhere(wave_check)[0]]
 
 		if np.isscalar(x): xi_z = np.sum(wave_function_array(x, u_array, dim[0]) * wave_function_array(y, v_array, dim[1]) * coeff)
 		else:
