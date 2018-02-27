@@ -277,13 +277,16 @@ def intrinsic_area(coeff, qm, qu, dim):
 	
 	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
 	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+	wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
 
-	coeff_2 = coeff**2
+	u_array = u_array[np.argwhere(wave_check)[0]]
+	v_array = v_array[np.argwhere(wave_check)[0]]
+	coeff_2 = coeff[np.argwhere(wave_check)[0]]**2
 
 	int_A = np.pi**2  * vcheck(u_array, v_array) * (u_array**2 / dim[0]**2 + v_array**2 / dim[1]**2) * coeff_2
 	int_A = 1 + 0.5 * np.sum(int_A)
 
-        return int_A
+	return int_A
 
 
 def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncube=3, vlim=3):
@@ -540,7 +543,7 @@ def surface_reconstruction(coeff, pivot, xmol, ymol, zmol, dim, qm, n0, phi, psi
 	"Form the diagonal xi^2 terms and b vector solutions"
 	A = np.zeros((2, n_waves**2, n_waves**2))
 	fuv1 = np.zeros((n_waves**2, n0))
-        fuv2 = np.zeros((n_waves**2, n0))
+	fuv2 = np.zeros((n_waves**2, n0))
 	b = np.zeros((2, n_waves**2))
 
         for j in xrange(n_waves**2):
@@ -686,6 +689,35 @@ def wave_function_array(x, u_array, Lx):
 	return f_array
 
 
+def d_wave_function_array(x, u_array, Lx):
+	"""
+	d_wave_function_array(x, u_array, Lx)
+
+	Returns numpy array of all derivatives of waves in Fouier sum 
+	
+	"""
+
+	q = 2 * np.pi * np.abs(u_array) * x / Lx
+
+	cos_indicies = np.argwhere(u_array >= 0)
+	sin_indicies = np.argwhere(u_array < 0)
+	f_array = np.zeros(u_array.shape)
+	f_array[cos_indicies] -= np.sin(q[cos_indicies])
+	f_array[sin_indicies] += np.cos(q[sin_indicies])
+	f_array *= 2 * np.pi * np.abs(u_array) / Lx
+
+	return f_array
+
+
+def dd_wave_function_array(x, u_array, Lx):
+	"""
+	dd_wave_function_array(x, u_array, Lx)
+	Returns numpy array of all second derivatives of waves in Fouier sum 
+	
+	"""
+	return - 4 * np.pi**2 * u_array**2 / Lx**2 * wave_function_array(x, u_array, Lx)
+
+
 def xi(x, y, coeff, qm, qu, dim):
 	"""
 	xi(x, y, coeff, qm, qu, dim)
@@ -719,15 +751,15 @@ def xi(x, y, coeff, qm, qu, dim):
 	n_waves = 2 * qm + 1
 	nmol = len(x)
 	
-	if qm > 3:
+	if qu > 3:
 
 		u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
 		v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
 		wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
 
-		u_array = u_array[np.argwhere(wave_check)].T[0]
-		v_array = v_array[np.argwhere(wave_check)].T[0]
-		coeff = coeff[np.argwhere(wave_check)].T[0]
+		u_array = u_array[np.argwhere(wave_check)[0]]
++		v_array = v_array[np.argwhere(wave_check)[0]]
++		coeff = coeff[np.argwhere(wave_check)[0]]
 
 		if np.isscalar(x): xi_z = np.sum(wave_function_array(x, u_array, dim[0]) * wave_function_array(y, v_array, dim[1]) * coeff)
 		else:
@@ -776,13 +808,38 @@ def dxy_dxi(x, y, coeff, qm, qu, dim):
 		Derivative of intrinsic surface in y dimension
 	
 	"""
-	dx_dxi = 0
-	dy_dxi = 0
-	for u in xrange(-qu, qu+1):
-		for v in xrange(-qu, qu+1):
-			j = (2 * qm + 1) * (u + qm) + (v + qm)
-			dx_dxi += d_wave_function(x, u, dim[0]) * wave_function(y, v, dim[1]) * coeff[j]
-			dy_dxi += wave_function(x, u, dim[0]) * d_wave_function(y, v, dim[1]) * coeff[j]
+
+	n_waves = 2 * qm + 1
+	nmol = len(x)
+
+	if qu > 3:
+
+		u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
+		v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+		wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+
+		u_array = u_array[np.argwhere(wave_check)[0]]
+		v_array = v_array[np.argwhere(wave_check)[0]]
+		coeff = coeff[np.argwhere(wave_check)[0]]
+
+		if np.isscalar(x): 
+			dx_dxi = np.sum(d_wave_function_array(x, u_array, dim[0]) * wave_function_array(y, v_array, dim[1]) * coeff)
+			dy_dxi = np.sum(wave_function_array(x, u_array, dim[0]) * d_wave_function_array(y, v_array, dim[1]) * coeff)
+		else:
+			dx_dxi = np.zeros(nmol)
+			dy_dxi = np.zeros(nmol)
+			for i in xrange(nmol):
+				dx_dxi[i] = np.sum(d_wave_function_array(x[i], u_array, dim[0]) * wave_function_array(y[i], v_array, dim[1]) * coeff)
+				dy_dxi[i] = np.sum(wave_function_array(x[i], u_array, dim[0]) * d_wave_function_array(y[i], v_array, dim[1]) * coeff)
+	else:
+
+		dx_dxi = 0
+		dy_dxi = 0
+		for u in xrange(-qu, qu+1):
+			for v in xrange(-qu, qu+1):
+				j = (2 * qm + 1) * (u + qm) + (v + qm)
+				dx_dxi += d_wave_function(x, u, dim[0]) * wave_function(y, v, dim[1]) * coeff[j]
+				dy_dxi += wave_function(x, u, dim[0]) * d_wave_function(y, v, dim[1]) * coeff[j]
 
 	return dx_dxi, dy_dxi
 
@@ -818,13 +875,38 @@ def ddxy_ddxi(x, y, coeff, qm, qu, dim):
 		Second derivative of intrinsic surface in y dimension
 	
 	"""
-	ddx_ddxi = 0
-	ddy_ddxi = 0
-	for u in xrange(-qu, qu+1):
-		for v in xrange(-qu, qu+1):
-			j = (2 * qm + 1) * (u + qm) + (v + qm)
-			ddx_ddxi += dd_wave_function(x, u, dim[0]) * wave_function(y, v, dim[1]) * coeff[j]
-			ddy_ddxi += wave_function(x, u, dim[0]) * dd_wave_function(y, v, dim[1]) * coeff[j]
+
+	n_waves = 2 * qm + 1
+	nmol = len(x)
+
+	if qu > 3:
+
+		u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
+		v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+		wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+
+		u_array = u_array[np.argwhere(wave_check)[0]]
+		v_array = v_array[np.argwhere(wave_check)[0]]
+		coeff = coeff[np.argwhere(wave_check)[0]]
+
+		if np.isscalar(x): 
+			ddx_ddxi = np.sum(dd_wave_function_array(x, u_array, dim[0]) * wave_function_array(y, v_array, dim[1]) * coeff)
+			ddy_ddxi = np.sum(wave_function_array(x, u_array, dim[0]) * dd_wave_function_array(y, v_array, dim[1]) * coeff)
+		else:
+			ddx_ddxi = np.zeros(nmol)
+			ddy_ddxi = np.zeros(nmol)
+			for i in xrange(nmol):
+				ddx_ddxi[i] = np.sum(dd_wave_function_array(x[i], u_array, dim[0]) * wave_function_array(y[i], v_array, dim[1]) * coeff)
+				ddy_ddxi[i] = np.sum(wave_function_array(x[i], u_array, dim[0]) * dd_wave_function_array(y[i], v_array, dim[1]) * coeff)
+	else:
+
+		ddx_ddxi = 0
+		ddy_ddxi = 0
+		for u in xrange(-qu, qu+1):
+			for v in xrange(-qu, qu+1):
+				j = (2 * qm + 1) * (u + qm) + (v + qm)
+				ddx_ddxi += dd_wave_function(x, u, dim[0]) * wave_function(y, v, dim[1]) * coeff[j]
+				ddy_ddxi += wave_function(x, u, dim[0]) * dd_wave_function(y, v, dim[1]) * coeff[j]
 
 	return ddx_ddxi, ddy_ddxi
 
