@@ -53,8 +53,8 @@ top_dir = top_file[:file_end]
 top_file = top_file[file_end+1:]
 
 alias_dir = traj_dir + '/alias_analysis/'
-data_dir = alias_dir + '/data/'
-figure_dir = alias_dir + '/figures/'
+data_dir = alias_dir + 'data/'
+figure_dir = alias_dir + 'figures/'
 if not os.path.exists(alias_dir): os.mkdir(alias_dir)
 if not os.path.exists(data_dir): os.mkdir(data_dir)
 if not os.path.exists(figure_dir): os.mkdir(figure_dir)
