@@ -24,9 +24,11 @@ Instructions:
 
 1) run alias.sh [traj] [top] [flags]
 
-		traj: 	Trajectory file
-		top:	Topology file  
-		flags:
+	traj: 	
+		Trajectory file
+	top:	
+		Topology file  
+	flags:
 		-recon      Perform surface reconstruction routine
 		-ow_coeff   Overwrite existing intrnisic surface coefficients
 		-ow_recon   Overwrite reconstructed surface coefficients
