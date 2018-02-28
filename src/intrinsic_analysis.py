@@ -24,9 +24,9 @@ import os, sys, time, tables
 vcheck = np.vectorize(ism.check_uv)
 
 
-def av_intrinsic_dist(directory, file_name, dim, nslice, qm, n0, phi, nframe, nsample, nz=100, recon=False, ow_dist=False):
+def av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, nframe, nsample, nz=100, recon=False, ow_dist=False):
 	"""
-	av_intrinsic_dist(directory, file_name, dim, nslice, qm, n0, phi, nframe, nsample, nz=100, recon=False, ow_dist=False)
+	av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, nframe, nsample, nz=100, recon=False, ow_dist=False)
 
 	Summate average density and curvature distributions
 
@@ -72,11 +72,10 @@ def av_intrinsic_dist(directory, file_name, dim, nslice, qm, n0, phi, nframe, ns
 	
 	intden_dir = directory + 'intden/'
 
-	file_name_count = '{}_{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)
+	file_name_hist = '{}_{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)
+	if recon: file_name_hist += '_R'
 
-	if recon: file_name_count += '_R'
-
-	if not os.path.exists(intden_dir + file_name_count + '_int_den_curve.npy'):
+	if not os.path.exists(intden_dir + file_name_hist + '_int_den_curve.npy'):
 
 		int_den_curve_matrix = np.zeros((qm+1, nslice, nz))
 
@@ -89,13 +88,13 @@ def av_intrinsic_dist(directory, file_name, dim, nslice, qm, n0, phi, nframe, ns
 			sys.stdout.write("Frame {}\r".format(frame))
 			sys.stdout.flush()
 
-			count_corr_array = ut.load_hdf5(intden_dir + file_name_count + '_count_corr', frame)
+			count_corr_array = ut.load_hdf5(intden_dir + file_name_hist + '_count_corr', frame)
 			int_den_curve_matrix += count_corr_array / (nsample * Vslice)
 
-		ut.save_npy(intden_dir + file_name_count + '_int_den_curve', int_den_curve_matrix)
+		ut.save_npy(intden_dir + file_name_hist + '_int_den_curve', int_den_curve_matrix)
 
 	else:
-		int_den_curve_matrix = ut.load_npy(intden_dir + file_name_count + '_int_den_curve')
+		int_den_curve_matrix = ut.load_npy(intden_dir + file_name_hist + '_int_den_curve')
 
 	int_density = np.sum(int_den_curve_matrix, axis=2) / 2.
 	int_curvature = np.sum(np.moveaxis(int_den_curve_matrix, 1, 2), axis=2) / 2.

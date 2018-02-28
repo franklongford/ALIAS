@@ -22,6 +22,8 @@ Installation:
 Instructions:
 -------------
 
+Main routine of ALIAS can be run via the following commands:
+
 1) ``./alias.sh [traj] [top] [flags]``
 
 	traj: 	
@@ -34,6 +36,7 @@ Instructions:
 		-ow_recon   Overwrite reconstructed surface coefficients
 		-ow_intpos  Overwrite intrinsic molecular positions and derivatives
 		-ow_hist    Overwrite histograms of intrinsic distributions
+		-ow_dist    Overwrite average intrinsic density and curvature distributions
 		
 	(see MDTraj_ homepage for supported filetypes and detailed instructions)
 
@@ -57,7 +60,7 @@ Instructions:
 
 5) *Enter molecular radius:*
 
-	Enter a suitable radius :math:`$\sigma$` (in angstroms) for the molecular interaction sphere.
+	Enter a suitable radius ``mol_sigma`` (in angstroms) for the molecular interaction sphere.
 
 	For small molecules with one LJ site, this should be the LJ sigma parameter.
 
@@ -102,17 +105,17 @@ Output of main routine will produce following file tree structure in the ``traj`
     │    │    └── ...int_ddxddy_mol.hdf5
     │    │
     │    └── intden
-    │         └── ...count_corr.hdf5
+    │         ├── ...count_corr.hdf5
+    │         └── ...int_den_curve.npy
     │     
     └── figures
-
-
 
 
 
 Extra Functions:
 ----------------
 
+Additional functions are
 
 
 
