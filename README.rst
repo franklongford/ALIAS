@@ -79,6 +79,9 @@ Main routine of ALIAS can be run via the following commands:
 	If not selected, search will commence to minmise pivot diffusion rate, as recommended by `Duque, Tarazona and Chacon 2008`_.
 
 
+File Tree:
+-------------
+
 Output of main routine will produce following file tree structure in the ``traj`` directory:
 
 ::
