@@ -42,6 +42,7 @@ Instructions:
 2) Choose residue to use for surface identification (optional)
 
 	Select name of molecule / fragment / residue that will be used to map the intrinsic surface.
+
 	If only one residue type is detected, selects by default.
 
 3) Use elemental masses found in checkfile?
@@ -71,6 +72,7 @@ Instructions:
 7) Manually enter in new surface pivot number? (search will commence otherwise)
 
 	Enter maximum number of pivots included intrinsic fitting routine for each surface. 
+
 	If not selected, search will commence to minmise pivot diffusion rate, as recommended by `Duque, Tarazona and Chacon 2008`_.
 
 
