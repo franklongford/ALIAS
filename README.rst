@@ -16,13 +16,13 @@ Extra functions included for Surface Reconstruction routine by Longford 2018.
 Installation:
 -------------
 
-`python setup.py install`
+``python setup.py install``
 
 
 Instructions:
 -------------
 
-1) run ``alias.sh [traj] [top] [flags]``
+1) ``./alias.sh [traj] [top] [flags]``
 
 	traj: 	
 		Trajectory file
@@ -74,6 +74,25 @@ Instructions:
 	Enter maximum number of pivots included intrinsic fitting routine for each surface. 
 
 	If not selected, search will commence to minmise pivot diffusion rate, as recommended by `Duque, Tarazona and Chacon 2008`_.
+
+
+Output of main routine will produce following file tree structure:
+
+::
+
+    project
+    ├── demo.py
+    ├── LICENCE.txt
+    ├── processes          
+    │   ├── area.py
+    │   └── bboxinout.py
+    ├── pywps.cfg          
+    ├── requirements.txt
+    ├── server.py          
+    ├── setup.py
+    ├── static
+    ├── templates
+    └── tests
 
 
 Extra Functions:
