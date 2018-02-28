@@ -22,7 +22,7 @@ Installation:
 Instructions:
 -------------
 
-1) run `alias.sh [traj] [top] [flags]`
+1) run ``alias.sh [traj] [top] [flags]``
 
 	traj: 	
 		Trajectory file
@@ -39,23 +39,23 @@ Instructions:
 
 .. _MDTraj: http://mdtraj.org/1.9.0/index.html
 
-2) Choose residue to use for surface identification (optional)
+2) *Choose residue to use for surface identification:* (optional)
 
 	Select name of molecule / fragment / residue that will be used to map the intrinsic surface.
 
 	If only one residue type is detected, selects by default.
 
-3) Use elemental masses found in checkfile?
+3) *Use standard elemental masses?*
 
 	Decide whether to use MDTraj_ experimental atomic mass database for each atomic site on selected residue or enter forcefield masses if known (recommended).
 
-4) Use atomic site as centre of molecular mass?
+4) *Use atomic site as centre of molecular mass?*
 
 	Decide whether to use an atomic site as a proxy molecular position or calculate centre of mass explicitly.
 
 	For light molecules (water, methane etc..), using a single atomic site is usually sufficient.
 
-5) Enter molecular radius:
+5) *Enter molecular radius:*
 
 	Enter a suitable radius :math:`$\sigma$` (in angstroms) for the molecular interaction sphere.
 
@@ -65,11 +65,11 @@ Instructions:
 
 	Note: radius determines minimum seperation distance between molecules, so interaction sphere should not be less than this distance.
 
-6) Use recommended weighting coefficient for surface area minimisation?
+6) *Use recommended weighting coefficient for surface area minimisation?*
 
 	RECOMMENDED! Only change this if you know what you are doing.
 
-7) Manually enter in new surface pivot number? (search will commence otherwise)
+7) *Manually enter in new surface pivot number? (search will commence otherwise)*
 
 	Enter maximum number of pivots included intrinsic fitting routine for each surface. 
 
