@@ -112,10 +112,4 @@ Output of main routine will produce following file tree structure in the ``traj`
 
 
 
-Extra Functions:
-----------------
-
-Additional functions are
-
-
 
