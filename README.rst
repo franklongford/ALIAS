@@ -57,7 +57,7 @@ Instructions:
 
 5) Enter molecular radius:
 
-	Enter a suitable radius :math:`\sigma` (in angstroms) for the molecular interaction sphere.::
+	Enter a suitable radius :math:`\\sigma` (in angstroms) for the molecular interaction sphere.
 
 	For small molecules with one LJ site, this should be the LJ sigma parameter.
 
