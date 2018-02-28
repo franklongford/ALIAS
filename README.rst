@@ -47,7 +47,7 @@ Instructions:
 
 3) Use elemental masses found in checkfile?
 
-	Decide whether to use MDTraj experimental atomic mass database for each atomic site on selected residue or enter forcefield masses if known (recommended).
+	Decide whether to use MDTraj_ experimental atomic mass database for each atomic site on selected residue or enter forcefield masses if known (recommended).
 
 4) Use atomic site as centre of molecular mass?
 
@@ -57,7 +57,7 @@ Instructions:
 
 5) Enter molecular radius:
 
-	Enter a suitable radius :math:`\sigma` (in angstroms) for the molecular interaction sphere.
+	Enter a suitable radius :math:`\sigma` (in angstroms) for the molecular interaction sphere.::
 
 	For small molecules with one LJ site, this should be the LJ sigma parameter.
 
