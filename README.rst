@@ -22,10 +22,17 @@ python setup.py install
 Instructions:
 -------------
 
-1) run alias.sh [traj] [top]
+1) run alias.sh [traj] [top] [flags]
 
 	traj: 	Trajectory file
 	top:	Topology file  
+	flags:
+		-recon      Perform surface reconstruction routine
+		-ow_coeff   Overwrite existing intrnisic surface coefficients
+		-ow_recon   Overwrite reconstructed surface coefficients
+		-ow_intpos  Overwrite intrinsic molecular positions and derivatives
+		-ow_hist    Overwrite histograms of intrinsic distributions
+		
 	(see MDTraj_ homepage for supported filetypes and detailed instructions)
 
 .. _MDTraj: http://mdtraj.org/1.9.0/index.html
