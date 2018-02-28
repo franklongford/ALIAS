@@ -76,23 +76,38 @@ Instructions:
 	If not selected, search will commence to minmise pivot diffusion rate, as recommended by `Duque, Tarazona and Chacon 2008`_.
 
 
-Output of main routine will produce following file tree structure:
+Output of main routine will produce following file tree structure in the ``traj`` directory:
 
 ::
 
-    project
-    ├── demo.py
-    ├── LICENCE.txt
-    ├── processes          
-    │   ├── area.py
-    │   └── bboxinout.py
-    ├── pywps.cfg          
-    ├── requirements.txt
-    ├── server.py          
-    ├── setup.py
-    ├── static
-    ├── templates
-    └── tests
+    alias_analysis
+    │
+    ├── ...chk.pkl
+    │
+    ├── data
+    │    │
+    │    ├── pos
+    │    │    ├── ...xmol.npy
+    │    │    ├── ...ymol.npy
+    │    │    ├── ...zmol.npy
+    │    │    └── ...com.npy		
+    │    │
+    │    ├── surface
+    │    │    ├── ...coeff.hdf5
+    │    │    └── ...pivot.hdf5
+    │    │
+    │    ├── intpos
+    │    │    ├── ...int_z_mol.hdf5
+    │    │    ├── ...int_dxdy_mol.hdf5
+    │    │    └── ...int_ddxddy_mol.hdf5
+    │    │
+    │    └── intden
+    │         └── ...count_corr.hdf5
+    │     
+    └── figures
+
+
+
 
 
 Extra Functions:
