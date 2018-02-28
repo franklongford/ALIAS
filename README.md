@@ -1,6 +1,3 @@
-.. role:: raw-latex(raw)
-    :format: latex
-
 ==========================================	
 ALIAS: Air-Liquid Interface Analysis Suite
 ==========================================
@@ -19,13 +16,13 @@ Extra functions included for Surface Reconstruction routine by Longford 2018.
 Installation:
 -------------
 
-python setup.py install
+`python setup.py install`
 
 
 Instructions:
 -------------
 
-1) run alias.sh [traj] [top] [flags]
+1) run `alias.sh [traj] [top] [flags]`
 
 	traj: 	
 		Trajectory file
@@ -60,7 +57,7 @@ Instructions:
 
 5) Enter molecular radius:
 
-	Enter a suitable radius :raw-latex:`$\sigma$` (in angstroms) for the molecular interaction sphere.
+	Enter a suitable radius :math:`$\sigma$` (in angstroms) for the molecular interaction sphere.
 
 	For small molecules with one LJ site, this should be the LJ sigma parameter.
 
