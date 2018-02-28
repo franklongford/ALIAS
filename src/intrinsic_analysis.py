@@ -24,9 +24,9 @@ import os, sys, time, tables
 vcheck = np.vectorize(ism.check_uv)
 
 
-def av_intrinsic_dist(directory, file_name, dim, nslice, qm, n0, phi, nframe, nsample, nz = 100, recon=False, ow_dist=False):
+def av_intrinsic_dist(directory, file_name, dim, nslice, qm, n0, phi, nframe, nsample, nz=100, recon=False, ow_dist=False):
 	"""
-	av_intrinsic_dist(directory, file_name, dim, nslice, qm, n0, phi, nframe, nsample, nz = 100, recon=False, ow_dist=False)
+	av_intrinsic_dist(directory, file_name, dim, nslice, qm, n0, phi, nframe, nsample, nz=100, recon=False, ow_dist=False)
 
 	Summate average density and curvature distributions
 
@@ -134,15 +134,22 @@ def H_xy(x, y, coeff, qm, qu, dim):
 
 	n_waves = 2 * qm + 1
 
-	start = time.time()
+	if np.isscalar(x):
+		u_array = (np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm)
+		v_array = (np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm)
+		wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+		indices = np.argwhere(wave_check).flatten()
 
-	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
-	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
-	wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+		fuv = ism.wave_function_array(x, u_array[indices], dim[0]) * ism.wave_function_array(y, v_array[indices], dim[1])
+		H = -4 * np.pi**2 * np.sum((u_array[indices]**2 / dim[0]**2 + v_array[indices]**2 / dim[1]**2) * fuv * coeff[indices])
+	else:
+		H_array = np.zeros(x.shape)
+		for u in xrange(-qu, qu+1):
+			for v in xrange(-qu, qu+1):
+				j = (2 * qm + 1) * (u + qm) + (v + qm)
+				H_array += ism.wave_function(x, u, dim[0]) * ism.wave_function(y, v, dim[1]) * (u**2 / dim[0]**2 + v**2 / dim[1]**2) * coeff[j]
+		H = -4 * np.pi**2 * H_array
 
-	fuv = ism.wave_function_array(x, u_array, dim[0]) * ism.wave_function_array(y, v_array, dim[1]) * wave_check
-	H = -4 * np.pi**2 * (u_array**2 / dim[0]**2 + v_array**2 / dim[1]**2) * fuv * coeff 
-	
 	return H
 
 
@@ -178,11 +185,12 @@ def H_var_coeff(coeff_2, qm, qu, dim):
 	
 	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
 	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+	wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+	indices = np.argwhere(wave_check).flatten()
 
-	H_var_array = 4 * np.pi**4 * vcheck(u_array, v_array) * coeff_2
-	H_var_array *= (u_array**4 / dim[0]**4 + v_array**4 / dim[1]**4 + 2 * u_array**2 * v_array**2 / (dim[0]**2 * dim[1]**2))
-	H_var_array *= (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
-	H_var = np.sum(H_var_array) 
+	H_var_array = vcheck(u_array[indices], v_array[indices]) * coeff_2[indices]
+	H_var_array *= (u_array[indices]**4 / dim[0]**4 + v_array[indices]**4 / dim[1]**4 + 2 * u_array[indices]**2 * v_array[indices]**2 / (dim[0]**2 * dim[1]**2))
+	H_var = 4 * np.pi**4 * np.sum(H_var_array) 
 
 	return H_var
 
@@ -220,33 +228,32 @@ def H_var_mol(xmol, ymol, coeff, qm, qu, dim):
 	if qu == 0: return 0
 	
 	n_waves = 2 * qm +1
-	n0 = len(xmol)
+	nmol = xmol.shape[0]
 
 	"Create arrays of wave frequency indicies u and v"
 	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
 	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
 	wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+	indices = np.argwhere(wave_check).flatten()
 
 	"Create matrix of wave frequency indicies (u,v)**2"
-	u_matrix = np.tile(u_array, (n_waves**2, 1))
-	v_matrix = np.tile(v_array, (n_waves**2, 1))
+	u_matrix = np.tile(u_array[indices], (len([indices]), 1))
+	v_matrix = np.tile(v_array[indices], (len([indices]), 1))
 
 	"Make curvature diagonal terms of A matrix"
 	curve_diag = 16 * np.pi**4 * (u_matrix**2 * u_matrix.T**2 / dim[0]**4 + v_matrix**2 * v_matrix.T**2 / dim[1]**4 +
 				     (u_matrix**2 * v_matrix.T**2 + u_matrix.T**2 * v_matrix**2) / (dim[0]**2 * dim[1]**2))
 
 	"Form the diagonal xi^2 terms and b vector solutions"
-        fuv = np.zeros((n_waves**2, n0))
+        fuv = np.zeros((n_waves**2, nmol))
         for u in xrange(-qu, qu+1):
 		for v in xrange(-qu, qu+1):
 			j = (2 * qm + 1) * (u + qm) + (v + qm)
-                	fuv[j] = ism.wave_function(xmol, int(j/n_waves)-qm, dim[0]) * ism.wave_function(ymol, int(j%n_waves)-qm, dim[1])
-	ffuv = np.dot(fuv, fuv.T)
+                	fuv[j] = ism.wave_function(xmol, u_array[j], dim[0]) * ism.wave_function(ymol, v_array[j], dim[1])
+	ffuv = np.dot(fuv[indices], fuv[indices].T)
 
-	coeff_matrix = np.tile(coeff, (n_waves**2, 1))
-	H_var = np.sum(coeff_matrix * coeff_matrix.T * ffuv * curve_diag / n0)
-
-	stop = time.time()
+	coeff_matrix = np.tile(coeff[indices], (len([indices]), 1))
+	H_var = np.sum(coeff_matrix * coeff_matrix.T * ffuv * curve_diag / nmol)
 
 	return H_var
 

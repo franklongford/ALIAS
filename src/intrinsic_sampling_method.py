@@ -101,11 +101,16 @@ def update_A_b(xmol, ymol, zmol, dim, qm, n_waves, new_piv1, new_piv2):
 	-------
 
 	A:  float, array_like; shape=(2, n_waves**2, n_waves**2)
-		Matrix containing weightings for each coefficient product x_i.x_j in the linear algebra equation Ax = b for both surfaces 
+		Matrix containing wave product weightings f(x, u1, Lx).f(y, v1, Ly).f(x, u2, Lx).f(y, v2, Ly) 
+		for each coefficient in the linear algebra equation Ax = b for both surfaces 
 	b:  float, array_like; shape=(2, n_waves**2)
-		Vector containing solutions to the linear algebra equation Ax = b for both surfaces
+		Vector containing solutions z.f(x, u, Lx).f(y, v, Ly) to the linear algebra equation Ax = b 
+		for both surfaces
 
 	"""
+
+	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
+	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
 
 	A = np.zeros((2, n_waves**2, n_waves**2))
 	b = np.zeros((2, n_waves**2))
@@ -114,9 +119,9 @@ def update_A_b(xmol, ymol, zmol, dim, qm, n_waves, new_piv1, new_piv2):
 	fuv2 = np.zeros((n_waves**2, len(new_piv2)))
 
 	for j in xrange(n_waves**2):
-		fuv1[j] = wave_function(xmol[new_piv1], int(j/n_waves)-qm, dim[0]) * wave_function(ymol[new_piv1], int(j%n_waves)-qm, dim[1])
+		fuv1[j] = wave_function(xmol[new_piv1], u_array[j], dim[0]) * wave_function(ymol[new_piv1], v_array[j], dim[1])
 		b[0][j] += np.sum(zmol[new_piv1] * fuv1[j])
-		fuv2[j] = wave_function(xmol[new_piv2], int(j/n_waves)-qm, dim[0]) * wave_function(ymol[new_piv2], int(j%n_waves)-qm, dim[1])
+		fuv2[j] = wave_function(xmol[new_piv2], u_array[j], dim[0]) * wave_function(ymol[new_piv2], v_array[j], dim[1])
 		b[1][j] += np.sum(zmol[new_piv2] * fuv2[j])
 
 	A[0] += np.dot(fuv1, fuv1.T)
@@ -134,10 +139,12 @@ def LU_decomposition(A, b):
 	Parameters
 	----------
 
-	A:  float, array_like; shape=(n_waves**2, n_waves**2)
-		Matrix containing weightings for each coefficient product x_i.x_j in the linear algebra equation Ax = b
-	b:  float, array_like; shape=(n_waves**2)
-		Vector containing solutions to the linear algebra equation Ax = b
+	A:  float, array_like; shape=(2, n_waves**2, n_waves**2)
+		Matrix containing wave product weightings f(x, u1, Lx).f(y, v1, Ly).f(x, u2, Lx).f(y, v2, Ly) 
+		for each coefficient in the linear algebra equation Ax = b for both surfaces 
+	b:  float, array_like; shape=(2, n_waves**2)
+		Vector containing solutions z.f(x, u, Lx).f(y, v, Ly) to the linear algebra equation Ax = b 
+		for both surfaces
 
 	Returns
 	-------
@@ -278,12 +285,9 @@ def intrinsic_area(coeff, qm, qu, dim):
 	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
 	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
 	wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+	indices = np.argwhere(wave_check).flatten()
 
-	u_array = u_array[np.argwhere(wave_check).flatten()]
-	v_array = v_array[np.argwhere(wave_check).flatten()]
-	coeff_2 = coeff[np.argwhere(wave_check).flatten()]**2
-
-	int_A = np.pi**2  * vcheck(u_array, v_array) * (u_array**2 / dim[0]**2 + v_array**2 / dim[1]**2) * coeff_2
+	int_A = np.pi**2  * vcheck(u_array[indices], v_array[indices]) * (u_array[indices]**2 / dim[0]**2 + v_array[indices]**2 / dim[1]**2) * coeff[indices]**2
 	int_A = 1 + 0.5 * np.sum(int_A)
 
 	return int_A
@@ -749,31 +753,21 @@ def xi(x, y, coeff, qm, qu, dim):
 	"""
 
 	n_waves = 2 * qm + 1
-	nmol = len(x)
 	
-	if qu > 3 or nmol > 50:
-
-		u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
-		v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+	if np.isscalar(x):
+		u_array = (np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm)
+		v_array = (np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm)
 		wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
 		indices = np.argwhere(wave_check).flatten()
 
-		u_array = u_array[indices]
-		v_array = v_array[indices]
-		coeff = coeff[indices]
-
-		if np.isscalar(x): xi_z = np.sum(wave_function_array(x, u_array, dim[0]) * wave_function_array(y, v_array, dim[1]) * coeff)
-		else:
-			xi_z = np.zeros(nmol)
-			for i in xrange(nmol): xi_z[i] = np.sum(wave_function_array(x[i], u_array, dim[0]) * wave_function_array(y[i], v_array, dim[1]) * coeff)
+		fuv = wave_function_array(x, u_array[indices], dim[0]) * wave_function_array(y, v_array[indices], dim[1])
+		xi_z = np.sum(fuv * coeff[indices])
 	else:
-
-		xi_z = 0
+		xi_z = np.zeros(x.shape)
 		for u in xrange(-qu, qu+1):
 			for v in xrange(-qu, qu+1):
 				j = (2 * qm + 1) * (u + qm) + (v + qm)
 				xi_z += wave_function(x, u, dim[0]) * wave_function(y, v, dim[1]) * coeff[j]	
-
 	return xi_z
 
 
@@ -810,31 +804,22 @@ def dxy_dxi(x, y, coeff, qm, qu, dim):
 	"""
 
 	n_waves = 2 * qm + 1
-	nmol = len(x)
 
-	if qu > 3 or nmol > 50:
-
-		u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
-		v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+	if np.isscalar(x):
+		u_array = (np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm)
+		v_array = (np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm)
 		wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+		indices = np.argwhere(wave_check).flatten()
 
-		u_array = u_array[np.argwhere(wave_check)[0]]
-		v_array = v_array[np.argwhere(wave_check)[0]]
-		coeff = coeff[np.argwhere(wave_check)[0]]
+		dx_dxi = d_wave_function_array(x, u_array[indices], dim[0]) * wave_function_array(y, v_array[indices], dim[1])
+		dy_dxi = wave_function_array(x, u_array[indices], dim[0]) * d_wave_function_array(y, v_array[indices], dim[1])
 
-		if np.isscalar(x): 
-			dx_dxi = np.sum(d_wave_function_array(x, u_array, dim[0]) * wave_function_array(y, v_array, dim[1]) * coeff)
-			dy_dxi = np.sum(wave_function_array(x, u_array, dim[0]) * d_wave_function_array(y, v_array, dim[1]) * coeff)
-		else:
-			dx_dxi = np.zeros(nmol)
-			dy_dxi = np.zeros(nmol)
-			for i in xrange(nmol):
-				dx_dxi[i] = np.sum(d_wave_function_array(x[i], u_array, dim[0]) * wave_function_array(y[i], v_array, dim[1]) * coeff)
-				dy_dxi[i] = np.sum(wave_function_array(x[i], u_array, dim[0]) * d_wave_function_array(y[i], v_array, dim[1]) * coeff)
+		dx_dxi = np.sum(dx_dxi * coeff[indices])
+		dy_dxi = np.sum(dy_dxi * coeff[indices])
+
 	else:
-
-		dx_dxi = 0
-		dy_dxi = 0
+		dx_dxi = np.zeros(x.shape)
+		dy_dxi = np.zeros(x.shape)
 		for u in xrange(-qu, qu+1):
 			for v in xrange(-qu, qu+1):
 				j = (2 * qm + 1) * (u + qm) + (v + qm)
@@ -877,31 +862,22 @@ def ddxy_ddxi(x, y, coeff, qm, qu, dim):
 	"""
 
 	n_waves = 2 * qm + 1
-	nmol = len(x)
 
-	if qu > 3 or nmol > 50:
-
-		u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
-		v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+	if np.isscalar(x):
+		u_array = (np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm)
+		v_array = (np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm)
 		wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+		indices = np.argwhere(wave_check).flatten()
 
-		u_array = u_array[np.argwhere(wave_check)[0]]
-		v_array = v_array[np.argwhere(wave_check)[0]]
-		coeff = coeff[np.argwhere(wave_check)[0]]
+		ddx_ddxi = dd_wave_function_array(x, u_array[indices], dim[0]) * wave_function_array(y, v_array[indices], dim[1])
+		ddy_ddxi = wave_function_array(x, u_array[indices], dim[0]) * dd_wave_function_array(y, v_array[indices], dim[1])
 
-		if np.isscalar(x): 
-			ddx_ddxi = np.sum(dd_wave_function_array(x, u_array, dim[0]) * wave_function_array(y, v_array, dim[1]) * coeff)
-			ddy_ddxi = np.sum(wave_function_array(x, u_array, dim[0]) * dd_wave_function_array(y, v_array, dim[1]) * coeff)
-		else:
-			ddx_ddxi = np.zeros(nmol)
-			ddy_ddxi = np.zeros(nmol)
-			for i in xrange(nmol):
-				ddx_ddxi[i] = np.sum(dd_wave_function_array(x[i], u_array, dim[0]) * wave_function_array(y[i], v_array, dim[1]) * coeff)
-				ddy_ddxi[i] = np.sum(wave_function_array(x[i], u_array, dim[0]) * dd_wave_function_array(y[i], v_array, dim[1]) * coeff)
+		ddx_ddxi = np.sum(ddx_ddxi * coeff[indices])
+		ddy_ddxi = np.sum(ddy_ddxi * coeff[indices])
+
 	else:
-
-		ddx_ddxi = 0
-		ddy_ddxi = 0
+		ddx_ddxi = np.zeros(x.shape)
+		ddy_ddxi = np.zeros(x.shape)
 		for u in xrange(-qu, qu+1):
 			for v in xrange(-qu, qu+1):
 				j = (2 * qm + 1) * (u + qm) + (v + qm)
@@ -960,8 +936,6 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 
 	mol_ex_1 = []
 	mol_ex_2 = []
-	av_pos_1 = []
-	av_pos_2 = []
 	NS = []
 
 	n_waves = 2 * qm + 1
@@ -980,15 +954,10 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 	ns = start_ns
 	optimising = True
 
-	import matplotlib.pyplot as plt
-
 	while optimising:
 
 		NS.append(ns)
 		n0 = int(dim[0] * dim[1] * ns / mol_sigma**2)
-
-		tot_coeff_1 = np.zeros((nframe_ns, n_waves**2))
-		tot_coeff_2 = np.zeros((nframe_ns, n_waves**2))
 
 		tot_piv_n1 = np.zeros((nframe_ns, n0), dtype=int)
 		tot_piv_n2 = np.zeros((nframe_ns, n0), dtype=int)
@@ -1011,7 +980,6 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 			else: mode_pivot = False
 
 			if not mode_coeff and not mode_pivot:
-				coeff = ut.load_hdf5(surf_dir + file_name_coeff + '_coeff', frame)
 				pivot = ut.load_hdf5(surf_dir + file_name_coeff + '_pivot', frame)
 			else:
 				sys.stdout.write("Optimising Intrinsic Surface coefficients: frame {}\n".format(frame))
@@ -1021,22 +989,13 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 				ut.save_hdf5(surf_dir + file_name_coeff + '_coeff', coeff, frame, mode_coeff)
 				ut.save_hdf5(surf_dir + file_name_coeff + '_pivot', pivot, frame, mode_pivot)
 
-			tot_coeff_1[frame] += coeff[0]
-			tot_coeff_2[frame] += coeff[1]
-
 			tot_piv_n1[frame] += pivot[0]
 			tot_piv_n2[frame] += pivot[1]
-
-			piv_x = xmol[frame][tot_piv_n1[frame]]
-			piv_y = ymol[frame][tot_piv_n1[frame]]
-			piv_z = zmol[frame][tot_piv_n1[frame]]
 
 		ex_1, ex_2 = mol_exchange(tot_piv_n1, tot_piv_n2, nframe_ns, n0)
 
 		mol_ex_1.append(ex_1)
 		mol_ex_2.append(ex_2)
-		av_pos_1.append(abs(np.mean(np.moveaxis(tot_coeff_1, 0, 1)[(n_waves**2)/2])))
-		av_pos_2.append(abs(np.mean(np.moveaxis(tot_coeff_2, 0, 1)[(n_waves**2)/2])))
 
 		if len(mol_ex_1) > 1:
 			check = np.argmin((np.array(mol_ex_1) + np.array(mol_ex_2)) / 2.) == (len(NS) - 1)
@@ -1044,16 +1003,6 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 			else: 
 				ns += step_ns
 				print "Optimal surface density not found.\nContinuing search using pivot number = {}".format(int(dim[0] * dim[1] * ns / mol_sigma**2))
-			plt.figure(0)
-			plt.plot(NS, mol_ex_1)
-			plt.plot(NS, mol_ex_2)
-			plt.plot(NS, (np.array(mol_ex_1) + np.array(mol_ex_2)) / 2.)
-
-			plt.figure(1)
-			plt.plot(NS, av_pos_1)
-			plt.plot(NS, av_pos_2)
-			plt.plot(NS, (np.array(av_pos_1) + np.array(av_pos_2)) / 2.)
-			plt.show()
 		
 		else: ns += step_ns
 
@@ -1194,9 +1143,6 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 		COM = ut.load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
 		nmol = xmol.shape[1]
 		com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
-
-		assert com_tile.shape == (nframe, nmol) 
-
 		zmol = zmol - com_tile
 
 		for frame in xrange(nframe):
@@ -1523,7 +1469,7 @@ def make_den_curve(directory, zmol, int_z_mol, int_dxdy_mol, coeff, nmol, nslice
 	return count_corr_array
 
 
-def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, nslice, dim, nz=100, recon=False, ow_count=False):
+def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, nslice, dim, nz=100, recon=False, ow_hist=False):
 	"""
 	create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, nslice, dim, nz=100, nnz=100, recon=False, ow_count=False)
 
@@ -1568,20 +1514,20 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 
 	file_name_pos = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
 	file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
-	file_name_count = '{}_{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)	
+	file_name_hist = '{}_{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)	
 
 	if recon:
 		file_name_pos += '_R'
-		file_name_count += '_R'
+		file_name_hist += '_R'
 		file_name_coeff += '_R'
 
-	if not os.path.exists(intden_dir + file_name_count + '_count_corr.hdf5'):
-		ut.make_hdf5(intden_dir + file_name_count + '_count_corr', (qm+1, nslice, nz), tables.Float64Atom())
+	if not os.path.exists(intden_dir + file_name_hist + '_count_corr.hdf5'):
+		ut.make_hdf5(intden_dir + file_name_hist + '_count_corr', (qm+1, nslice, nz), tables.Float64Atom())
 		file_check = False
 
-	elif not ow_count:
+	elif not ow_hist:
 		"Checking number of frames in current distribution files"
-		try: file_check = (ut.shape_check_hdf5(intden_dir + file_name_count + '_count_corr') == (nframe, qm+1, nslice, nz))
+		try: file_check = (ut.shape_check_hdf5(intden_dir + file_name_hist + '_count_corr') == (nframe, qm+1, nslice, nz))
 		except: file_check = False
 	else:file_check = False
 
@@ -1595,10 +1541,10 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 		for frame in xrange(nframe):
 
 			"Checking number of frames in hdf5 files"
-			frame_check_count_corr = (ut.shape_check_hdf5(intden_dir + file_name_count + '_count_corr') <= frame)
+			frame_check_count_corr = (ut.shape_check_hdf5(intden_dir + file_name_hist + '_count_corr') <= frame)
 
 			if frame_check_count_corr: mode_count_corr = 'a'
-			elif ow_count: mode_count_corr = 'r+'
+			elif ow_hist: mode_count_corr = 'r+'
 			else: mode_count_corr = False
 
 			if not mode_count_corr:pass
@@ -1611,7 +1557,7 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 				int_dxdy_mol = ut.load_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol', frame)
 
 				count_corr_array = make_den_curve(directory, zmol[frame], int_z_mol, int_dxdy_mol, coeff, nmol, nslice, nz, qm, dim)
-				ut.save_hdf5(intden_dir + file_name_count + '_count_corr', count_corr_array, frame, mode_count_corr)
+				ut.save_hdf5(intden_dir + file_name_hist + '_count_corr', count_corr_array, frame, mode_count_corr)
 
 
 

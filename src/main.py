@@ -22,7 +22,7 @@ top_file:  str
 
 """
 import numpy as np
-import sys, os
+import sys, os, subprocess
 import mdtraj as md
 
 import utilities as ut
@@ -42,15 +42,23 @@ print ""
 
 if len(sys.argv) < 2: traj_file = raw_input("Enter trajectory file: ")
 else: traj_file = sys.argv[1]
+while not os.path.exists(traj_file): traj_file = raw_input("\nTrajectory file not recognised: Re-enter file path: ")
 file_end = max([0] + [pos for pos, char in enumerate(traj_file) if char == '/'])
 traj_dir = traj_file[:file_end]
 traj_file = traj_file[file_end+1:]
 
 if len(sys.argv) < 3: top_file = raw_input("\nEnter topology file: ")
 else: top_file = sys.argv[2]
+while not os.path.exists(top_file): top_file = raw_input("\nTopology file not recognised: Re-enter file path: ")
 file_end = max([0] + [pos for pos, char in enumerate(top_file) if char == '/'])
 top_dir = top_file[:file_end]
 top_file = top_file[file_end+1:]
+
+recon = ('-recon' in sys.argv)
+ow_coeff = ('-ow_coeff' in sys.argv)
+ow_recon = ('-ow_recon' in sys.argv)
+ow_intpos = ('-ow_intpos' in sys.argv)
+ow_hist = ('-ow_hist' in sys.argv)
 
 alias_dir = traj_dir + '/alias_analysis/'
 data_dir = alias_dir + 'data/'
@@ -59,7 +67,7 @@ if not os.path.exists(alias_dir): os.mkdir(alias_dir)
 if not os.path.exists(data_dir): os.mkdir(data_dir)
 if not os.path.exists(figure_dir): os.mkdir(figure_dir)
 
-print "Loading trajectory file {}".format(sys.argv[1])
+print "Loading trajectory file {} using {} topology".format(traj_file, top_file)
 
 traj, MOL, nframe, dim = ut.get_sim_param(traj_dir, top_dir, traj_file, top_file)
 
@@ -67,6 +75,7 @@ print "Number of simulation frames: {}".format(nframe)
 print "Simulation cell xyz dimensions in Angstoms: {}\n".format(dim)
 print "Residue types found: {}".format(len(MOL))
 print "List of residues found: {}".format(MOL)
+
 if len(MOL) > 1: mol = raw_input("\nChoose residue to use for surface identification: ")
 else: 
 	mol = MOL[0]
@@ -132,14 +141,6 @@ except:
 	checkfile = ut.update_checkfile(checkfile_name, 'mol_sigma', mol_sigma)
 
 
-try:
-	if bool(raw_input("\nUse average temperature found in checkfile? {} K (Y/N): ".format(checkfile['T'])).upper() == 'Y'):
-		T = checkfile['T']
-	else: raise Exception
-except: 
-	T = float(raw_input("\nEnter average temperature of simulation in K: "))
-	checkfile = ut.update_checkfile(checkfile_name, 'T', T)
-
 lslice = 0.05 * mol_sigma
 nslice = int(dim[2] / lslice)
 npi = 50
@@ -147,6 +148,9 @@ npi = 50
 q_max = 2 * np.pi / mol_sigma
 q_min = 2 * np.pi / np.sqrt(dim[0] * dim[1])
 qm = int(q_max / q_min)
+
+sys.stdout.write("Calculating position and curvature distributions: frame {}\r".format(frame))
+sys.stdout.flush()
 
 print "\n------STARTING INTRINSIC SAMPLING-------\n"
 
@@ -190,15 +194,10 @@ print "-" * 14 * 5
 for qu in QM: print "{:12d} | {:12.4f} | {:12.4f}".format(qu, q_max / (qu*q_min), mol_sigma * q_max / (10*qu*q_min))
 print ""
 
-ow_coeff = bool(raw_input("OVERWRITE ACOEFF? (Y/N): ").upper() == 'Y')
-ow_recon = bool(raw_input("OVERWRITE RECON ACOEFF? (Y/N): ").upper() == 'Y')
-ow_pos = bool(raw_input("OVERWRITE POSITIONS? (Y/N): ").upper() == 'Y')
-ow_count = bool(raw_input("OVERWRITE DENSITY COUNT? (Y/N): ").upper() == 'Y')
-
-ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=True, ow_coeff=ow_coeff, ow_recon=ow_recon)
+ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=recon, ow_coeff=ow_coeff, ow_recon=ow_recon)
 
 for recon in [False, True]:
-	ism.create_intrinsic_positions_dxdyz(data_dir, file_name, nmol, nframe, qm, n0, phi, dim, recon=recon, ow_pos=ow_pos)
-	ism.create_intrinsic_den_curve_dist(data_dir, file_name, qm, n0, phi, nframe, nslice, dim, recon=recon, ow_count=ow_count)
+	ism.create_intrinsic_positions_dxdyz(data_dir, file_name, nmol, nframe, qm, n0, phi, dim, recon=recon, ow_pos=ow_intpos)
+	ism.create_intrinsic_den_curve_dist(data_dir, file_name, qm, n0, phi, nframe, nslice, dim, recon=recon, ow_hist=ow_hist)
 
 print"\n---- ENDING PROGRAM ----\n"

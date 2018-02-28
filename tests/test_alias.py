@@ -16,9 +16,11 @@ import scipy as sp
 import subprocess, time, sys, os, math, copy, gc, tables
 import mdtraj as md
 
-
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
+
 import utilities as ut
+import intrinsic_sampling_method as ism
+import intrinsic_analysis as ia
 
 THRESH = 1E-8
 
@@ -140,5 +142,46 @@ def test_bubble_sort():
 	
 	assert abs(np.sum(array - answer)) <= THRESH
 	assert abs(np.sum(key - answer)) <= THRESH
+
+
+def test_wavefunctions():
+
+	qm = 8
+	qu = 5
+	n_waves = 2 * qm + 1
+	coeff = np.ones(n_waves**2) * 0.5
+	dim = [10., 12.]
+
+	pos = np.arange(10)
+	u_array = np.arange(-qm, qm+1)
+
+	xi_array = ism.xi(pos, pos, coeff, qm, qu, dim)
+	dx_dxi_array, dy_dxi_array = ism.dxy_dxi(pos, pos, coeff, qm, qu, dim)
+	ddx_ddxi_array, ddy_ddxi_array = ism.ddxy_ddxi(pos, pos, coeff, qm, qu, dim)
+	H_array = ia.H_xy(pos, pos, coeff, qm, qu, dim)
+
+	assert xi_array.shape == pos.shape
+	assert dx_dxi_array.shape == pos.shape
+	assert dy_dxi_array.shape == pos.shape
+	assert ddx_ddxi_array.shape == pos.shape
+	assert ddy_ddxi_array.shape == pos.shape
+	assert H_array.shape == pos.shape
+
+	for i, x in enumerate(pos):
+		xi = ism.xi(x, x, coeff, qm, qu, dim)
+		dx_dxi, dy_dxi = ism.dxy_dxi(x, x, coeff, qm, qu, dim)
+		ddx_ddxi, ddy_ddxi = ism.ddxy_ddxi(x, x, coeff, qm, qu, dim)
+		H = ia.H_xy(x, x, coeff, qm, qu, dim)
+
+		assert abs(np.sum(xi - xi_array[i])) <= THRESH
+		assert abs(np.sum(dx_dxi - dx_dxi_array[i])) <= THRESH
+		assert abs(np.sum(dy_dxi - dy_dxi_array[i])) <= THRESH
+		assert abs(np.sum(ddx_ddxi - ddx_ddxi_array[i])) <= THRESH
+		assert abs(np.sum(ddy_ddxi - ddy_ddxi_array[i])) <= THRESH
+		assert abs(np.sum(H - H_array[i])) <= THRESH
+
+	pos = np.arange(100)
+	H_array = ia.H_xy(pos, pos, coeff, qm, qu, dim)
+	assert abs(ia.H_var_mol(pos, pos, coeff, qm, qu, dim) - np.var(H_array)) <= 0.07
 
 
