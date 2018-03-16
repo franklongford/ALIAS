@@ -572,6 +572,11 @@ def cw_gamma_dft(q, gamma, kappa, eta0, eta1): return gamma + eta0 * q + kappa *
 
 
 def coeff_slice(coeff, qm, qu):
+	"""
+	coeff_slice(coeff, qm, qu)
+
+	Truncates coeff array up to qu resolution
+	"""
 
 	n_waves_qm = 2 * qm + 1
 	n_waves_qu = 2 * qu + 1
@@ -585,26 +590,68 @@ def coeff_slice(coeff, qm, qu):
 	return coeff_qu
 	
 
-def auv2_to_f2(auv2, qm):
+def coeff_to_fouier_2(coeff_2, qm):
+	"""
+	coeff_to_fouier_2(coeff_2, qm)
 
-	f2 = np.zeros((2*qm+1)**2)
+	Converts square coefficients to square fouier coefficients
+	"""
+
+	f_2 = np.zeros((2*qm+1)**2)
 
 	for u in xrange(-qm, qm+1):
 		for v in xrange(-qm, qm+1):
 			j = (2 * qm + 1) * (u + qm) + (v + qm)
-			f2[j] = auv2[j] * ut.check_uv(u, v) / 4.
+			f_2[j] = coeff_2[j] * ut.check_uv(u, v) / 4.
 
-	return f2
+	print(f_2)
+
+	n_waves = 2 * qm +1
+	
+	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
+	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+
+	f_2 = vcheck(u_array, v_array) * coeff_2
+
+	print(f_2)
+
+	return f_2
 
 
-def auv_xy_correlation(auv_2, qm, qu):
+def xy_correlation(coeff_2, qm, qu):
+	"""
+	xy_correlation(coeff_2, qm, qu)
 
-	auv_2[len(auv_2)/2] = 0
-	f2 = auv2_to_f2(auv_2, qm)
+	Return correlation across xy plane using Wiener–Khinchin theorem
 
-	f2_qm = auv_qm(f2, qm, qu).reshape(((2*qu+1), (2*qu+1)))
-	xy_corr = np.fft.fftshift(np.fft.ifftn(f2_qm))
-	#xy_corr = np.fft.ifftn(f2_qm)
+	Parameters
+	----------
 
-	return np.abs(xy_corr) * (2*qu+1)**2 / np.sum(f2_qm)
+	coeff_2:  float, array_like; shape=(n_waves_qm**2)
+		Square of optimised surface coefficients
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	qu:  int
+		Upper limit of wave frequencies in Fouier Sum representing intrinsic surface
+
+	Returns
+	-------
+
+	xy_corr:  float, array_like; shape=(n_waves_qu**2)
+		Length correlation function across xy plane
+
+	"""
+
+	n_waves_qm = 2 * qm + 1
+	n_waves_qu = 2 * qu + 1
+
+	coeff_2[len(coeff_2)/2] = 0
+	f_2 = coeff_to_fouier_2(coeff_2, qm)
+
+	f_2_matrix_qu = coeff_slice(f_2, qm, qu).reshape((n_waves_qu, n_waves_qu))
+	xy_corr = np.fft.fftshift(np.fft.ifftn(f_2_matrix_qu))
+
+	xy_corr = np.abs(xy_corr) / np.mean(f_2_matrix_qu)
+
+	return xy_corr
 
