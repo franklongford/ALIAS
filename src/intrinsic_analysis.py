@@ -597,23 +597,12 @@ def coeff_to_fouier_2(coeff_2, qm):
 	Converts square coefficients to square fouier coefficients
 	"""
 
-	f_2 = np.zeros((2*qm+1)**2)
-
-	for u in xrange(-qm, qm+1):
-		for v in xrange(-qm, qm+1):
-			j = (2 * qm + 1) * (u + qm) + (v + qm)
-			f_2[j] = coeff_2[j] * ut.check_uv(u, v) / 4.
-
-	print(f_2)
-
-	n_waves = 2 * qm +1
+	n_waves = 2 * qm + 1
 	
 	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
 	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
 
-	f_2 = vcheck(u_array, v_array) * coeff_2
-
-	print(f_2)
+	f_2 = vcheck(u_array, v_array) * coeff_2 / 4.
 
 	return f_2
 
@@ -622,7 +611,7 @@ def xy_correlation(coeff_2, qm, qu):
 	"""
 	xy_correlation(coeff_2, qm, qu)
 
-	Return correlation across xy plane using Wiener–Khinchin theorem
+	Return correlation across xy plane using Wiener-Khinchin theorem
 
 	Parameters
 	----------

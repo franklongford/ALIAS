@@ -187,8 +187,8 @@ def test_wavefunctions():
 
 def test_coeff_slice():
 
-	qm = 2
-	qu = 1
+	qm = 5
+	qu = 3
 	
 	n_waves_qm = 2 * qm + 1
 	n_waves_qu = 2 * qu + 1
@@ -205,9 +205,5 @@ def test_coeff_slice():
 	q_array_qu_2 = ia.coeff_slice(q_array_qm, qm, qu)
 
 	assert abs(np.sum(q_array_qu_2 - q_array_qu)) <= THRESH
-
-	f_array_qm = ia.coeff_to_fouier_2(q_array_qm, qm)	
-
-	assert abs(np.sum(f_array_qm - 1)) <= THRESH
 
 
