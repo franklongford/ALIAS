@@ -187,26 +187,22 @@ def test_wavefunctions():
 
 def test_coeff_slice():
 
-	qm = 5
-	qu = 3
-	n_waves = 2 * qm + 1
+	qm = 2
+	qu = 1
+	n_waves_qm = 2 * qm + 1
+	n_waves_qu = 2 * qu + 1
 
-	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
-	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
-	wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
-	indices = np.argwhere(wave_check).flatten()
+	u_array_qm = np.array(np.arange(n_waves_qm**2) / n_waves_qm, dtype=int) - qm
+	v_array_qm = np.array(np.arange(n_waves_qm**2) % n_waves_qm, dtype=int) - qm
 
-	"Create matrix of wave frequency indicies (u,v)**2"
-	u_matrix_qm = np.tile(u_array, (n_waves, 1))
-	v_matrix_qm = np.tile(v_array, (n_waves, 1))
-	q_matrix_qm = np.sqrt(u_matrix_qm**2 + v_matrix_qm**2)
+	u_array_qu = np.array(np.arange(n_waves_qu**2) / n_waves_qu, dtype=int) - qu
+        v_array_qu = np.array(np.arange(n_waves_qu**2) % n_waves_qu, dtype=int) - qu
 
-	u_matrix_qu = np.tile(u_array[indices], (len([indices]), 1))
-	v_matrix_qu = np.tile(v_array[indices], (len([indices]), 1))
-	q_matrix_qu = np.sqrt(u_matrix_qu**2 + v_matrix_qu**2)
+	q_array_qm = np.sqrt(u_array_qm**2 + v_array_qm**2)
+	q_array_qu = np.sqrt(u_array_qu**2 + v_array_qu**2)
 
-	q_matrix_qu_2 = ia.coeff_slice(q_matrix_qm, qm, qu)
+	q_array_qu_2 = ia.coeff_slice(q_array_qm, qm, qu)
 
-	assert abs(np.sum(q_matrix_qu_2 - q_matrix_qu)) <= THRESH
+	assert abs(np.sum(q_array_qu_2 - q_array_qu)) <= THRESH
 
 

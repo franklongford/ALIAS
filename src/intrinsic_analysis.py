@@ -573,23 +573,16 @@ def cw_gamma_dft(q, gamma, kappa, eta0, eta1): return gamma + eta0 * q + kappa *
 
 def coeff_slice(coeff, qm, qu):
 
-	coeff_qu = np.zeros((2*qu+1)**2)
+	n_waves_qm = 2 * qm + 1
+	n_waves_qu = 2 * qu + 1
 
-	for u in xrange(-qu, qu+1):
-		for v in xrange(-qu, qu+1):
-			j1 = (2 * qm + 1) * (u + qm) + (v + qm)
-			j2 = (2 * qu + 1) * (u + qu) + (v + qu)
+	index_1 = qm - qu
+	index_2 = index_1 + n_waves_qu
 
-			coeff_qu[j2] = coeff[j1]
+	coeff_matrix = np.reshape(coeff, (n_waves_qm, n_waves_qm))
+	coeff_qu = coeff_matrix[[slice(index_1, index_2) for _ in coeff_matrix.shape]].flatten()
 
-	print(coeff_qu)
-
-	index_1 = (2 * qm + 1) * (qm - qu) + (qm - qu)
-	index_2 = (2 * qm + 1) * (qm + qu) + (qm + qu)
-
-	print(coeff[[slice(index_1, index_2) for _ in coeff.shape]])
-
-	return auv_qm
+	return coeff_qu
 	
 
 def auv2_to_f2(auv2, qm):
