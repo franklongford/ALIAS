@@ -602,7 +602,7 @@ def coeff_to_fouier_2(coeff_2, qm):
 	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
 	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
 
-	f_2 = vcheck(u_array, v_array) * coeff_2 / 4.
+	f_2 = np.reshape(vcheck(u_array, v_array) * coeff_2 / 4., (n_waves, n_waves))
 
 	return f_2
 
@@ -616,7 +616,7 @@ def xy_correlation(coeff_2, qm, qu):
 	Parameters
 	----------
 
-	coeff_2:  float, array_like; shape=(n_waves_qm**2)
+	coeff_2:  float, array_like; shape=(n_waves**2)
 		Square of optimised surface coefficients
 	qm:  int
 		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
@@ -631,16 +631,13 @@ def xy_correlation(coeff_2, qm, qu):
 
 	"""
 
-	n_waves_qm = 2 * qm + 1
-	n_waves_qu = 2 * qu + 1
-
 	coeff_2[len(coeff_2)/2] = 0
-	f_2 = coeff_to_fouier_2(coeff_2, qm)
+	coeff_2_slice = coeff_slice(coeff_2, qm, qu)
 
-	f_2_matrix_qu = coeff_slice(f_2, qm, qu).reshape((n_waves_qu, n_waves_qu))
-	xy_corr = np.fft.fftshift(np.fft.ifftn(f_2_matrix_qu))
+	f_2_qu = coeff_to_fouier_2(coeff_2, qu)
+	xy_corr = np.fft.fftshift(np.fft.ifftn(f_2_qu))
 
-	xy_corr = np.abs(xy_corr) / np.mean(f_2_matrix_qu)
+	xy_corr = np.abs(xy_corr) / np.mean(f_2_qu)
 
 	return xy_corr
 
