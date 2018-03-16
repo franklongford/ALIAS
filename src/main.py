@@ -199,7 +199,7 @@ ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, n0, phi, mol_sigma, 
 
 for recon in [False, True]:
 	ism.create_intrinsic_positions_dxdyz(data_dir, file_name, nmol, nframe, qm, n0, phi, dim, recon=recon, ow_pos=ow_intpos)
-	ism.create_intrinsic_den_curve_histogram(data_dir, file_name, qm, n0, phi, nframe, nslice, dim, recon=recon, ow_hist=ow_hist)
+	ia.create_intrinsic_den_curve_histogram(data_dir, file_name, qm, n0, phi, nframe, nslice, dim, recon=recon, ow_hist=ow_hist)
 	ia.av_intrinsic_distributions(data_dir, file_name, dim, nslice, qm, n0, phi, nframe, nframe, recon=recon, ow_dist=ow_dist)
 
 print"\n---- ENDING PROGRAM ----\n"
