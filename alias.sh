@@ -9,5 +9,5 @@ declare  ow_intpos="$6"
 declare  ow_hist="$7"
 
 
-python src/main.py $traj $top $recon $ow_coeff $ow_recon $ow_intpos $ow_hist
+python -B src/main.py $traj $top $recon $ow_coeff $ow_recon $ow_intpos $ow_hist
 

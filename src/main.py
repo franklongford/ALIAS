@@ -43,7 +43,7 @@ def print_alias():
         print ""
 
 
-def run_alias(traj_file, top_file):
+def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False, ow_intpos=False, ow_hist=False, ow_dist=False):
 
 	file_end = max([0] + [pos for pos, char in enumerate(traj_file) if char == '/'])
 	traj_dir = traj_file[:file_end]
@@ -52,13 +52,6 @@ def run_alias(traj_file, top_file):
 	file_end = max([0] + [pos for pos, char in enumerate(top_file) if char == '/'])
 	top_dir = top_file[:file_end]
 	top_file = top_file[file_end+1:]
-
-	recon = ('-recon' in sys.argv)
-	ow_coeff = ('-ow_coeff' in sys.argv)
-	ow_recon = ('-ow_recon' in sys.argv)
-	ow_intpos = ('-ow_intpos' in sys.argv)
-	ow_hist = ('-ow_hist' in sys.argv)
-	ow_dist = ('-ow_dist' in sys.argv)
 
 	alias_dir = traj_dir + '/alias_analysis/'
 	data_dir = alias_dir + 'data/'
@@ -212,4 +205,11 @@ if __name__ == '__main__':
 	else: top_file = sys.argv[2]
 	while not os.path.exists(top_file): top_file = raw_input("\nTopology file not recognised: Re-enter file path: ")
 
-	run_alias(traj_file, top_file)
+	recon = ('-recon' in sys.argv)
+        ow_coeff = ('-ow_coeff' in sys.argv)
+        ow_recon = ('-ow_recon' in sys.argv)
+        ow_intpos = ('-ow_intpos' in sys.argv)
+        ow_hist = ('-ow_hist' in sys.argv)
+        ow_dist = ('-ow_dist' in sys.argv)
+
+	run_alias(traj_file, top_file, recon, ow_coeff, ow_recon, ow_intpos, ow_hist, ow_dist)
