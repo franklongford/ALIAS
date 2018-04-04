@@ -94,45 +94,57 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 	print "{} {} residues found, each containing {} atoms".format(nmol, mol, nsite)
 	print "Atomic sites: {}".format(AT)
 
-	try:
-		if bool(raw_input("\nUse elemental masses found in checkfile? {} g mol-1 (Y/N): ".format(checkfile['M'])).upper() == 'Y'):
-			M = checkfile['M']
-		else: raise Exception
-	except:
-		if bool(raw_input("\nUse standard elemental masses? (Y/N): ").upper() == 'Y'):
-			M = [atom.element.mass for atom in traj.topology.atoms][:nsite]
-		else:
-			M = []
-			for i in range(nsite):
-				M.append(float(raw_input("   Enter mass for site {} g mol-1 ({}): ".format(i, AT[i]))))
-			checkfile = ut.update_checkfile(checkfile_name, 'M', M)
+        if ('-M' in sys.argv): 
+		M = sys.argv[sys.argv.index('[') + 1 : sys.argv.index(']')]
+		M = [float(m) for m in M]
+		checkfile = ut.update_checkfile(checkfile_name, 'M', M)
+	else:
+		try:
+			if bool(raw_input("\nUse elemental masses found in checkfile? {} g mol-1 (Y/N): ".format(checkfile['M'])).upper() == 'Y'):
+				M = checkfile['M']
+			else: raise Exception
+		except:
+			if bool(raw_input("\nUse standard elemental masses? (Y/N): ").upper() == 'Y'):
+				M = [atom.element.mass for atom in traj.topology.atoms][:nsite]
+			else:
+				M = []
+				for i in range(nsite):
+					M.append(float(raw_input("   Enter mass for site {} g mol-1 ({}): ".format(i, AT[i]))))
+				checkfile = ut.update_checkfile(checkfile_name, 'M', M)
 
 	print "Using atomic site masses: {} g mol-1".format(M)
 	print "Molar mass: {}  g mol-1".format(np.sum(M))
 
-	try:
-		if bool(raw_input("\nUse centre of molecular mass in checkfile? {} (Y/N): ".format(checkfile['mol_com'])).upper() == 'Y'):
-			mol_com = checkfile['mol_com']
-		else: raise Exception
-	except:
-		if bool(raw_input("\nUse atomic site as centre of molecular mass? (Y/N): ").upper() == 'Y'):
-			mol_com = int(raw_input("   Site index: "))
-		else: mol_com = 'COM'
-		checkfile = ut.update_checkfile(checkfile_name, 'mol_com', mol_com)
+	if ('-mol_com' in sys.argv): 
+                mol_com = int(sys.argv[sys.argv.index('-mol_com') + 1])
+                checkfile = ut.update_checkfile(checkfile_name, 'mol_com', mol_com)
+        else:
+		try:
+			if bool(raw_input("\nUse centre of molecular mass in checkfile? {} (Y/N): ".format(checkfile['mol_com'])).upper() == 'Y'):
+				mol_com = checkfile['mol_com']
+			else: raise Exception
+		except:
+			if bool(raw_input("\nUse atomic site as centre of molecular mass? (Y/N): ").upper() == 'Y'):
+				mol_com = int(raw_input("   Site index: "))
+			else: mol_com = 'COM'
+			checkfile = ut.update_checkfile(checkfile_name, 'mol_com', mol_com)
 
 	file_name = "{}_{}_{}".format(traj_file.split('.')[0], mol, mol_com)
 	ut.make_mol_com(traj, data_dir, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol_com) 
 
 	del traj
 
-	try:
-		if bool(raw_input("\nUse molecular radius found in checkfile? {} Angstroms (Y/N): ".format(checkfile['mol_sigma'])).upper() == 'Y'):
-			mol_sigma = checkfile['mol_sigma']
-		else: raise Exception
-	except: 
-		mol_sigma = float(raw_input("Enter molecular radius: (Angstroms) "))
-		checkfile = ut.update_checkfile(checkfile_name, 'mol_sigma', mol_sigma)
-
+	if ('-mol_sigma' in sys.argv): 
+                mol_sigma = float(sys.argv[sys.argv.index('-mol_sigma') + 1])
+                checkfile = ut.update_checkfile(checkfile_name, 'mol_sigma', mol_sigma)
+        else:
+		try:
+			if bool(raw_input("\nUse molecular radius found in checkfile? {} Angstroms (Y/N): ".format(checkfile['mol_sigma'])).upper() == 'Y'):
+				mol_sigma = checkfile['mol_sigma']
+			else: raise Exception
+		except: 
+			mol_sigma = float(raw_input("Enter molecular radius: (Angstroms) "))
+			checkfile = ut.update_checkfile(checkfile_name, 'mol_sigma', mol_sigma)
 
 	lslice = 0.05 * mol_sigma
 	nslice = int(dim[2] / lslice)
@@ -143,30 +155,36 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 	qm = int(q_max / q_min)
 
 	print "\n------STARTING INTRINSIC SAMPLING-------\n"
-
-
 	print "Max wavelength = {:12.4f} sigma   Min wavelength = {:12.4f} sigma".format(q_max, q_min)
 	print "Max frequency qm = {:6d}".format(qm)
 
-	try:
-		if bool(raw_input("\nUse weighting coefficient for surface area minimisation found in checkfile: phi = {}? (Y/N): ".format(checkfile['phi'])).upper() == 'Y'):
-			phi = checkfile['phi']
-		else: raise Exception
-	except: 
-		if bool(raw_input("\nUse recommended weighting coefficient for surface area minimisation: phi = 5E-8? (Y/N): ").upper() == 'Y'):
-			phi = 5E-8
-		else: phi = float(raw_input("\nManually enter weighting coefficient: "))
-		checkfile = ut.update_checkfile(checkfile_name, 'phi', phi)
+	if ('-phi' in sys.argv): 
+                phi = float(sys.argv[sys.argv.index('-phi') + 1])
+                checkfile = ut.update_checkfile(checkfile_name, 'phi', phi)
+        else:
+		try:
+			if bool(raw_input("\nUse weighting coefficient for surface area minimisation found in checkfile: phi = {}? (Y/N): ".format(checkfile['phi'])).upper() == 'Y'):
+				phi = checkfile['phi']
+			else: raise Exception
+		except: 
+			if bool(raw_input("\nUse recommended weighting coefficient for surface area minimisation: phi = 5E-8? (Y/N): ").upper() == 'Y'):
+				phi = 5E-8
+			else: phi = float(raw_input("\nManually enter weighting coefficient: "))
+			checkfile = ut.update_checkfile(checkfile_name, 'phi', phi)
 
-	try:
-		if bool(raw_input("\nUse surface pivot number found in checkfile? {} pivots (Y/N): ".format(checkfile['n0'])).upper() == 'Y'):
-			n0 = checkfile['n0']
-		else: raise Exception
-	except:
-		if bool(raw_input("\nManually enter in new surface pivot number? (search will commence otherwise): (Y/N)").upper() == 'Y'):
-			n0 = int(raw_input("\nEnter number of surface pivots: "))
-			checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
-		else:
+	if ('-n0' in sys.argv):
+                n0 = int(sys.argv[sys.argv.index('-n0') + 1])
+                checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
+        else:
+		try:
+			if bool(raw_input("\nUse surface pivot number found in checkfile? {} pivots (Y/N): ".format(checkfile['n0'])).upper() == 'Y'):
+				n0 = checkfile['n0']
+			else: raise Exception
+		except:
+			#if bool(raw_input("\nManually enter in new surface pivot number? (search will commence otherwise): (Y/N)").upper() == 'Y'):
+			#	n0 = int(raw_input("\nEnter number of surface pivots: "))
+			#	checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
+			#else:
 			print "\n-------OPTIMISING SURFACE DENSITY-------\n"
 
 			start_ns = 0.75

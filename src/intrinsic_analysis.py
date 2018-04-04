@@ -590,17 +590,17 @@ def coeff_slice(coeff, qm, qu):
 	return coeff_qu
 	
 
-def coeff_to_fouier_2(coeff_2, qm):
+def coeff_to_fouier_2(coeff_2, qu):
 	"""
-	coeff_to_fouier_2(coeff_2, qm)
+	coeff_to_fouier_2(coeff_2, qu)
 
 	Converts square coefficients to square fouier coefficients
 	"""
 
-	n_waves = 2 * qm + 1
+	n_waves = 2 * qu + 1
 	
-	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
-	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qu
+	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qu
 
 	f_2 = np.reshape(vcheck(u_array, v_array) * coeff_2 / 4., (n_waves, n_waves))
 
@@ -634,7 +634,7 @@ def xy_correlation(coeff_2, qm, qu):
 	coeff_2[len(coeff_2)/2] = 0
 	coeff_2_slice = coeff_slice(coeff_2, qm, qu)
 
-	f_2_qu = coeff_to_fouier_2(coeff_2, qu)
+	f_2_qu = coeff_to_fouier_2(coeff_2_slice, qu)
 	xy_corr = np.fft.fftshift(np.fft.ifftn(f_2_qu))
 
 	xy_corr = np.abs(xy_corr) / np.mean(f_2_qu)
