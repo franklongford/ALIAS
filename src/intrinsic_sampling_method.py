@@ -998,10 +998,11 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 		mol_ex_2.append(ex_2)
 
 		if len(mol_ex_1) > 1:
-			check = np.argmin((np.array(mol_ex_1) + np.array(mol_ex_2)) / 2.) == (len(NS) - 1)
+			av_mol_ex = (np.array(mol_ex_1) + np.array(mol_ex_2)) / 2.
+			check = np.argmin(av_mol_ex) == (len(NS) - 1)
 			if not check: optimising = False
 			else: 
-				ns += step_ns
+				ns += np.sign(av_mol_ex[-2] - av_mol_ex[-1]) * step_ns
 				print "Optimal surface density not found.\nContinuing search using pivot number = {}".format(int(dim[0] * dim[1] * ns / mol_sigma**2))
 		
 		else: ns += step_ns
