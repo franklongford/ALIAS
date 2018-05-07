@@ -16,19 +16,228 @@ import numpy as np
 import scipy as sp, scipy.constants as con
 
 import utilities as ut
-import intrinsic_sampling_method as ism
+from intrinsic_sampling_method import wave_function, d_wave_function, dd_wave_function
 
 import os, sys, time, tables
 
 
 vcheck = np.vectorize(ism.check_uv)
 
-
-def make_den_curve(directory, zmol, int_z_mol, int_dxdy_mol, coeff, nmol, nslice, nz, qm, dim):
+def make_pos_dxdy(directory, file_name_pos, xmol, ymol, coeff, nmol, dim, qm):
 	"""
-	make_den_curve(directory, zmol, int_z_mol, int_dxdy_mol, coeff, nmol, nslice, nz, qm, dim)
+	make_pos_dxdy(directory, file_name_pos, xmol, ymol, coeff, nmol, dim, qm)
 
-	Creates density and curvature distributions normal to surface
+	Calculate distances and derivatives at each molecular position with respect to intrinsic surface
+
+	Parameters
+	----------
+
+	directory:  str
+		File path of directory of alias analysis.
+	file_name_pos:  str
+		File name to save position and derivatives to.
+	xmol:  float, array_like; shape=(nmol)
+		Molecular coordinates in x dimension
+	ymol:  float, array_like; shape=(nmol)
+		Molecular coordinates in y dimension
+	coeff:	float, array_like; shape=(n_waves**2)
+		Optimised surface coefficients
+	nmol:  int
+		Number of molecules in simulation
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+
+	Returns
+	-------
+
+	int_z_mol:  array_like (float); shape=(nframe, 2, qm+1, nmol)
+		Molecular distances from intrinsic surface
+	int_dxdy_mol:  array_like (float); shape=(nframe, 4, qm+1, nmol)
+		First derivatives of intrinsic surface wrt x and y at xmol, ymol
+	int_ddxddy_mol:  array_like (float); shape=(nframe, 4, qm+1, nmol)
+		Second derivatives of intrinsic surface wrt x and y at xmol, ymol 
+
+	"""
+	
+	int_z_mol = np.zeros((qm+1, 2, nmol))
+	int_dxdy_mol = np.zeros((qm+1, 4, nmol)) 
+	int_ddxddy_mol = np.zeros((qm+1, 4, nmol))
+
+	temp_int_z_mol = np.zeros((2, nmol))
+	temp_dxdy_mol = np.zeros((4, nmol)) 
+	temp_ddxddy_mol = np.zeros((4, nmol))
+	
+	for qu in xrange(qm+1):
+
+		if qu == 0:
+			j = (2 * qm + 1) * qm + qm
+			f_x = wave_function(xmol, 0, dim[0])
+			f_y = wave_function(ymol, 0, dim[1])
+
+			temp_int_z_mol[0] += f_x * f_y * coeff[0][j]
+			temp_int_z_mol[1] += f_x * f_y * coeff[1][j]
+
+		else:
+			for u in [-qu, qu]:
+				for v in xrange(-qu, qu+1):
+					j = (2 * qm + 1) * (u + qm) + (v + qm)
+
+					f_x = wave_function(xmol, u, dim[0])
+					f_y = wave_function(ymol, v, dim[1])
+					df_dx = d_wave_function(xmol, u, dim[0])
+					df_dy = d_wave_function(ymol, v, dim[1])
+					ddf_ddx = dd_wave_function(xmol, u, dim[0])
+					ddf_ddy = dd_wave_function(ymol, v, dim[1])
+
+					temp_int_z_mol[0] += f_x * f_y * coeff[0][j]
+					temp_int_z_mol[1] += f_x * f_y * coeff[1][j]
+					temp_dxdy_mol[0] += df_dx * f_y * coeff[0][j]
+					temp_dxdy_mol[1] += f_x * df_dy * coeff[0][j]
+					temp_dxdy_mol[2] += df_dx * f_y * coeff[1][j]
+					temp_dxdy_mol[3] += f_x * df_dy * coeff[1][j]
+					temp_ddxddy_mol[0] += ddf_ddx * f_y * coeff[0][j]
+					temp_ddxddy_mol[1] += f_x * ddf_ddy * coeff[0][j]
+					temp_ddxddy_mol[2] += ddf_ddx * f_y * coeff[1][j]
+					temp_ddxddy_mol[3] += f_x * ddf_ddy * coeff[1][j]
+
+			for u in xrange(-qu+1, qu):
+				for v in [-qu, qu]:
+					j = (2 * qm + 1) * (u + qm) + (v + qm)
+
+					f_x = wave_function(xmol, u, dim[0])
+					f_y = wave_function(ymol, v, dim[1])
+					df_dx = d_wave_function(xmol, u, dim[0])
+					df_dy = d_wave_function(ymol, v, dim[1])
+					ddf_ddx = dd_wave_function(xmol, u, dim[0])
+					ddf_ddy = dd_wave_function(ymol, v, dim[1])
+
+					temp_int_z_mol[0] += f_x * f_y * coeff[0][j]
+					temp_int_z_mol[1] += f_x * f_y * coeff[1][j]
+					temp_dxdy_mol[0] += df_dx * f_y * coeff[0][j]
+					temp_dxdy_mol[1] += f_x * df_dy * coeff[0][j]
+					temp_dxdy_mol[2] += df_dx * f_y * coeff[1][j]
+					temp_dxdy_mol[3] += f_x * df_dy * coeff[1][j]
+					temp_ddxddy_mol[0] += ddf_ddx * f_y * coeff[0][j]
+					temp_ddxddy_mol[1] += f_x * ddf_ddy * coeff[0][j]
+					temp_ddxddy_mol[2] += ddf_ddx * f_y * coeff[1][j]
+					temp_ddxddy_mol[3] += f_x * ddf_ddy * coeff[1][j]
+
+		int_z_mol[qu] += temp_int_z_mol
+		int_dxdy_mol[qu] += temp_dxdy_mol
+		int_ddxddy_mol[qu] += temp_ddxddy_mol
+
+	int_z_mol = np.swapaxes(int_z_mol, 0, 1)
+	int_dxdy_mol = np.swapaxes(int_dxdy_mol, 0, 1)
+	int_ddxddy_mol = np.swapaxes(int_ddxddy_mol, 0, 1)
+	
+	return int_z_mol, int_dxdy_mol, int_ddxddy_mol
+
+
+def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0, phi, dim, recon=False, ow_pos=False):
+	"""
+	create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0, phi, dim, recon, ow_pos)
+
+	Calculate distances and derivatives at each molecular position with respect to intrinsic surface in simulation frame
+
+	Parameters
+	----------
+
+	directory:  str
+		File path of directory of alias analysis.
+	file_name:  str
+		File name of trajectory being analysed.
+	nmol:  int
+		Number of molecules in simulation
+	nframe:  int
+		Number of frames in simulation trajectory
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	n0:  int
+		Maximum number of molecular pivots in intrinsic surface
+	phi:  float
+		Weighting factor of minimum surface area term in surface optimisation function
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+	recon:  bool (optional)
+		Whether to use surface reconstructe coefficients
+	ow_pos:  bool (optional)
+		Whether to overwrite positions and derivatives (default=False)
+
+	"""
+
+	print"\n--- Running Intrinsic Positions and Derivatives Routine ---\n"
+
+	n_waves = 2 * qm + 1
+	
+	surf_dir = directory + 'surface/'
+	pos_dir = directory + 'pos/'
+	intpos_dir = directory + 'intpos/'
+	if not os.path.exists(intpos_dir): os.mkdir(intpos_dir)
+
+	file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
+	file_name_pos = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
+	if recon: 
+		file_name_coeff += '_R'
+		file_name_pos += '_R'
+
+	if not os.path.exists('{}/{}_int_z_mol.hdf5'.format(intpos_dir, file_name_pos)):
+		ut.make_hdf5(intpos_dir + file_name_pos + '_int_z_mol', (2, qm+1, nmol), tables.Float64Atom())
+		ut.make_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol', (4, qm+1, nmol), tables.Float64Atom())
+		ut.make_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol', (4, qm+1, nmol), tables.Float64Atom())
+		file_check = False
+
+	elif not ow_pos:
+		"Checking number of frames in current distance files"
+		try:
+			file_check = (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_z_mol') == (nframe, 2, qm+1, nmol))
+			file_check *= (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol') == (nframe, 4, qm+1, nmol))
+			file_check *= (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol') == (nframe, 4, qm+1, nmol))
+		except: file_check = False
+	else: file_check = False
+
+	if not file_check:
+		xmol = ut.load_npy(pos_dir + file_name + '_{}_xmol'.format(nframe), frames=range(nframe))
+		ymol = ut.load_npy(pos_dir + file_name + '_{}_ymol'.format(nframe), frames=range(nframe))
+
+		for frame in xrange(nframe):
+
+			"Checking number of frames in int_z_mol file"
+			frame_check_int_z_mol = (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_z_mol')[0] <= frame)
+			frame_check_int_dxdy_mol = (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol')[0] <= frame)
+			frame_check_int_ddxddy_mol = (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol')[0] <= frame)
+
+			if frame_check_int_z_mol: mode_int_z_mol = 'a'
+			elif ow_pos: mode_int_z_mol = 'r+'
+			else: mode_int_z_mol = False
+
+			if frame_check_int_dxdy_mol: mode_int_dxdy_mol = 'a'
+			elif ow_pos: mode_int_dxdy_mol = 'r+'
+			else: mode_int_dxdy_mol = False
+
+			if frame_check_int_ddxddy_mol: mode_int_ddxddy_mol = 'a'
+			elif ow_pos: mode_int_ddxddy_mol = 'r+'
+			else: mode_int_ddxddy_mol = False
+
+			if not mode_int_z_mol and not mode_int_dxdy_mol and not mode_int_ddxddy_mol: pass
+			else:
+				sys.stdout.write("Calculating molecular distances and derivatives: frame {}\r".format(frame))
+				sys.stdout.flush()
+			
+				coeff = ut.load_hdf5(surf_dir + file_name_coeff + '_coeff', frame)
+
+				int_z_mol, int_dxdy_mol, int_ddxddy_mol = make_pos_dxdy(directory, file_name_pos, xmol[frame], ymol[frame], coeff, nmol, dim, qm)
+				ut.save_hdf5(intpos_dir + file_name_pos + '_int_z_mol', int_z_mol, frame, mode_int_z_mol)
+				ut.save_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol', int_dxdy_mol, frame, mode_int_dxdy_mol)
+				ut.save_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol', int_ddxddy_mol, frame, mode_int_ddxddy_mol)
+
+
+def make_den_curve(directory, zmol, int_z_mol, int_ddxddy_mol, coeff, nmol, nslice, nz, qm, dim):
+	"""
+	make_den_curve(directory, zmol, int_z_mol, int_ddxddy_mol, coeff, nmol, nslice, nz, qm, dim)
+
+	Creates density and mean curvature distributions
 
 	Parameters
 	----------
@@ -39,8 +248,8 @@ def make_den_curve(directory, zmol, int_z_mol, int_dxdy_mol, coeff, nmol, nslice
 		Molecular coordinates in z dimension
 	int_z_mol:  array_like (float); shape=(nframe, 2, qm+1, nmol)
 		Molecular distances from intrinsic surface
-	int_dxdy_mol:  array_like (float); shape=(nframe, 4, qm+1, nmol)
-		First derivatives of intrinsic surface wrt x and y at xmol, ymol
+	int_ddxddy_mol:  array_like (float); shape=(nframe, 4, qm+1, nmol)
+		Second derivatives of intrinsic surface wrt x and y at xmol, ymol
 	coeff:	float, array_like; shape=(n_waves**2)
 		Optimised surface coefficients
 	nmol:  int
@@ -76,22 +285,33 @@ def make_den_curve(directory, zmol, int_z_mol, int_dxdy_mol, coeff, nmol, nslice
 		z1 = zmol - int_z1
 		z2 = -zmol + int_z2
 
-		dzx1 = int_dxdy_mol[0][qu]
-		dzy1 = int_dxdy_mol[1][qu]
-		dzx2 = int_dxdy_mol[2][qu]
-		dzy2 = int_dxdy_mol[3][qu]
+		#dzx1 = int_dxdy_mol[0][qu]
+		#dzy1 = int_dxdy_mol[1][qu]
+		#dzx2 = int_dxdy_mol[2][qu]
+		#dzy2 = int_dxdy_mol[3][qu]
+
+		ddzx1 = int_ddxddy_mol[0][qu]
+		ddzy1 = int_ddxddy_mol[1][qu]
+		ddzx2 = int_ddxddy_mol[2][qu]
+		ddzy2 = int_ddxddy_mol[3][qu]
 
 		index1_mol = np.array((z1 + dim[2]/2.) * nslice / dim[2], dtype=int) % nslice
 		index2_mol = np.array((z2 + dim[2]/2.) * nslice / dim[2], dtype=int) % nslice
 
-		normal1 = ut.unit_vector(np.array([-dzx1, -dzy1, np.ones(nmol)]))
-		normal2 = ut.unit_vector(np.array([-dzx2, -dzy2, np.ones(nmol)]))
+		#normal1 = ut.unit_vector(np.array([-dzx1, -dzy1, np.ones(nmol)]))
+		#normal2 = ut.unit_vector(np.array([-dzx2, -dzy2, np.ones(nmol)]))
 
-		index1_nz = np.array(abs(normal1[2]) * nz, dtype=int) % nz
-		index2_nz = np.array(abs(normal2[2]) * nz, dtype=int) % nz
+		#index1_nz = np.array(abs(normal1[2]) * nz, dtype=int) % nz
+		#index2_nz = np.array(abs(normal2[2]) * nz, dtype=int) % nz
 
-		temp_count_corr_array += np.histogram2d(index1_mol, index1_nz, bins=[nslice, nz], range=[[0, nslice], [0, nz]])[0]
-		temp_count_corr_array += np.histogram2d(index2_mol, index2_nz, bins=[nslice, nz], range=[[0, nslice], [0, nz]])[0]
+		H1 = ddzx1 + ddzy1
+		H2 = ddzx2 + ddzy2
+
+		index1_H = np.array(H1 * nz, dtype=int) % nz
+		index2_H = np.array(H1 * nz, dtype=int) % nz
+
+		temp_count_corr_array += np.histogram2d(index1_mol, index1_H, bins=[nslice, nz], range=[[0, nslice], [0, nz]])[0]
+		temp_count_corr_array += np.histogram2d(index2_mol, index2_H, bins=[nslice, nz], range=[[0, nslice], [0, nz]])[0]
 
 		count_corr_array[qu] += temp_count_corr_array
 
@@ -187,7 +407,7 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 
 				count_corr_array = make_den_curve(directory, zmol[frame], int_z_mol, int_dxdy_mol, coeff, nmol, nslice, nz, qm, dim)
 				ut.save_hdf5(intden_dir + file_name_hist + '_count_corr', count_corr_array, frame, mode_count_corr)
-
+				
 
 def av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, nframe, nsample, nz=100, recon=False, ow_dist=False):
 	"""
