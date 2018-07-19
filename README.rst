@@ -24,7 +24,7 @@ Instructions:
 
 Main routine of ALIAS can be run via the following commands:
 
-1) ``./alias.sh [traj] [top] [flags]``
+1) ``./ALIAS.sh [traj] [top] [flags]``
 
 	traj: 	
 		Trajectory file
