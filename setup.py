@@ -3,6 +3,11 @@
 
 from setuptools import setup, find_packages
 
+AUTHOR = 'Frank Longford'
+AUTHOR_EMAIL = 'f.longford@soton.ac.uk'
+URL = 'https://github.com/franklongford/ALIAS'
+PLATFORMS = ['Linux', 'Unix', 'Mac OS X']
+PACKAGE_DIR = {'ALIAS/src': '.'}
 
 with open('README.rst') as f:
     readme = f.read()
@@ -14,11 +19,13 @@ with open('LICENSE') as f:
 setup(
 	name='ALIAS',
 	version='1.2.0.dev1',
-	description='Intinsic Surface Analysis tools for simulations of air-liquid interfaces',
+	description='Air-Liquid Interface Analysis Suite',
 	long_description=readme,
-	author='Frank Longford',
-	author_email='f.longford@soton.ac.uk',
-	url='https://github.com/franklongford/alias',
+	author=AUTHOR,
+	author_email=AUTHOR_EMAIL,
+	url=URL,
+	platforms=PLATFORMS,
+	package_dir=PACKAGE_DIR,
 	license=license,
 	packages=find_packages(exclude=('tests', 'docs')),
 	python_requires='>=2.7'

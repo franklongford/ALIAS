@@ -37,7 +37,7 @@ def print_alias():
         print "|    /  \    |        |      /  \    \___   |"
         print "|   /___ \   |        |     /___ \       \  |"
         print "|  /      \  |____  __|__  /      \  ____/  |"
-        print '|'+ '_' * 43 + '|' + '  v1.2.0.dev1'
+        print '|'+ '_' * 43 + '|' + '  v1.2.1'
         print ""
         print "    Air-Liquid Interface Analysis Suite"
         print ""
@@ -61,59 +61,82 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 	if not os.path.exists(figure_dir): os.mkdir(figure_dir)
 
 	print "Loading trajectory file {} using {} topology".format(traj_file, top_file)
-
-	traj, MOL, nframe, dim = ut.get_sim_param(traj_dir, top_dir, traj_file, top_file)
-
-	print "Number of simulation frames: {}".format(nframe)
-	print "Simulation cell xyz dimensions in Angstoms: {}\n".format(dim)
-	print "Residue types found: {}".format(len(MOL))
-	print "List of residues found: {}".format(MOL)
-
-	if len(MOL) > 1: mol = raw_input("\nChoose residue to use for surface identification: ")
-	else: 
-		mol = MOL[0]
-		print "Using residue {} for surface identification".format(mol)
-	atoms = [atom for atom in traj.topology.atoms if (atom.residue.name == mol)]
-	molecules = [molecule for molecule in traj.topology.residues if (molecule.name == mol)]
-
-	AT = [atom.name for atom in molecules[0].atoms]
-	at_index = [atom.index for atom in atoms]
-	nsite = molecules[0].n_atoms
-	natom = len(atoms)
-	nmol = len(molecules)
-
 	checkfile_name = alias_dir + traj_file.split('.')[0] + '_chk'
-	if not os.path.exists('{}.pkl'.format(checkfile_name)): 
+	if not os.path.exists('{}.pkl'.format(checkfile_name)):
 		ut.make_checkfile(checkfile_name)
+
+		traj, MOL, dim = ut.get_sim_param('{}/{}'.format(traj_dir, traj_file), '{}/{}'.format(top_dir, top_file))
+
+		print "Simulation cell xyz dimensions in Angstoms: {}\n".format(dim)
+		print "Residue types found: {}".format(len(MOL))
+		print "List of residues found: {}".format(MOL)
+
+		if len(MOL) > 1: mol = raw_input("\nChoose residue to use for surface identification: ")
+		else: 
+			mol = MOL[0]
+			print "Using residue {} for surface identification".format(mol)
+		atoms = [atom for atom in traj.topology.atoms if (atom.residue.name == mol)]
+		molecules = [molecule for molecule in traj.topology.residues if (molecule.name == mol)]
+
+		AT = [atom.name for atom in molecules[0].atoms]
+		at_index = [atom.index for atom in atoms]
+		nsite = molecules[0].n_atoms
+		natom = len(atoms)
+		nmol = len(molecules)
+		sys_M = [atom.element.mass for atom in traj.topology.atoms]
+		nframe = int(raw_input("\nEnter number of simulation frames: "))
+
 		checkfile = ut.update_checkfile(checkfile_name, 'dim', dim)
 		checkfile = ut.update_checkfile(checkfile_name, 'mol', mol)
+		checkfile = ut.update_checkfile(checkfile_name, 'natom', natom)
 		checkfile = ut.update_checkfile(checkfile_name, 'nmol', nmol)
 		checkfile = ut.update_checkfile(checkfile_name, 'nframe', nframe)
-	checkfile = ut.read_checkfile(checkfile_name)
+		checkfile = ut.update_checkfile(checkfile_name, 'nsite', nsite)
+		checkfile = ut.update_checkfile(checkfile_name, 'AT', AT)
+		checkfile = ut.update_checkfile(checkfile_name, 'at_index', at_index)
+		checkfile = ut.update_checkfile(checkfile_name, 'sys_M', sys_M)
+
+	else:
+
+		checkfile = ut.read_checkfile(checkfile_name)
+		natom = checkfile['natom']
+		nmol = checkfile['nmol']
+		mol = checkfile['mol']
+		nframe = checkfile['nframe']
+		nsite = checkfile['nsite']
+		dim = checkfile['dim']
+		sys_M = checkfile['sys_M']
+		AT = checkfile['AT']
+		at_index = checkfile['at_index']
+
+		print "Number of simulation frames: {}".format(nframe)
+		print "Simulation cell xyz dimensions in Angstoms: {}\n".format(dim)
+		print "Using residue {} for surface identification".format(mol)
 
 	print "{} {} residues found, each containing {} atoms".format(nmol, mol, nsite)
 	print "Atomic sites: {}".format(AT)
 
-        if ('-M' in sys.argv): 
-		M = sys.argv[sys.argv.index('[') + 1 : sys.argv.index(']')]
-		M = [float(m) for m in M]
-		checkfile = ut.update_checkfile(checkfile_name, 'M', M)
+	if ('-M' in sys.argv): 
+		mol_M = sys.argv[sys.argv.index('[') + 1 : sys.argv.index(']')]
+		mol_M = [float(m) for m in mol_M]
 	else:
 		try:
-			if bool(raw_input("\nUse elemental masses found in checkfile? {} g mol-1 (Y/N): ".format(checkfile['M'])).upper() == 'Y'):
-				M = checkfile['M']
+			if bool(raw_input("\nUse elemental masses found in checkfile? {} g mol-1 (Y/N): ".format(checkfile['mol_M'])).upper() == 'Y'):
+				mol_M = checkfile['mol_M']
 			else: raise Exception
 		except:
 			if bool(raw_input("\nUse standard elemental masses? (Y/N): ").upper() == 'Y'):
-				M = [atom.element.mass for atom in traj.topology.atoms][:nsite]
+				mol_M = [mass for mass in sys_M][:nsite]
 			else:
-				M = []
+				mol_M = np.zeros(nsite)
 				for i in range(nsite):
-					M.append(float(raw_input("   Enter mass for site {} g mol-1 ({}): ".format(i, AT[i]))))
-				checkfile = ut.update_checkfile(checkfile_name, 'M', M)
+					mol_M[i] = float(raw_input("   Enter mass for site {} g mol-1: ".format(AT[i])))
 
-	print "Using atomic site masses: {} g mol-1".format(M)
-	print "Molar mass: {}  g mol-1".format(np.sum(M))
+			checkfile = ut.update_checkfile(checkfile_name, 'mol_M', mol_M)
+	
+
+	print "Using atomic site masses: {} g mol-1".format(mol_M)
+	print "Molar mass: {}  g mol-1".format(np.sum(mol_M))
 
 	if ('-mol_com' in sys.argv): 
                 mol_com = int(sys.argv[sys.argv.index('-mol_com') + 1])
@@ -130,9 +153,7 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 			checkfile = ut.update_checkfile(checkfile_name, 'mol_com', mol_com)
 
 	file_name = "{}_{}_{}".format(traj_file.split('.')[0], mol, mol_com)
-	ut.make_mol_com(traj, data_dir, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol_com) 
-
-	del traj
+	ut.make_mol_com('{}/{}'.format(traj_dir, traj_file), '{}/{}'.format(top_dir, top_file), data_dir, file_name, natom, nmol, at_index, nframe, dim, nsite, mol_M, sys_M, mol_com) 
 
 	if ('-mol_sigma' in sys.argv): 
                 mol_sigma = float(sys.argv[sys.argv.index('-mol_sigma') + 1])
@@ -158,6 +179,16 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 	print "Max wavelength = {:12.4f} sigma   Min wavelength = {:12.4f} sigma".format(q_max, q_min)
 	print "Max frequency qm = {:6d}".format(qm)
 
+	if ('-vlim' in sys.argv): 
+                vlim = int(sys.argv[sys.argv.index('-vlim') + 1])
+                checkfile = ut.update_checkfile(checkfile_name, 'vlim', vlim)
+	else: vlim = 3
+
+	if ('-ncube' in sys.argv): 
+                ncube = int(sys.argv[sys.argv.index('-ncube') + 1])
+                checkfile = ut.update_checkfile(checkfile_name, 'ncube', ncube)
+	else: ncube = 3
+
 	if ('-phi' in sys.argv): 
                 phi = float(sys.argv[sys.argv.index('-phi') + 1])
                 checkfile = ut.update_checkfile(checkfile_name, 'phi', phi)
@@ -181,19 +212,17 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 				n0 = checkfile['n0']
 			else: raise Exception
 		except:
-			#if bool(raw_input("\nManually enter in new surface pivot number? (search will commence otherwise): (Y/N)").upper() == 'Y'):
-			#	n0 = int(raw_input("\nEnter number of surface pivots: "))
-			#	checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
-			#else:
-			print "\n-------OPTIMISING SURFACE DENSITY-------\n"
+			if bool(raw_input("\nManually enter in new surface pivot number? (search will commence otherwise): (Y/N)").upper() == 'Y'):
+				n0 = int(raw_input("\nEnter number of surface pivots: "))
+				checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
+			else:
+				print "\n-------OPTIMISING SURFACE DENSITY-------\n"
 
-			start_ns = 0.75
-			step_ns = 0.05
+				start_ns = 0.5
+				step_ns = 0.05
 
-			print "Using initial pivot number = {}, step size = {}".format(int(dim[0] * dim[1] * start_ns / mol_sigma**2), int(dim[0] * dim[1] * step_ns / mol_sigma**2))
-
-			ns, n0 = ism.optimise_ns(data_dir, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns)
-			checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
+				ns, n0 = ism.optimise_ns(data_dir, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, ncube=ncube, vlim=vlim)
+				checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
 
 	QM = range(1, qm+1)
 	print "\nResolution parameters:"
@@ -202,8 +231,7 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 	for qu in QM: print "{:12d} | {:12.4f} | {:12.4f}".format(qu, q_max / (qu*q_min), mol_sigma * q_max / (10*qu*q_min))
 	print ""
 
-	ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=recon, ow_coeff=ow_coeff, ow_recon=ow_recon)
-
+	ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=True, ncube=ncube, vlim=vlim, ow_coeff=ow_coeff, ow_recon=ow_recon)
 	#"""
 	for recon in [False, True]:
 		ia.create_intrinsic_positions_dxdyz(data_dir, file_name, nmol, nframe, qm, n0, phi, dim, recon=recon, ow_pos=ow_intpos)

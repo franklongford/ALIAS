@@ -16,12 +16,12 @@ import numpy as np
 import scipy as sp, scipy.constants as con
 
 import utilities as ut
-from intrinsic_sampling_method import wave_function, d_wave_function, dd_wave_function
+from intrinsic_sampling_method import xi, wave_function, d_wave_function, dd_wave_function, check_uv
 
 import os, sys, time, tables
 
 
-vcheck = np.vectorize(ism.check_uv)
+vcheck = np.vectorize(check_uv)
 
 def make_pos_dxdy(directory, file_name_pos, xmol, ymol, coeff, nmol, dim, qm):
 	"""
@@ -487,6 +487,29 @@ def av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, n
 	return int_den_curve_matrix, int_density, int_curvature
 
 
+def xi_var(coeff, qm, qu, dim):
+
+	nframe = coeff.shape[0]
+	n_waves = 2 * qm +1
+	nxy = 40
+	
+	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
+	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+	wave_filter = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+	indices = np.argwhere(wave_filter).flatten()
+	Psi = vcheck(u_array, v_array)[indices] / 4.
+
+	coeff_filter = coeff[:,:,indices]
+	mid_point = len(indices) / 2 
+
+	av_coeff = np.mean(coeff_filter[:, :,mid_point], axis=0)
+	av_coeff_2 = np.mean(coeff_filter**2, axis=(0, 1)) * Psi
+	
+	calc_var = np.sum(av_coeff_2) - np.mean(av_coeff**2, axis=0)
+
+	return calc_var
+
+
 def H_xy(x, y, coeff, qm, qu, dim):
 	"""
 	H_xy(x, y, coeff, qm, qu, dim)
@@ -721,7 +744,7 @@ def power_spectrum_coeff(coeff_2, qm, qu, dim):
 			set_index = np.round(u**2*dim[1]/dim[0] + v**2*dim[0]/dim[1], 4)
 
 			if set_index != 0:
-				p_spec = coeff_2[j] * ism.check_uv(u, v) / 4.
+				p_spec = coeff_2[j] * check_uv(u, v) / 4.
 				p_spec_hist[q2_set == set_index] += p_spec
 				p_spec_count[q2_set == set_index] += 1
 
@@ -772,7 +795,7 @@ def surface_tension_coeff(coeff_2, qm, qu, dim, T):
 			set_index = np.round(u**2*dim[1]/dim[0] + v**2*dim[0]/dim[1], 4)
 
 			if set_index != 0:
-				gamma = 1. / (ism.check_uv(u, v) * coeff_2[j] * 1E-20 * dot_prod)
+				gamma = 1. / (check_uv(u, v) * coeff_2[j] * 1E-20 * dot_prod)
 				gamma_hist[q2_set == set_index] += gamma
 				gamma_count[q2_set == set_index] += 1
 
@@ -810,26 +833,81 @@ def coeff_slice(coeff, qm, qu):
 	return coeff_qu
 	
 
-def coeff_to_fouier_2(coeff_2, qu):
+def coeff_to_fouier(coeff, qm, dim):
 	"""
-	coeff_to_fouier_2(coeff_2, qu)
+	coeff_to_fouier(coeff, nm)
+
+	Returns Fouier coefficients for Fouier series representing intrinsic surface from linear algebra coefficients
+
+	Parameters
+	----------
+
+	coeff:	float, array_like; shape=(n_waves**2)
+		Optimised linear algebra surface coefficients
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	
+	Returns
+	-------
+
+	f_coeff:  float, array_like; shape=(n_waves**2)
+		Optimised Fouier surface coefficients
+	
+	"""
+
+	n_waves = 2 * qm + 1
+
+	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
+	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+
+	frequencies = np.pi * 2 * (u_array.reshape(n_waves, n_waves) / dim[0] + v_array.reshape(n_waves, n_waves) / dim[1])
+
+        amplitudes = np.zeros(n_waves**2, dtype=complex)
+
+        for u in xrange(-qm,qm+1):
+                for v in xrange(-qm, qm+1):
+                        index = n_waves * (u + qm) + (v + qm)
+
+                        j1 = n_waves * (abs(u) + qm) + (abs(v) + qm)
+                        j2 = n_waves * (-abs(u) + qm) + (abs(v) + qm)
+                        j3 = n_waves * (abs(u) + qm) + (-abs(v) + qm)
+                        j4 = n_waves * (-abs(u) + qm) + (-abs(v) + qm)
+
+			if abs(u) + abs(v) == 0: amplitudes[index] = coeff[j1]
+
+                        elif v == 0: amplitudes[index] = (coeff[j1] - np.sign(u) * 1j * coeff[j2]) / 2.
+                        elif u == 0: amplitudes[index] = (coeff[j1] - np.sign(v) * 1j * coeff[j3]) / 2.
+
+                        elif u < 0 and v < 0: amplitudes[index] = (coeff[j1] + 1j * (coeff[j2] + coeff[j3]) - coeff[j4]) / 4.
+                        elif u > 0 and v > 0: amplitudes[index] = (coeff[j1] - 1j * (coeff[j2] + coeff[j3]) - coeff[j4]) / 4.
+
+                        elif u < 0: amplitudes[index] = (coeff[j1] + 1j * (coeff[j2] - coeff[j3]) + coeff[j4]) / 4.
+                        elif v < 0: amplitudes[index] = (coeff[j1] - 1j * (coeff[j2] - coeff[j3]) + coeff[j4]) / 4.
+
+        return amplitudes, frequencies 
+
+
+def coeff_to_fouier_2(coeff_2, qm, dim):
+	"""
+	coeff_to_fouier_2(coeff_2, qm)
 
 	Converts square coefficients to square fouier coefficients
 	"""
 
-	n_waves = 2 * qu + 1
+	n_waves = 2 * qm + 1
 	
-	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qu
-	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qu
+	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
+	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
 
-	f_2 = np.reshape(vcheck(u_array, v_array) * coeff_2 / 4., (n_waves, n_waves))
+	frequencies = np.pi * 2 * (u_array.reshape(n_waves, n_waves) / dim[0] + v_array.reshape(n_waves, n_waves) / dim[1])
+	amplitudes_2 = np.reshape(vcheck(u_array, v_array) * coeff_2 / 4., (n_waves, n_waves))
 
-	return f_2
+	return amplitudes_2, frequencies 
 
 
-def xy_correlation(coeff_2, qm, qu):
+def xy_correlation(coeff_2, qm, qu, dim):
 	"""
-	xy_correlation(coeff_2, qm, qu)
+	xy_correlation(coeff_2, qm, qu, dim)
 
 	Return correlation across xy plane using Wiener-Khinchin theorem
 
@@ -854,7 +932,7 @@ def xy_correlation(coeff_2, qm, qu):
 	coeff_2[len(coeff_2)/2] = 0
 	coeff_2_slice = coeff_slice(coeff_2, qm, qu)
 
-	f_2_qu = coeff_to_fouier_2(coeff_2_slice, qu)
+	_, f_2_qu = ut.coeff_to_fouier_2(coeff_2_slice, qu, dim)
 	xy_corr = np.fft.fftshift(np.fft.ifftn(f_2_qu))
 
 	xy_corr = np.abs(xy_corr) / np.mean(f_2_qu)

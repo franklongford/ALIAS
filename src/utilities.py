@@ -16,6 +16,7 @@ import numpy as np
 import subprocess, os, sys, pickle, tables
 
 from scipy import stats
+from scipy.signal import convolve
 import scipy.constants as con
 
 import mdtraj as md
@@ -88,7 +89,7 @@ def update_checkfile(checkfile_name, symb, obj):
 	return checkfile
 
 
-def get_sim_param(traj_dir, top_dir, traj_file, top_file):
+def get_sim_param(traj_file, top_file):
 	"""
 	get_sim_param(traj_dir, top_dir, traj_file, top_file)
 
@@ -119,12 +120,11 @@ def get_sim_param(traj_dir, top_dir, traj_file, top_file):
 			Simulation cell dimensions (angstroms)
 	"""
 
-	traj = md.load('{}/{}'.format(traj_dir, traj_file), top='{}/{}'.format(top_dir, top_file))
+	traj = md.load_frame(traj_file, 0, top=top_file)
 	mol = list(set([molecule.name for molecule in traj.topology.residues]))
-	nframe = int(traj.n_frames)
 	dim = np.array(traj.unitcell_lengths[0]) * 10
 
-	return traj, mol, nframe, dim
+	return traj, mol, dim
 
 
 def molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com):
@@ -224,7 +224,7 @@ def load_npy(file_path, frames=[]):
 	return array
 
 
-def make_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol_com):
+def make_mol_com(traj_file, top_file, directory, file_name, natom, nmol, at_index, nframe, dim, nsite, mol_M, sys_M, mol_com):
 	"""
 	make_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol_com)
 
@@ -258,11 +258,13 @@ def make_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, dim,
 
 	"""
 	print "\n-----------CREATING POSITIONAL FILES------------\n"
+	
 
 	pos_dir = directory + 'pos/'
 	if not os.path.exists(pos_dir): os.mkdir(pos_dir)
 
 	file_name_pos = file_name + '_{}'.format(nframe)
+
 	if not os.path.exists(pos_dir + file_name_pos + '_xmol.npy'):
 
 		xmol = np.zeros((nframe, nmol))
@@ -270,26 +272,36 @@ def make_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, dim,
 		zmol = np.zeros((nframe, nmol))
 		COM = np.zeros((nframe, 3))
 
-		mol_M = np.array(M * nmol)
+		mol_M = np.array(mol_M * nmol)
+		sys_M = np.array(sys_M)
 
-		XYZ = np.moveaxis(traj.xyz, 1, 2) * 10
+		#XYZ = np.moveaxis(traj.xyz, 1, 2) * 10
 
-		for frame in xrange(nframe):
-			sys.stdout.write("PROCESSING {} out of {} IMAGES\r".format(frame, nframe) )
-			sys.stdout.flush()
+		chunk = 500
 
-			COM[frame, :] = traj.xyz[frame].astype('float64').T.dot(mol_M / mol_M.sum()) * 10
+		#for frame in xrange(nframe):
+		for i, traj in enumerate(md.iterload(traj_file, chunk=chunk, top=top_file)):
+			chunk_index = np.arange(i*chunk, i*chunk + traj.n_frames)
 
-			xat = XYZ[frame][0][at_index]
-			yat = XYZ[frame][1][at_index]
-			zat = XYZ[frame][2][at_index]
+			XYZ = np.moveaxis(traj.xyz, 1, 2) * 10
 
-			if nsite > 1: xmol[frame], ymol[frame], zmol[frame] = molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com)
-			else: xmol[frame], ymol[frame], zmol[frame] = xat, yat, zat
-		
+			for j, frame in enumerate(chunk_index):
+				sys.stdout.write("PROCESSING {} out of {} IMAGES\r".format(frame, nframe) )
+				sys.stdout.flush()
+
+				COM[frame, :] = traj.xyz[j].astype('float64').T.dot(sys_M / sys_M.sum()) * 10
+
+				xat = XYZ[j][0][at_index]
+				yat = XYZ[j][1][at_index]
+				zat = XYZ[j][2][at_index]
+
+				if nsite > 1: xmol[frame], ymol[frame], zmol[frame] = molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com)
+				else: xmol[frame], ymol[frame], zmol[frame] = xat, yat, zat
+
 		file_name_pos = file_name + '_{}'.format(nframe)
 
 		print '\nSAVING OUTPUT MOLECULAR POSITION FILES\n'
+
 		save_npy(pos_dir + file_name_pos + '_xmol', xmol)
 		save_npy(pos_dir + file_name_pos + '_ymol', ymol)
 		save_npy(pos_dir + file_name_pos + '_zmol', zmol)
@@ -328,76 +340,27 @@ def unit_vector(vector, axis=-1):
 
 	return u_vector
 
-
-def get_fourier_coeff(coeff, qm):
-	"""
-	get_fourier(coeff, nm)
-
-	Returns Fouier coefficients for Fouier series representing intrinsic surface from linear algebra coefficients
-
-	Parameters
-	----------
-
-	coeff:	float, array_like; shape=(n_waves**2)
-		Optimised linear algebra surface coefficients
-	qm:  int
-		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
-	
-	Returns
-	-------
-
-	f_coeff:  float, array_like; shape=(n_waves**2)
-		Optimised Fouier surface coefficients
-	
-	"""
-
-	n_waves = 2 * qm + 1
-        f_coeff = np.zeros(n_waves**2, dtype=complex)
-
-        for u in xrange(-qm,qm+1):
-                for v in xrange(-qm, qm+1):
-                        index = n_waves * (u + qm) + (v + qm)
-
-                        j1 = n_waves * (abs(u) + qm) + (abs(v) + qm)
-                        j2 = n_waves * (-abs(u) + qm) + (abs(v) + qm)
-                        j3 = n_waves * (abs(u) + qm) + (-abs(v) + qm)
-                        j4 = n_waves * (-abs(u) + qm) + (-abs(v) + qm)
-
-			if abs(u) + abs(v) == 0: f_coeff[index] = coeff[j1]
-
-                        elif v == 0: f_coeff[index] = (coeff[j1] - np.sign(u) * 1j * coeff[j2]) / 2.
-                        elif u == 0: f_coeff[index] = (coeff[j1] - np.sign(v) * 1j * coeff[j3]) / 2.
-
-                        elif u < 0 and v < 0: f_coeff[index] = (coeff[j1] + 1j * (coeff[j2] + coeff[j3]) - coeff[j4]) / 4.
-                        elif u > 0 and v > 0: f_coeff[index] = (coeff[j1] - 1j * (coeff[j2] + coeff[j3]) - coeff[j4]) / 4.
-
-                        elif u < 0: f_coeff[index] = (coeff[j1] + 1j * (coeff[j2] - coeff[j3]) + coeff[j4]) / 4.
-                        elif v < 0: f_coeff[index] = (coeff[j1] - 1j * (coeff[j2] - coeff[j3]) + coeff[j4]) / 4.
-
-        return f_coeff
-
-
 def linear(x, m, c): return m * x + c
 
 
 def gaussian(x, mean, std): return np.exp(-(x-mean)**2 / (2 * std**2)) / (SQRT2 * std * SQRTPI)
 
 
-def gaussian_convolution(arrays, centres, deltas, dim, nslice):
+def gaussian_convolution(array, centre, delta, dim, nslice):
 	"""
-	gaussian_convolution(arrays, centres, deltas, dim, nslice)
+	gaussian_convolution(array, centre, delta, dim, nslice)
 
 	Convolution of distributions 'arrays' using a normal probability distribution with mean=centres and variance=deltas
 
 	Parameters
 	----------
 
-	arrays:  float, array_like; shape=(n_arrays, n_dist)
-		Set of arrays to convolute
-	centres: float, array_like; shape=(n_arrays)	
-		Set of mean values for normal probability distributions
-	deltas: float, array_like; shape=(n_arrays)	
-		Set of variances for normal probability distributions
+	array:  float, array_like; shape=(nslice)
+		Array to convolute
+	centre: float
+		Mean value for normal probability distribution
+	delta: float	
+		Variance for normal probability distribution
 	dim:  float, array_like; shape=(3)
 		XYZ dimensions of simulation cell
 	nslice: int
@@ -406,33 +369,22 @@ def gaussian_convolution(arrays, centres, deltas, dim, nslice):
 	Returns
 	-------
 
-	conv_arrays:  float, array_like; shape=(n_arrays, n_dist)
-		Set of convoluted arrays
-
+	conv_array:  float, array_like; shape=(nslice)
+		Convoluted array
 	"""
 
-	conv_arrays = np.zeros(arrays.shape)
-
-	stds = np.sqrt(np.array(deltas))
+	std = np.sqrt(delta)
 	lslice = dim[2] / nslice
+	length = int(std / lslice) * 10
+	ZG = np.arange(0, dim[2], lslice)
+	gaussian_array = gaussian(ZG, centre, std) * lslice
 
-	Z1 = np.linspace(0, dim[2], nslice)
-	max_std = np.max(stds)
-	length = int(max_std / lslice) * 12
-	ZG = np.arange(-lslice*length/2, lslice*length/2 + lslice/2, lslice)
-	P_arrays = [[gaussian(z, 0, STD) for z in ZG ] for STD in stds]
+	index = nslice / 8
+	array = np.roll(array, -index)
+	gaussian_array = gaussian(ZG, centre+ZG[index], std) * lslice
+	conv_array = convolve(array, gaussian_array, mode='same', method='direct')
 	
-	for n1, z1 in enumerate(Z1):
-		for n2, z2 in enumerate(ZG):
-			sys.stdout.write("PERFORMING GAUSSIAN SMOOTHING {0:.1%} COMPLETE \r".format(float(n1 * nslice + n2) / nslice**2) )
-			sys.stdout.flush()
-
-			indexes = [int((z1 - z2 - z0) / dim[2] * nslice) % nslice for z0 in centres]
-
-			for i, array in enumerate(arrays):
-				try: conv_arrays[i][n1] += array[indexes[i]] * P_arrays[i][n2] * lslice
-				except IndexError: pass
-	return conv_arrays
+	return conv_array
 
 
 def make_earray(file_name, arrays, atom, sizes):
@@ -568,14 +520,14 @@ def shape_check_hdf5(file_path):
 	return shape_hdf5
 
 
-def view_surface(coeff, qm, qu, piv_x, piv_y, piv_z, nxy, dim):
+def view_surface(coeff, pivot, nframe, qm, qu, xmol, ymol, zmol, nxy, dim):
 
 	import matplotlib.pyplot as plt
+	import matplotlib.animation as anim
 	from mpl_toolkits.mplot3d import Axes3D
 	
 	import intrinsic_sampling_method as ism
 
-	surface = np.zeros((nxy, nxy))
 	X = np.linspace(0, dim[0], nxy)
 	Y = np.linspace(0, dim[1], nxy)
 
@@ -587,22 +539,32 @@ def view_surface(coeff, qm, qu, piv_x, piv_y, piv_z, nxy, dim):
 	wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
 	Delta = 1. / 4 * np.sum(coeff**2 * wave_check * vcheck(u_array, v_array))
 
-	for i, x in enumerate(X): surface[i] += ism.xi(np.ones(nxy) * x, Y, coeff, qm, qu, dim)
+	surface = np.zeros((nframe, 2, nxy, nxy))
+	
+	for frame in xrange(nframe):
+		for i, x in enumerate(X): 
+			for j in xrange(2): surface[frame][j][i] += ism.xi(np.ones(nxy) * x, Y, coeff[frame][j], qm, qu, dim)
 
-	surface = np.moveaxis(surface, 0, 1)
+	surface = np.moveaxis(surface, 2, 3)
 
-	fig = plt.figure(figsize=(15,15))
+	fig = plt.figure(0, figsize=(15,15))
 	ax = fig.gca(projection='3d')
 	ax.set_xlabel(r'$x$ (\AA)')
 	ax.set_ylabel(r'$y$ (\AA)')
 	ax.set_zlabel(r'$z$ (\AA)')
 	ax.set_xlim3d(0, dim[0])
 	ax.set_ylim3d(0, dim[1])
-	ax.set_zlim3d(-Delta*4, Delta*4)		
-	X_grid, Y_grid = np.meshgrid(X, Y)
-	ax.plot_wireframe(X_grid, Y_grid, surface, color='r')
-	ax.scatter(piv_x, piv_y, piv_z, color='b')
-	plt.show()
+	#ax.set_zlim3d(-Delta*4, Delta*4)
+	X_grid, Y_grid = np.meshgrid(X, Y)		
 
+	def update(frame):
+		ax.clear()		
+		ax.plot_wireframe(X_grid, Y_grid, surface[frame][0], color='r')
+		ax.scatter(xmol[frame][pivot[frame][0]], ymol[frame][pivot[frame][0]], zmol[frame][pivot[frame][0]], color='b')
+		ax.plot_wireframe(X_grid, Y_grid, surface[frame][1], color='r')
+		ax.scatter(xmol[frame][pivot[frame][1]], ymol[frame][pivot[frame][1]], zmol[frame][pivot[frame][1]], color='b')
+
+	a = anim.FuncAnimation(fig, update, frames=nframe, repeat=False)
+	plt.show()
 
 
