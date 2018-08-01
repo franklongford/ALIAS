@@ -189,19 +189,20 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
                 checkfile = ut.update_checkfile(checkfile_name, 'ncube', ncube)
 	else: ncube = 3
 
+	if ('-tau' in sys.argv): 
+                vlim = int(sys.argv[sys.argv.index('-tau') + 1])
+                checkfile = ut.update_checkfile(checkfile_name, 'tau', vlim)
+	else: tau = 0.5
+
+	if ('-max_r' in sys.argv): 
+                vlim = int(sys.argv[sys.argv.index('-max_r') + 1])
+                checkfile = ut.update_checkfile(checkfile_name, 'max_r', vlim)
+	else: max_r = 1.5
+
 	if ('-phi' in sys.argv): 
                 phi = float(sys.argv[sys.argv.index('-phi') + 1])
                 checkfile = ut.update_checkfile(checkfile_name, 'phi', phi)
-        else:
-		try:
-			if bool(raw_input("\nUse weighting coefficient for surface area minimisation found in checkfile: phi = {}? (Y/N): ".format(checkfile['phi'])).upper() == 'Y'):
-				phi = checkfile['phi']
-			else: raise Exception
-		except: 
-			if bool(raw_input("\nUse recommended weighting coefficient for surface area minimisation: phi = 5E-8? (Y/N): ").upper() == 'Y'):
-				phi = 5E-8
-			else: phi = float(raw_input("\nManually enter weighting coefficient: "))
-			checkfile = ut.update_checkfile(checkfile_name, 'phi', phi)
+        else: phi = 5E-8
 
 	if ('-n0' in sys.argv):
                 n0 = int(sys.argv[sys.argv.index('-n0') + 1])
@@ -221,7 +222,7 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 				start_ns = 0.5
 				step_ns = 0.05
 
-				ns, n0 = ism.optimise_ns(data_dir, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, ncube=ncube, vlim=vlim)
+				ns, n0 = ism.optimise_ns(data_dir, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, ncube=ncube, vlim=vlim, tau=tau, max_r=max_r)
 				checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
 
 	QM = range(1, qm+1)
@@ -231,11 +232,11 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 	for qu in QM: print "{:12d} | {:12.4f} | {:12.4f}".format(qu, q_max / (qu*q_min), mol_sigma * q_max / (10*qu*q_min))
 	print ""
 
-	ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=True, ncube=ncube, vlim=vlim, ow_coeff=ow_coeff, ow_recon=ow_recon)
+	ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=True, ncube=ncube, vlim=vlim, tau=tau, max_r=max_r, ow_coeff=ow_coeff, ow_recon=ow_recon)
 	#"""
 	for recon in [False, True]:
 		ia.create_intrinsic_positions_dxdyz(data_dir, file_name, nmol, nframe, qm, n0, phi, dim, recon=recon, ow_pos=ow_intpos)
-		ia.create_intrinsic_den_curve_histogram(data_dir, file_name, qm, n0, phi, nframe, nslice, dim, recon=recon, ow_hist=ow_hist)
+		ia.create_intrinsic_den_curve_hist(data_dir, file_name, qm, n0, phi, nframe, nslice, dim, recon=recon, ow_hist=ow_hist)
 		ia.av_intrinsic_distributions(data_dir, file_name, dim, nslice, qm, n0, phi, nframe, nframe, recon=recon, ow_dist=ow_dist)
 	#"""
 	print"\n---- ENDING PROGRAM ----\n"
@@ -256,6 +257,6 @@ if __name__ == '__main__':
         ow_recon = ('-ow_recon' in sys.argv)
         ow_intpos = ('-ow_intpos' in sys.argv)
         ow_hist = ('-ow_hist' in sys.argv)
-        ow_dist = ('-ow_dist' in sys.argv)
+        ow_dist = ('-ow_dist' in sys.argv or ow_hist)
 
 	run_alias(traj_file, top_file, recon, ow_coeff, ow_recon, ow_intpos, ow_hist, ow_dist)

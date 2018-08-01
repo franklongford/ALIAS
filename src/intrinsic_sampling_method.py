@@ -410,7 +410,7 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 		for i, l in enumerate(dim): dxyz[i] -= l * np.array(2 * dxyz[i] / l, dtype=int)
 		dr2 = np.sum(dxyz**2, axis=0)
 
-		vapour_list = np.where(np.count_nonzero(dr2 < max_r**2, axis=1) == 0)
+		vapour_list = np.where(np.count_nonzero(dr2 < max_r**2, axis=1) < vlim)
 
 		del dxyz, dr2
 
@@ -524,6 +524,8 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 	print '\nTOTAL time: {:7.2f} s \n'.format(end - start)
 
 	pivot = np.array((piv_n1, piv_n2), dtype=int)
+
+	#ut.view_surface(coeff, pivot, qm, qm, xmol, ymol, zmol, 30, dim)
 
 	return coeff, pivot
 
@@ -931,7 +933,7 @@ def ddxy_ddxi(x, y, coeff, qm, qu, dim):
 	return ddx_ddxi, ddy_ddxi
 
 
-def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, nframe_ns = 20, ncube=3, vlim=3, precision=0.0005, gamma=0.5):
+def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, nframe_ns = 20, ncube=3, vlim=3, tau=0.5, max_r=1.5, precision=0.0005, gamma=0.5):
 	"""
 	optimise_ns(directory, file_name, nmol, nframe, qm, phi, ncube, dim, mol_sigma, start_ns, step_ns, nframe_ns = 20, vlim=3)
 
@@ -984,8 +986,8 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 	derivative = []
 
 	n_waves = 2 * qm + 1
-	max_r = 1.5 * mol_sigma
-	tau = 0.5 * mol_sigma
+	max_r *= mol_sigma
+	tau *= mol_sigma
 	
 	xmol = ut.load_npy(pos_dir + file_name + '_{}_xmol'.format(nframe), frames=range(nframe_ns))
 	ymol = ut.load_npy(pos_dir + file_name + '_{}_ymol'.format(nframe), frames=range(nframe_ns))
@@ -1127,7 +1129,7 @@ def mol_exchange(piv_1, piv_2, nframe, n0):
 
 
 
-def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=True, ncube=3, vlim=3, ow_coeff=False, ow_recon=False):
+def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=True, ncube=3, vlim=3, tau=0.5, max_r=1.5, ow_coeff=False, ow_recon=False):
 	"""
 	create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=True, ow_coeff=False, ow_recon=False)
 
@@ -1170,8 +1172,8 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 
 	file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
 	n_waves = 2 * qm + 1
-	max_r = 1.5 * mol_sigma
-	tau = 0.5 * mol_sigma
+	max_r *= mol_sigma
+	tau *= mol_sigma
 
 	"Make coefficient and pivot files"
 	if not os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_coeff)):
@@ -1601,10 +1603,10 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 
 	if not file_check:
 		zmol = ut.load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe))
-		COM = ut.load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
+		#COM = ut.load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
 		nmol = zmol.shape[1]
-		com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
-		zmol = zmol - com_tile
+		#com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
+		#zmol = zmol - com_tile
 
 		for frame in xrange(nframe):
 

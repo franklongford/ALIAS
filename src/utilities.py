@@ -377,13 +377,22 @@ def gaussian_convolution(array, centre, delta, dim, nslice):
 	lslice = dim[2] / nslice
 	length = int(std / lslice) * 10
 	ZG = np.arange(0, dim[2], lslice)
-	gaussian_array = gaussian(ZG, centre, std) * lslice
 
 	index = nslice / 8
 	array = np.roll(array, -index)
+
 	gaussian_array = gaussian(ZG, centre+ZG[index], std) * lslice
-	conv_array = convolve(array, gaussian_array, mode='same', method='direct')
-	
+	conv_array = convolve(array, gaussian_array, mode='same')
+
+	"""
+	import matplotlib.pyplot as plt
+	plt.figure(100)
+	plt.plot(ZG, gaussian_array)
+	plt.plot(ZG, array)
+	plt.plot(ZG, conv_array)
+	plt.show()
+	#"""
+
 	return conv_array
 
 
@@ -520,18 +529,18 @@ def shape_check_hdf5(file_path):
 	return shape_hdf5
 
 
-def view_surface(coeff, pivot, nframe, qm, qu, xmol, ymol, zmol, nxy, dim):
+def view_surface(coeff, pivot, qm, qu, xmol, ymol, zmol, nxy, dim):
 
 	import matplotlib.pyplot as plt
 	import matplotlib.animation as anim
 	from mpl_toolkits.mplot3d import Axes3D
 	
-	import intrinsic_sampling_method as ism
+	from intrinsic_sampling_method import check_uv, xi
 
 	X = np.linspace(0, dim[0], nxy)
 	Y = np.linspace(0, dim[1], nxy)
 
-	vcheck = np.vectorize(ism.check_uv)
+	vcheck = np.vectorize(check_uv)
 
 	n_waves = 2 * qm + 1
 	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
@@ -539,13 +548,12 @@ def view_surface(coeff, pivot, nframe, qm, qu, xmol, ymol, zmol, nxy, dim):
 	wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
 	Delta = 1. / 4 * np.sum(coeff**2 * wave_check * vcheck(u_array, v_array))
 
-	surface = np.zeros((nframe, 2, nxy, nxy))
+	surface = np.zeros((2, nxy, nxy))
 	
-	for frame in xrange(nframe):
-		for i, x in enumerate(X): 
-			for j in xrange(2): surface[frame][j][i] += ism.xi(np.ones(nxy) * x, Y, coeff[frame][j], qm, qu, dim)
+	for i, x in enumerate(X): 
+		for j in xrange(2): surface[j][i] += xi(np.ones(nxy) * x, Y, coeff[j], qm, qu, dim)
 
-	surface = np.moveaxis(surface, 2, 3)
+	surface = np.moveaxis(surface, 1, 2)
 
 	fig = plt.figure(0, figsize=(15,15))
 	ax = fig.gca(projection='3d')
@@ -559,12 +567,12 @@ def view_surface(coeff, pivot, nframe, qm, qu, xmol, ymol, zmol, nxy, dim):
 
 	def update(frame):
 		ax.clear()		
-		ax.plot_wireframe(X_grid, Y_grid, surface[frame][0], color='r')
-		ax.scatter(xmol[frame][pivot[frame][0]], ymol[frame][pivot[frame][0]], zmol[frame][pivot[frame][0]], color='b')
-		ax.plot_wireframe(X_grid, Y_grid, surface[frame][1], color='r')
-		ax.scatter(xmol[frame][pivot[frame][1]], ymol[frame][pivot[frame][1]], zmol[frame][pivot[frame][1]], color='b')
+		ax.plot_wireframe(X_grid, Y_grid, surface[0], color='r')
+		ax.scatter(xmol[pivot[0]], ymol[pivot[0]], zmol[pivot[0]], color='b')
+		ax.plot_wireframe(X_grid, Y_grid, surface[1], color='r')
+		ax.scatter(xmol[pivot[1]], ymol[pivot[1]], zmol[pivot[1]], color='b')
 
-	a = anim.FuncAnimation(fig, update, frames=nframe, repeat=False)
+	a = anim.FuncAnimation(fig, update, frames=1, repeat=False)
 	plt.show()
 
 

@@ -23,19 +23,15 @@ import os, sys, time, tables
 
 vcheck = np.vectorize(check_uv)
 
-def make_pos_dxdy(directory, file_name_pos, xmol, ymol, coeff, nmol, dim, qm):
+def make_pos_dxdy(xmol, ymol, coeff, nmol, dim, qm):
 	"""
-	make_pos_dxdy(directory, file_name_pos, xmol, ymol, coeff, nmol, dim, qm)
+	make_pos_dxdy(xmol, ymol, coeff, nmol, dim, qm)
 
 	Calculate distances and derivatives at each molecular position with respect to intrinsic surface
 
 	Parameters
 	----------
 
-	directory:  str
-		File path of directory of alias analysis.
-	file_name_pos:  str
-		File name to save position and derivatives to.
 	xmol:  float, array_like; shape=(nmol)
 		Molecular coordinates in x dimension
 	ymol:  float, array_like; shape=(nmol)
@@ -160,9 +156,9 @@ def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0,
 		Weighting factor of minimum surface area term in surface optimisation function
 	dim:  float, array_like; shape=(3)
 		XYZ dimensions of simulation cell
-	recon:  bool (optional)
+	recon:  bool (default=False)
 		Whether to use surface reconstructe coefficients
-	ow_pos:  bool (optional)
+	ow_pos:  bool (default=False)
 		Whether to overwrite positions and derivatives (default=False)
 
 	"""
@@ -227,31 +223,81 @@ def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0,
 			
 				coeff = ut.load_hdf5(surf_dir + file_name_coeff + '_coeff', frame)
 
-				int_z_mol, int_dxdy_mol, int_ddxddy_mol = make_pos_dxdy(directory, file_name_pos, xmol[frame], ymol[frame], coeff, nmol, dim, qm)
+				int_z_mol, int_dxdy_mol, int_ddxddy_mol = make_pos_dxdy(xmol[frame], ymol[frame], coeff, nmol, dim, qm)
 				ut.save_hdf5(intpos_dir + file_name_pos + '_int_z_mol', int_z_mol, frame, mode_int_z_mol)
 				ut.save_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol', int_dxdy_mol, frame, mode_int_dxdy_mol)
 				ut.save_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol', int_ddxddy_mol, frame, mode_int_ddxddy_mol)
 
 
-def make_den_curve(directory, zmol, int_z_mol, int_ddxddy_mol, coeff, nmol, nslice, nz, qm, dim):
+def make_int_mol_count(zmol, int_z_mol, nmol, nslice, qm, dim):
 	"""
-	make_den_curve(directory, zmol, int_z_mol, int_ddxddy_mol, coeff, nmol, nslice, nz, qm, dim)
+	make_int_mol_count(zmol, int_z_mol, nmol, nslice, qm, dim)
 
-	Creates density and mean curvature distributions
+	Creates density histogram
 
 	Parameters
 	----------
 
-	directory:  str
-		File path of directory of alias analysis.
+	zmol:  float, array_like; shape=(nmol)
+		Molecular coordinates in z dimension
+	int_z_mol:  array_like (float); shape=(nframe, 2, qm+1, nmol)
+		Molecular distances from intrinsic surface
+	nmol:  int
+		Number of molecules in simulation
+	nslice: int
+		Number of bins in density histogram along axis normal to surface
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+
+	Returns
+	-------
+
+	mol_count_array:  int, array_like; shape=(qm+1, nslice, nz)
+		Number histogram binned by molecular position along z axis and mean curvature H across qm resolutions 
+
+	"""
+
+	lslice = dim[2] / nslice
+	mol_count_array = np.zeros((qm+1, nslice))
+
+	for qu in xrange(qm+1):
+
+		temp_mol_count_array = np.zeros((nslice))
+
+		int_z1 = int_z_mol[0][qu]
+		int_z2 = int_z_mol[1][qu]
+
+		z1 = zmol - int_z1 + dim[2]
+		z2 = -(zmol - int_z2) + dim[2]
+
+		z1 -= dim[2] * np.array(z1 / dim[2], dtype=int)
+		z2 -= dim[2] * np.array(z2 / dim[2], dtype=int)
+
+		temp_mol_count_array += np.histogram(z1, bins=nslice, range=[0, dim[2]])[0]
+		temp_mol_count_array += np.histogram(z2, bins=nslice, range=[0, dim[2]])[0]
+
+		mol_count_array[qu] += temp_mol_count_array
+
+	return mol_count_array
+
+
+def den_curve_hist(zmol, int_z_mol, int_ddxddy_mol, nmol, nslice, nz, qm, dim, max_H=10):
+	"""
+	den_curve_hist(directory, zmol, int_z_mol, int_ddxddy_mol, nmol, nslice, nz, qm, dim)
+
+	Creates density and mean curvature histograms
+
+	Parameters
+	----------
+
 	zmol:  float, array_like; shape=(nmol)
 		Molecular coordinates in z dimension
 	int_z_mol:  array_like (float); shape=(nframe, 2, qm+1, nmol)
 		Molecular distances from intrinsic surface
 	int_ddxddy_mol:  array_like (float); shape=(nframe, 4, qm+1, nmol)
 		Second derivatives of intrinsic surface wrt x and y at xmol, ymol
-	coeff:	float, array_like; shape=(n_waves**2)
-		Optimised surface coefficients
 	nmol:  int
 		Number of molecules in simulation
 	nslice: int
@@ -272,8 +318,9 @@ def make_den_curve(directory, zmol, int_z_mol, int_ddxddy_mol, coeff, nmol, nsli
 	"""
 
 	lslice = dim[2] / nslice
-
 	count_corr_array = np.zeros((qm+1, nslice, nz))
+
+	import matplotlib.pyplot as plt
 
 	for qu in xrange(qm+1):
 
@@ -282,8 +329,11 @@ def make_den_curve(directory, zmol, int_z_mol, int_ddxddy_mol, coeff, nmol, nsli
 		int_z1 = int_z_mol[0][qu]
 		int_z2 = int_z_mol[1][qu]
 
-		z1 = zmol - int_z1
-		z2 = -zmol + int_z2
+		z1 = zmol - int_z1 + dim[2]
+		z2 = -(zmol - int_z2) + dim[2]
+
+		z1 -= dim[2] * np.array(z1 / dim[2], dtype=int)
+		z2 -= dim[2] * np.array(z2 / dim[2], dtype=int)
 
 		#dzx1 = int_dxdy_mol[0][qu]
 		#dzy1 = int_dxdy_mol[1][qu]
@@ -295,8 +345,8 @@ def make_den_curve(directory, zmol, int_z_mol, int_ddxddy_mol, coeff, nmol, nsli
 		ddzx2 = int_ddxddy_mol[2][qu]
 		ddzy2 = int_ddxddy_mol[3][qu]
 
-		index1_mol = np.array((z1 + dim[2]/2.) * nslice / dim[2], dtype=int) % nslice
-		index2_mol = np.array((z2 + dim[2]/2.) * nslice / dim[2], dtype=int) % nslice
+		#index1_mol = np.array((z1 + dim[2]/2.) * nslice / dim[2], dtype=int) % nslice
+		#index2_mol = np.array((z2 + dim[2]/2.) * nslice / dim[2], dtype=int) % nslice
 
 		#normal1 = ut.unit_vector(np.array([-dzx1, -dzy1, np.ones(nmol)]))
 		#normal2 = ut.unit_vector(np.array([-dzx2, -dzy2, np.ones(nmol)]))
@@ -307,22 +357,22 @@ def make_den_curve(directory, zmol, int_z_mol, int_ddxddy_mol, coeff, nmol, nsli
 		H1 = ddzx1 + ddzy1
 		H2 = ddzx2 + ddzy2
 
-		index1_H = np.array(H1 * nz, dtype=int) % nz
-		index2_H = np.array(H1 * nz, dtype=int) % nz
+		#index1_H = np.array(H1 * nz, dtype=int) % nz
+		#index2_H = np.array(H2 * nz, dtype=int) % nz
 
-		temp_count_corr_array += np.histogram2d(index1_mol, index1_H, bins=[nslice, nz], range=[[0, nslice], [0, nz]])[0]
-		temp_count_corr_array += np.histogram2d(index2_mol, index2_H, bins=[nslice, nz], range=[[0, nslice], [0, nz]])[0]
+		temp_count_corr_array += np.histogram2d(z1, H1, bins=[nslice, nz], range=[[0, dim[2]], [-max_H, max_H]])[0]
+		temp_count_corr_array += np.histogram2d(z2, H2, bins=[nslice, nz], range=[[0, dim[2]], [-max_H, max_H]])[0]
 
 		count_corr_array[qu] += temp_count_corr_array
 
 	return count_corr_array
 
 
-def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, nslice, dim, nz=100, recon=False, ow_hist=False):
+def create_intrinsic_den_curve_hist(directory, file_name, qm, n0, phi, nframe, nslice, dim, nz=100, recon=False, ow_hist=False):
 	"""
-	create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, nslice, dim, nz=100, nnz=100, recon=False, ow_count=False)
+	create_intrinsic_den_curve_hist(directory, file_name, qm, n0, phi, nframe, nslice, dim, nz=100, recon=False, ow_hist=False)
 
-	Calculate density and curvature distributions across surface
+	Calculate density and curvature histograms across surface
 
 	Parameters
 	----------
@@ -362,13 +412,11 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 	lslice = dim[2] / nslice
 
 	file_name_pos = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
-	file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
 	file_name_hist = '{}_{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)	
 
 	if recon:
 		file_name_pos += '_R'
 		file_name_hist += '_R'
-		file_name_coeff += '_R'
 
 	if not os.path.exists(intden_dir + file_name_hist + '_count_corr.hdf5'):
 		ut.make_hdf5(intden_dir + file_name_hist + '_count_corr', (qm+1, nslice, nz), tables.Float64Atom())
@@ -382,10 +430,10 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 
 	if not file_check:
 		zmol = ut.load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe))
-		COM = ut.load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
+		#COM = ut.load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
 		nmol = zmol.shape[1]
-		com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
-		zmol = zmol - com_tile
+		#com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
+		#zmol = zmol - com_tile
 
 		for frame in xrange(nframe):
 
@@ -401,11 +449,10 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 				sys.stdout.write("Calculating position and curvature distributions: frame {}\r".format(frame))
 				sys.stdout.flush()
 
-				coeff = ut.load_hdf5(surf_dir + file_name_coeff + '_coeff', frame)
 				int_z_mol = ut.load_hdf5(intpos_dir + file_name_pos + '_int_z_mol', frame)
-				int_dxdy_mol = ut.load_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol', frame)
+				int_ddxddy_mol = ut.load_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol', frame)
 
-				count_corr_array = make_den_curve(directory, zmol[frame], int_z_mol, int_dxdy_mol, coeff, nmol, nslice, nz, qm, dim)
+				count_corr_array = den_curve_hist(zmol[frame], int_z_mol, int_ddxddy_mol, nmol, nslice, nz, qm, dim)
 				ut.save_hdf5(intden_dir + file_name_hist + '_count_corr', count_corr_array, frame, mode_count_corr)
 				
 
@@ -458,9 +505,13 @@ def av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, n
 	intden_dir = directory + 'intden/'
 
 	file_name_hist = '{}_{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)
-	if recon: file_name_hist += '_R'
+	file_name_dist = '{}_{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nsample)
 
-	if not os.path.exists(intden_dir + file_name_hist + '_int_den_curve.npy'):
+	if recon: 
+		file_name_hist += '_R'
+		file_name_dist += '_R'
+
+	if not os.path.exists(intden_dir + file_name_dist + '_int_den_curve.npy') or ow_dist:
 
 		int_den_curve_matrix = np.zeros((qm+1, nslice, nz))
 
@@ -476,10 +527,10 @@ def av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, n
 			count_corr_array = ut.load_hdf5(intden_dir + file_name_hist + '_count_corr', frame)
 			int_den_curve_matrix += count_corr_array / (nsample * Vslice)
 
-		ut.save_npy(intden_dir + file_name_hist + '_int_den_curve', int_den_curve_matrix)
+		ut.save_npy(intden_dir + file_name_dist + '_int_den_curve', int_den_curve_matrix)
 
 	else:
-		int_den_curve_matrix = ut.load_npy(intden_dir + file_name_hist + '_int_den_curve')
+		int_den_curve_matrix = ut.load_npy(intden_dir + file_name_dist + '_int_den_curve')
 
 	int_density = np.sum(int_den_curve_matrix, axis=2) / 2.
 	int_curvature = np.sum(np.moveaxis(int_den_curve_matrix, 1, 2), axis=2) / 2.
@@ -488,6 +539,30 @@ def av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, n
 
 
 def xi_var(coeff, qm, qu, dim):
+	"""
+	xi_var(coeff, qm, qu, dim)
+
+	Calculate average variance of surface heights
+
+	Parameters
+	----------
+
+	coeff:	float, array_like; shape=(n_frame, n_waves**2)
+		Optimised surface coefficients
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	qu:  int
+		Upper limit of wave frequencies in Fouier Sum representing intrinsic surface
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+
+	Returns
+	-------
+
+	calc_var: float
+		Variance of surface heights across whole surface
+
+	"""
 
 	nframe = coeff.shape[0]
 	n_waves = 2 * qm +1
@@ -560,17 +635,17 @@ def H_xy(x, y, coeff, qm, qu, dim):
 	return H
 
 
-def H_var_coeff(coeff_2, qm, qu, dim):
+def H_var_coeff(coeff, qm, qu, dim):
 	"""
-	H_var_coeff(coeff_2, qm, qu, dim)
+	H_var_coeff(coeff, qm, qu, dim)
 
 	Variance of mean curvature H across surface determined by coeff at resolution qu
 
 	Parameters
 	----------
 
-	coeff_2:  float, array_like; shape=(n_waves**2)
-		Square of optimised surface coefficients
+	coeff:	float, array_like; shape=(n_frame, n_waves**2)
+		Optimised surface coefficients
 	qm:  int
 		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
 	qu:  int
@@ -587,15 +662,21 @@ def H_var_coeff(coeff_2, qm, qu, dim):
 	"""
 
 	if qu == 0: return 0
-	
+
+
+	nframe = coeff.shape[0]
 	n_waves = 2 * qm +1
 	
 	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
 	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
-	wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
-	indices = np.argwhere(wave_check).flatten()
+	wave_filter = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+	indices = np.argwhere(wave_filter).flatten()
+	Psi = vcheck(u_array, v_array)[indices] / 4.
 
-	H_var_array = vcheck(u_array[indices], v_array[indices]) * coeff_2[indices]
+	coeff_filter = coeff[:,:,indices]
+	av_coeff_2 = np.mean(coeff_filter**2, axis=(0, 1)) * Psi
+
+	H_var_array = vcheck(u_array[indices], v_array[indices]) * av_coeff_2[indices]
 	H_var_array *= (u_array[indices]**4 / dim[0]**4 + v_array[indices]**4 / dim[1]**4 + 2 * u_array[indices]**2 * v_array[indices]**2 / (dim[0]**2 * dim[1]**2))
 	H_var = 4 * np.pi**4 * np.sum(H_var_array) 
 
@@ -669,7 +750,7 @@ def get_frequency_set(qm, dim):
 	"""
 	get_frequency_set(qm, dim)
 
-	Returns set of unique frequencies in Fouier series
+	Returns set of unique frequencies in Fourier series
 
 	Parameters
 	----------
@@ -809,9 +890,6 @@ def cw_gamma_sr(q, gamma, kappa): return gamma + kappa * q**2
 
 
 def cw_gamma_lr(q, gamma, kappa0, l0): return gamma + q**2 * (kappa0 + l0 * np.log(q))
-
-
-def cw_gamma_dft(q, gamma, kappa, eta0, eta1): return gamma + eta0 * q + kappa * q**2 + eta1 * q**3
 
 
 def coeff_slice(coeff, qm, qu):
