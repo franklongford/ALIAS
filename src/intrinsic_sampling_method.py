@@ -1087,7 +1087,7 @@ def optimise_ns_diff(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma
 	return opt_ns, opt_n0
 
 
-def optimise_ns_aic(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, nframe_ns = 20, ncube=3, vlim=3, tau=0.5, max_r=1.5, precision=0.0005, gamma=0.5):
+def optimise_ns_aic(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, nframe_ns = 20, ncube=3, vlim=3, tau=0.5, max_r=1.5, precision=0.5, gamma=0.05):
 	"""
 	optimise_ns(directory, file_name, nmol, nframe, qm, phi, ncube, dim, mol_sigma, start_ns, step_ns, nframe_ns = 20, vlim=3)
 
@@ -1208,8 +1208,8 @@ def optimise_ns_aic(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma,
 			W_1[frame] = 0.5 * np.sum(zeta_1**2) + phi * intrinsic_area(coeff[0], qm, qm, dim)
 			W_2[frame] = 0.5 * np.sum(zeta_2**2) + phi * intrinsic_area(coeff[1], qm, qm, dim)
 
-		AIC_1.append(2 * n0 - 2 * np.mean(np.log(W_1)))
-		AIC_2.append(2 * n0 - 2 * np.mean(np.log(W_2)))
+		AIC_1.append(2 * n0 - 2 * np.log(np.mean(W_1)))
+		AIC_2.append(2 * n0 - 2 * np.log(np.mean(W_2)))
 
 		av_AIC = (np.array(AIC_1) + np.array(AIC_2)) / 2.
 		print("Average AIC = {}".format(av_AIC[-1]))
@@ -1228,9 +1228,8 @@ def optimise_ns_aic(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma,
 				ns -= gamma * derivative[-1]
 				print("Optimal pivot density not found.\nSurface density coefficient step size = |{}| > {}\n".format(step_size, precision))
 
-		else:
-			ns += step_ns
-			print("Optimal pivot density not found.\nSurface density coefficient step size = |{}| > {}\n".format(step_ns / gamma, precision))
+		else: ns += step_ns
+			
 	
 
 	opt_ns = NS[np.argmin(av_AIC)]
