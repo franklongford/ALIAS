@@ -933,7 +933,7 @@ def ddxy_ddxi(x, y, coeff, qm, qu, dim):
 	return ddx_ddxi, ddy_ddxi
 
 
-def optimise_ns_diff(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, AIC=False, nframe_ns = 20, ncube=3, vlim=3, tau=0.5, max_r=1.5, precision=0.0005, gamma=0.5):
+def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, AIC=False, nframe_ns = 20, ncube=3, vlim=3, tau=0.5, max_r=1.5, precision=0.0005, gamma=0.5):
 	"""
 	optimise_ns(directory, file_name, nmol, nframe, qm, phi, ncube, dim, mol_sigma, start_ns, step_ns, nframe_ns = 20, vlim=3)
 
