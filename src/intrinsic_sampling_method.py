@@ -1189,6 +1189,7 @@ def optimise_ns_aic(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma,
 			else: mode_pivot = False
 
 			if not mode_coeff and not mode_pivot:
+				coeff = ut.load_hdf5(surf_dir + file_name_coeff + '_coeff', frame)
 				pivot = ut.load_hdf5(surf_dir + file_name_coeff + '_pivot', frame)
 			else:
 				sys.stdout.write("Optimising Intrinsic Surface coefficients: frame {}\n".format(frame))
