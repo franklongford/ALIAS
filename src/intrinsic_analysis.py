@@ -283,7 +283,7 @@ def make_int_mol_count(zmol, int_z_mol, nmol, nslice, qm, dim):
 	return mol_count_array
 
 
-def den_curve_hist(zmol, int_z_mol, int_ddxddy_mol, nmol, nslice, nz, qm, dim, max_H=10):
+def den_curve_hist(zmol, int_z_mol, int_ddxddy_mol, nmol, nslice, nz, qm, dim, max_H=12):
 	"""
 	den_curve_hist(directory, zmol, int_z_mol, int_ddxddy_mol, nmol, nslice, nz, qm, dim)
 
@@ -329,11 +329,15 @@ def den_curve_hist(zmol, int_z_mol, int_ddxddy_mol, nmol, nslice, nz, qm, dim, m
 		int_z1 = int_z_mol[0][qu]
 		int_z2 = int_z_mol[1][qu]
 
-		z1 = zmol - int_z1 + dim[2]
-		z2 = -(zmol - int_z2) + dim[2]
+		z1 = zmol - int_z1
+		z2 = zmol - int_z2
 
-		z1 -= dim[2] * np.array(z1 / dim[2], dtype=int)
-		z2 -= dim[2] * np.array(z2 / dim[2], dtype=int)
+		z1 -= dim[2] * np.array(2 * z1 / dim[2], dtype=int)
+		z2 -= dim[2] * np.array(2 * z2 / dim[2], dtype=int)
+
+		#plt.hist(z1, bins=100)
+		#plt.hist(z2, bins=100)
+		#plt.show()
 
 		#dzx1 = int_dxdy_mol[0][qu]
 		#dzy1 = int_dxdy_mol[1][qu]
@@ -354,14 +358,14 @@ def den_curve_hist(zmol, int_z_mol, int_ddxddy_mol, nmol, nslice, nz, qm, dim, m
 		#index1_nz = np.array(abs(normal1[2]) * nz, dtype=int) % nz
 		#index2_nz = np.array(abs(normal2[2]) * nz, dtype=int) % nz
 
-		H1 = ddzx1 + ddzy1
-		H2 = ddzx2 + ddzy2
+		H1 = abs(ddzx1 + ddzy1)
+		H2 = abs(ddzx2 + ddzy2)
 
 		#index1_H = np.array(H1 * nz, dtype=int) % nz
 		#index2_H = np.array(H2 * nz, dtype=int) % nz
 
-		temp_count_corr_array += np.histogram2d(z1, H1, bins=[nslice, nz], range=[[0, dim[2]], [-max_H, max_H]])[0]
-		temp_count_corr_array += np.histogram2d(z2, H2, bins=[nslice, nz], range=[[0, dim[2]], [-max_H, max_H]])[0]
+		temp_count_corr_array += np.histogram2d(z1, H1, bins=[nslice, nz], range=[[-dim[2]/2, dim[2]/2], [0, max_H]])[0]
+		temp_count_corr_array += (np.histogram2d(z2, H2, bins=[nslice, nz], range=[[-dim[2]/2, dim[2]/2], [0, max_H]])[0])[::-1]
 
 		count_corr_array[qu] += temp_count_corr_array
 
@@ -430,10 +434,10 @@ def create_intrinsic_den_curve_hist(directory, file_name, qm, n0, phi, nframe, n
 
 	if not file_check:
 		zmol = ut.load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe))
-		#COM = ut.load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
+		COM = ut.load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
 		nmol = zmol.shape[1]
-		#com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
-		#zmol = zmol - com_tile
+		com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
+		zmol = zmol - com_tile
 
 		for frame in xrange(nframe):
 
@@ -616,20 +620,20 @@ def H_xy(x, y, coeff, qm, qu, dim):
 
 	n_waves = 2 * qm + 1
 
-	if np.isscalar(x):
+	if np.isscalar(x) and np.isscalar(y):
 		u_array = (np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm)
 		v_array = (np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm)
 		wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
 		indices = np.argwhere(wave_check).flatten()
 
-		fuv = ism.wave_function_array(x, u_array[indices], dim[0]) * ism.wave_function_array(y, v_array[indices], dim[1])
+		fuv = wave_function_array(x, u_array[indices], dim[0]) * wave_function_array(y, v_array[indices], dim[1])
 		H = -4 * np.pi**2 * np.sum((u_array[indices]**2 / dim[0]**2 + v_array[indices]**2 / dim[1]**2) * fuv * coeff[indices])
 	else:
 		H_array = np.zeros(x.shape)
 		for u in xrange(-qu, qu+1):
 			for v in xrange(-qu, qu+1):
 				j = (2 * qm + 1) * (u + qm) + (v + qm)
-				H_array += ism.wave_function(x, u, dim[0]) * ism.wave_function(y, v, dim[1]) * (u**2 / dim[0]**2 + v**2 / dim[1]**2) * coeff[j]
+				H_array += wave_function(x, u, dim[0]) * wave_function(y, v, dim[1]) * (u**2 / dim[0]**2 + v**2 / dim[1]**2) * coeff[j]
 		H = -4 * np.pi**2 * H_array
 
 	return H
@@ -678,7 +682,7 @@ def H_var_coeff(coeff, qm, qu, dim):
 
 	H_var_array = vcheck(u_array[indices], v_array[indices]) * av_coeff_2[indices]
 	H_var_array *= (u_array[indices]**4 / dim[0]**4 + v_array[indices]**4 / dim[1]**4 + 2 * u_array[indices]**2 * v_array[indices]**2 / (dim[0]**2 * dim[1]**2))
-	H_var = 4 * np.pi**4 * np.sum(H_var_array) 
+	H_var = 16 * np.pi**4 * np.sum(H_var_array) 
 
 	return H_var
 
