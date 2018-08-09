@@ -933,7 +933,7 @@ def ddxy_ddxi(x, y, coeff, qm, qu, dim):
 	return ddx_ddxi, ddy_ddxi
 
 
-def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, nframe_ns = 20, ncube=3, vlim=3, tau=0.5, max_r=1.5, precision=0.0005, gamma=0.5):
+def optimise_ns_diff(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, nframe_ns = 20, ncube=3, vlim=3, tau=0.5, max_r=1.5, precision=0.0005, gamma=0.5):
 	"""
 	optimise_ns(directory, file_name, nmol, nframe, qm, phi, ncube, dim, mol_sigma, start_ns, step_ns, nframe_ns = 20, vlim=3)
 
@@ -1085,6 +1085,168 @@ def optimise_ns(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, sta
 			os.remove(surf_dir + file_name_coeff + '_pivot.hdf5')
 
 	return opt_ns, opt_n0
+
+
+def optimise_ns_aic(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, nframe_ns = 20, ncube=3, vlim=3, tau=0.5, max_r=1.5, precision=0.0005, gamma=0.5):
+	"""
+	optimise_ns(directory, file_name, nmol, nframe, qm, phi, ncube, dim, mol_sigma, start_ns, step_ns, nframe_ns = 20, vlim=3)
+
+	Routine to find optimised pivot density coefficient ns and pivot number n0 based on akaike'c criterion function
+
+	Parameters
+	----------
+
+	directory:  str
+		File path of directory of alias analysis.
+	file_name:  str
+		File name of trajectory being analysed.
+	nmol:  int
+		Number of molecules in simulation
+	nframe: int
+		Number of trajectory frames in simulation
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	phi:  float
+		Weighting factor of minimum surface area term in surface optimisation function
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+	mol_sigma:  float
+		Radius of spherical molecular interaction sphere
+	start_ns:  float
+		Initial value for pivot density optimisation routine
+	step_ns:  float
+		Search step difference between each pivot density value ns
+	nframe_ns:  (optional) int
+		Number of trajectory frames to perform optimisation with
+
+	Returns
+	-------
+
+	opt_ns: float
+		Optimised surface pivot density parameter
+	opt_n0: int
+		Optimised number of pivot molecules
+
+	"""
+
+	pos_dir = directory + 'pos/'
+	surf_dir = directory + 'surface/'
+
+	if not os.path.exists(surf_dir): os.mkdir(surf_dir)
+
+	mol_ex_1 = []
+	mol_ex_2 = []
+	NS = []
+	derivative = []
+
+	n_waves = 2 * qm + 1
+	max_r *= mol_sigma
+	tau *= mol_sigma
+	
+	xmol = ut.load_npy(pos_dir + file_name + '_{}_xmol'.format(nframe), frames=range(nframe_ns))
+	ymol = ut.load_npy(pos_dir + file_name + '_{}_ymol'.format(nframe), frames=range(nframe_ns))
+	zmol = ut.load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe), frames=range(nframe_ns))
+	COM = ut.load_npy(pos_dir + file_name + '_{}_com'.format(nframe), frames=range(nframe_ns))
+
+	com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
+	zmol = zmol - com_tile
+
+	if nframe < nframe_ns: nframe_ns = nframe
+	ns = start_ns
+	optimising = True
+
+	print("Surface pivot density precision = {}".format(precision))
+
+	while optimising:
+
+		NS.append(ns)
+		n0 = int(dim[0] * dim[1] * ns / mol_sigma**2)
+
+		print("Density Coefficient = {}".format(ns))		
+		print("Using pivot number = {}".format(n0))
+		
+		tot_piv_n1 = np.zeros((nframe_ns, n0), dtype=int)
+		tot_piv_n2 = np.zeros((nframe_ns, n0), dtype=int)
+
+		area_1 = np.zeros((nframe_ns))
+		area_2 = np.zeros((nframe_ns))
+
+		file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
+
+		if not os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_coeff)):
+			ut.make_hdf5(surf_dir + file_name_coeff + '_coeff', (2, n_waves**2), tables.Float64Atom())
+			ut.make_hdf5(surf_dir + file_name_coeff + '_pivot', (2, n0), tables.Int64Atom())
+
+		for frame in xrange(nframe_ns):
+			"Checking number of frames in coeff and pivot files"
+			frame_check_coeff = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_coeff')[0] <= frame)
+			frame_check_pivot = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_pivot')[0] <= frame)
+
+			if frame_check_coeff: mode_coeff = 'a'
+			else: mode_coeff = False
+
+			if frame_check_pivot: mode_pivot = 'a'
+			else: mode_pivot = False
+
+			if not mode_coeff and not mode_pivot:
+				pivot = ut.load_hdf5(surf_dir + file_name_coeff + '_pivot', frame)
+			else:
+				sys.stdout.write("Optimising Intrinsic Surface coefficients: frame {}\n".format(frame))
+				sys.stdout.flush()
+
+				coeff, pivot = build_surface(xmol[frame], ymol[frame], zmol[frame], dim, mol_sigma, qm, n0, phi, tau, max_r, ncube=ncube, vlim=vlim)
+				ut.save_hdf5(surf_dir + file_name_coeff + '_coeff', coeff, frame, mode_coeff)
+				ut.save_hdf5(surf_dir + file_name_coeff + '_pivot', pivot, frame, mode_pivot)
+
+			tot_piv_n1[frame] += pivot[0]
+			tot_piv_n2[frame] += pivot[1]
+
+			zeta_1 = make_zeta_list(xmol[frame], ymol[frame], dim, pivot[0], coeff[0], qm, qm) - zmol[frame][pivot[0]]
+			zeta_2 = make_zeta_list(xmol[frame], ymol[frame], dim, pivot[1], coeff[1], qm, qm) - zmol[frame][pivot[1]]
+
+			W_1[frame] = 0.5 * np.sum(zeta_1**2) + phi * intrinsic_area(coeff[0], qm, qm, dim)
+			W_2[frame] = 0.5 * np.sum(zeta_2**2) + phi * intrinsic_area(coeff[1], qm, qm, dim)
+
+		AIC_1.append(2 * n0 - 2 * np.log(W_1))
+		AIC_2.append(2 * n0 - 2 * np.log(W_2))
+
+		av_AIC = (np.array(AIC_1) + np.array(AIC_2)) / 2.
+		print("Average AIC = {}".format(av_AIC[-1]))
+
+		if len(av_AIC) > 1:
+			step_size = (av_AIC[-1] - av_AIC[-2])
+			derivative.append(step_size / (NS[-1] - NS[-2]))
+			#min_arg = np.argsort(abs(NS[-1] - np.array(NS)))
+			#min_derivative = (av_mol_ex[min_arg[0]] - av_mol_ex[min_arg[1]]) / (NS[min_arg[0]] - NS[min_arg[1]])
+			#derivative.append(min_derivative)
+			
+			check = abs(step_size) <= precision
+			if check: optimising = False
+			else:
+				#if len(derivative) > 1: gamma = (NS[-1] - NS[-2]) / (derivative[-1] - derivative[-2])
+				ns -= gamma * derivative[-1]
+				print("Optimal pivot density not found.\nSurface density coefficient step size = |{}| > {}\n".format(step_size, precision))
+
+		else:
+			ns += step_ns
+			print("Optimal pivot density not found.\nSurface density coefficient step size = |{}| > {}\n".format(step_ns / gamma, precision))
+	
+
+	opt_ns = NS[np.argmin(av_AIC)]
+	opt_n0 = int(dim[0] * dim[1] * opt_ns / mol_sigma**2)
+
+	print "Optimal pivot density found = {}\nSurface density coefficient step size = |{}| < {}\n".format(opt_ns, step_size, precision)
+	print "Optimal number of pivots = {}".format(opt_n0)
+
+	for ns in NS:
+		if ns != opt_ns:
+			n0 = int(dim[0] * dim[1] * ns / mol_sigma**2)
+			file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
+			os.remove(surf_dir + file_name_coeff + '_coeff.hdf5')
+			os.remove(surf_dir + file_name_coeff + '_pivot.hdf5')
+
+	return opt_ns, opt_n0
+
 
 
 def mol_exchange(piv_1, piv_2, nframe, n0):
