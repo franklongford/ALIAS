@@ -222,7 +222,7 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 				start_ns = 0.5
 				step_ns = 0.05
 
-				ns, n0 = ism.optimise_ns_aic(data_dir, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, ncube=ncube, vlim=vlim, tau=tau, max_r=max_r)
+				ns, n0 = ism.optimise_ns(data_dir, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, AIC=True, ncube=ncube, vlim=vlim, tau=tau, max_r=max_r)
 				checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
 
 	QM = range(1, qm+1)
