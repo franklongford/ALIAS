@@ -1208,8 +1208,8 @@ def optimise_ns_aic(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma,
 			W_1[frame] = 0.5 * np.sum(zeta_1**2) + phi * intrinsic_area(coeff[0], qm, qm, dim)
 			W_2[frame] = 0.5 * np.sum(zeta_2**2) + phi * intrinsic_area(coeff[1], qm, qm, dim)
 
-		AIC_1.append(2 * n0 - 2 * np.log(W_1))
-		AIC_2.append(2 * n0 - 2 * np.log(W_2))
+		AIC_1.append(2 * n0 - 2 * np.mean(np.log(W_1)))
+		AIC_2.append(2 * n0 - 2 * np.mean(np.log(W_2)))
 
 		av_AIC = (np.array(AIC_1) + np.array(AIC_2)) / 2.
 		print("Average AIC = {}".format(av_AIC[-1]))
