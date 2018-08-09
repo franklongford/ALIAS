@@ -1134,8 +1134,8 @@ def optimise_ns_aic(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma,
 
 	if not os.path.exists(surf_dir): os.mkdir(surf_dir)
 
-	mol_ex_1 = []
-	mol_ex_2 = []
+	AIC_1 = []
+	AIC_2 = []
 	NS = []
 	derivative = []
 
@@ -1168,8 +1168,8 @@ def optimise_ns_aic(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma,
 		tot_piv_n1 = np.zeros((nframe_ns, n0), dtype=int)
 		tot_piv_n2 = np.zeros((nframe_ns, n0), dtype=int)
 
-		area_1 = np.zeros((nframe_ns))
-		area_2 = np.zeros((nframe_ns))
+		W_1 = np.zeros((nframe_ns))
+		W_2 = np.zeros((nframe_ns))
 
 		file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
 
