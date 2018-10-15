@@ -61,9 +61,9 @@ def make_pos_dxdy(xmol, ymol, coeff, nmol, dim, qm):
 	int_dxdy_mol = np.zeros((qm+1, 4, nmol)) 
 	int_ddxddy_mol = np.zeros((qm+1, 4, nmol))
 
-	temp_int_z_mol = np.zeros((2, nmol))
-	temp_dxdy_mol = np.zeros((4, nmol)) 
-	temp_ddxddy_mol = np.zeros((4, nmol))
+	tmp_int_z_mol = np.zeros((2, nmol))
+	tmp_dxdy_mol = np.zeros((4, nmol)) 
+	tmp_ddxddy_mol = np.zeros((4, nmol))
 	
 	for qu in xrange(qm+1):
 
@@ -72,8 +72,8 @@ def make_pos_dxdy(xmol, ymol, coeff, nmol, dim, qm):
 			f_x = wave_function(xmol, 0, dim[0])
 			f_y = wave_function(ymol, 0, dim[1])
 
-			temp_int_z_mol[0] += f_x * f_y * coeff[0][j]
-			temp_int_z_mol[1] += f_x * f_y * coeff[1][j]
+			tmp_int_z_mol[0] += f_x * f_y * coeff[0][j]
+			tmp_int_z_mol[1] += f_x * f_y * coeff[1][j]
 
 		else:
 			for u in [-qu, qu]:
@@ -87,16 +87,16 @@ def make_pos_dxdy(xmol, ymol, coeff, nmol, dim, qm):
 					ddf_ddx = dd_wave_function(xmol, u, dim[0])
 					ddf_ddy = dd_wave_function(ymol, v, dim[1])
 
-					temp_int_z_mol[0] += f_x * f_y * coeff[0][j]
-					temp_int_z_mol[1] += f_x * f_y * coeff[1][j]
-					temp_dxdy_mol[0] += df_dx * f_y * coeff[0][j]
-					temp_dxdy_mol[1] += f_x * df_dy * coeff[0][j]
-					temp_dxdy_mol[2] += df_dx * f_y * coeff[1][j]
-					temp_dxdy_mol[3] += f_x * df_dy * coeff[1][j]
-					temp_ddxddy_mol[0] += ddf_ddx * f_y * coeff[0][j]
-					temp_ddxddy_mol[1] += f_x * ddf_ddy * coeff[0][j]
-					temp_ddxddy_mol[2] += ddf_ddx * f_y * coeff[1][j]
-					temp_ddxddy_mol[3] += f_x * ddf_ddy * coeff[1][j]
+					tmp_int_z_mol[0] += f_x * f_y * coeff[0][j]
+					tmp_int_z_mol[1] += f_x * f_y * coeff[1][j]
+					tmp_dxdy_mol[0] += df_dx * f_y * coeff[0][j]
+					tmp_dxdy_mol[1] += f_x * df_dy * coeff[0][j]
+					tmp_dxdy_mol[2] += df_dx * f_y * coeff[1][j]
+					tmp_dxdy_mol[3] += f_x * df_dy * coeff[1][j]
+					tmp_ddxddy_mol[0] += ddf_ddx * f_y * coeff[0][j]
+					tmp_ddxddy_mol[1] += f_x * ddf_ddy * coeff[0][j]
+					tmp_ddxddy_mol[2] += ddf_ddx * f_y * coeff[1][j]
+					tmp_ddxddy_mol[3] += f_x * ddf_ddy * coeff[1][j]
 
 			for u in xrange(-qu+1, qu):
 				for v in [-qu, qu]:
@@ -109,20 +109,20 @@ def make_pos_dxdy(xmol, ymol, coeff, nmol, dim, qm):
 					ddf_ddx = dd_wave_function(xmol, u, dim[0])
 					ddf_ddy = dd_wave_function(ymol, v, dim[1])
 
-					temp_int_z_mol[0] += f_x * f_y * coeff[0][j]
-					temp_int_z_mol[1] += f_x * f_y * coeff[1][j]
-					temp_dxdy_mol[0] += df_dx * f_y * coeff[0][j]
-					temp_dxdy_mol[1] += f_x * df_dy * coeff[0][j]
-					temp_dxdy_mol[2] += df_dx * f_y * coeff[1][j]
-					temp_dxdy_mol[3] += f_x * df_dy * coeff[1][j]
-					temp_ddxddy_mol[0] += ddf_ddx * f_y * coeff[0][j]
-					temp_ddxddy_mol[1] += f_x * ddf_ddy * coeff[0][j]
-					temp_ddxddy_mol[2] += ddf_ddx * f_y * coeff[1][j]
-					temp_ddxddy_mol[3] += f_x * ddf_ddy * coeff[1][j]
+					tmp_int_z_mol[0] += f_x * f_y * coeff[0][j]
+					tmp_int_z_mol[1] += f_x * f_y * coeff[1][j]
+					tmp_dxdy_mol[0] += df_dx * f_y * coeff[0][j]
+					tmp_dxdy_mol[1] += f_x * df_dy * coeff[0][j]
+					tmp_dxdy_mol[2] += df_dx * f_y * coeff[1][j]
+					tmp_dxdy_mol[3] += f_x * df_dy * coeff[1][j]
+					tmp_ddxddy_mol[0] += ddf_ddx * f_y * coeff[0][j]
+					tmp_ddxddy_mol[1] += f_x * ddf_ddy * coeff[0][j]
+					tmp_ddxddy_mol[2] += ddf_ddx * f_y * coeff[1][j]
+					tmp_ddxddy_mol[3] += f_x * ddf_ddy * coeff[1][j]
 
-		int_z_mol[qu] += temp_int_z_mol
-		int_dxdy_mol[qu] += temp_dxdy_mol
-		int_ddxddy_mol[qu] += temp_ddxddy_mol
+		int_z_mol[qu] += tmp_int_z_mol
+		int_dxdy_mol[qu] += tmp_dxdy_mol
+		int_ddxddy_mol[qu] += tmp_ddxddy_mol
 
 	int_z_mol = np.swapaxes(int_z_mol, 0, 1)
 	int_dxdy_mol = np.swapaxes(int_dxdy_mol, 0, 1)
