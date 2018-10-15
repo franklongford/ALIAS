@@ -71,7 +71,7 @@ def dd_wave_function(x, u, Lx):
 	return - 4 * np.pi**2 * u**2 / Lx**2 * wave_function(x, u, Lx)
 
 
-def update_A_b(xmol, ymol, zmol, dim, qm, n_waves, new_piv1, new_piv2):
+def update_A_b(xmol, ymol, zmol, dim, qm, new_piv1, new_piv2):
 	"""
 	update_A_b(xmol, ymol, zmol, dim, qm, n_waves, new_piv1, new_piv2)
 	
@@ -108,6 +108,7 @@ def update_A_b(xmol, ymol, zmol, dim, qm, n_waves, new_piv1, new_piv2):
 		for both surfaces
 
 	"""
+	n_waves = 2 * qm +1
 
 	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
 	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
@@ -127,7 +128,7 @@ def update_A_b(xmol, ymol, zmol, dim, qm, n_waves, new_piv1, new_piv2):
 	A[0] += np.dot(fuv1, fuv1.T)
 	A[1] += np.dot(fuv2, fuv2.T)
 
-	return A, b
+	return A, b, fuv1, fuv2
 
 
 def LU_decomposition(A, b):
@@ -294,7 +295,115 @@ def intrinsic_area(coeff, qm, qu, dim):
 	return int_A
 
 
-def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncube=3, vlim=3):
+def initialise_surface(qm, phi, dim, recon=0):
+
+	n_waves = 2*qm+1
+
+	"Form the diagonal xi^2 terms"
+	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
+	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+
+	uv_check = vcheck(u_array, v_array)
+
+	"Make diagonal terms of A matrix"
+	diag = uv_check * (phi * (u_array**2 * dim[1] / dim[0] + v_array**2 * dim[0] / dim[1]))
+	diag = 4 * np.pi**2 * np.diagflat(diag)
+
+	"Create empty A matrix and b vector for linear algebra equation Ax = b"
+	A = np.zeros((2, n_waves**2, n_waves**2))
+	b = np.zeros((2, n_waves**2))
+	coeff = np.zeros((2, n_waves**2))
+
+	if recon != 0:
+		u_matrix = np.tile(u_array, (n_waves**2, 1))
+		v_matrix = np.tile(v_array, (n_waves**2, 1))
+
+		curve_diag = 16 * np.pi**4 * (u_matrix**2 * u_matrix.T**2 / dim[0]**4 + v_matrix**2 * v_matrix.T**2 / dim[1]**4 +
+				     	     (u_matrix**2 * v_matrix.T**2 + u_matrix.T**2 * v_matrix**2) / (dim[0]**2 * dim[1]**2))
+
+		H_var = 4 * np.pi**4 * uv_check * (u_array**4 / dim[0]**4 + v_array**4 / dim[1]**4 + 2 * u_array**2 * v_array**2 / (dim[0]**2 * dim[1]**2))
+
+		return A, b, diag, coeff, curve_diag, H_var
+
+	return A, b, diag, coeff
+
+
+def H_var_arrays(coeff, ffuv, curve_diag, H_var, qm, n0):
+
+
+	"Calculate variance of curvature across entire surface from coefficients"
+	H_var_coeff = np.sum(H_var * coeff**2)
+	"Calculate variance of curvature at pivot sites only"
+	coeff_matrix = np.tile(coeff, (n_waves**2, 1))
+	H_var_piv = np.sum(coeff_matrix * coeff_matrix.T * ffuv * curve_diag / n0)
+	"Calculate optimisation function (diff between coeff and pivot variance)"
+	H_var_func = abs(H_var_coeff - H_var_piv)
+
+	return H_var_coeff, H_var_piv, H_var_func
+
+
+def recon_algorithm(coeff, ffuv, diag, curve_diag, qm, n0):
+
+	reconstructing = True
+	psi_array = np.array([0, psi])
+	coeff_recon = np.zeros(coeff.shape)
+	step = 0
+	weight = 0.9
+
+	H_var_coeff = np.zeros(2)
+	H_var_piv = np.zeros(2)
+	H_var_func = np.zeros(2)
+	H_var_grad = np.zeros(2)
+
+	H_var_coeff[0], H_var_piv[0], H_var_func[0] = H_var_arrays(coeff, ffuv, curve_diag, H_var, qm, n0)
+	H_var_grad[0] = 1
+	
+	"Amend psi weighting coefficient until H_var == H_piv_var"
+	while reconstructing:       
+
+		"Update A matrix and b vector" 
+		A = ffuv * (1. + curve_diag * psi_array[1] / n0)
+
+		"Update coeffs by performing LU decomosition to solve Ax = b"
+		coeff_recon = LU_decomposition(A + diag, b)
+
+		H_var_coeff[1], H_var_piv[1], H_var_func[1] = H_var_arrays(coeff_recon, ffuv, curve_diag, H_var, qm, n0)
+
+		"Recalculate gradient of optimistation function wrt psi"
+		H_var_grad[1] = (H_var_func[1] - H_var_func[0]) / (psi_array[1] - psi_array[0])
+
+		if abs(H_var_func[1]) <= precision: reconstructing = False
+		else:
+			step += 1
+
+			if step >= max_step:
+				"Reconstruction routine failed to find minimum. Restart using smaller psi"
+				psi_array[0] = 0
+				psi_array[1] = psi * weight
+
+				"Calculate original values of Curvature variances"
+				H_var_coeff[0], H_var_piv[0], H_var_func[0] = H_var_arrays(coeff, ffuv, curve_diag, H_var, qm, n0)
+				H_var_grad[0] = 1
+
+				"Decrease psi weighting for next run"
+				weight *= 0.9
+				"Reset number of steps"
+				step = 0
+			else:
+				gamma = H_var_func[1] / H_var_grad[1]
+
+				psi_array[0] = psi_array[1]
+				psi_array[1] -= gamma
+
+				H_var_coeff[0] = H_var_coeff[1]
+				H_var_piv[0] = H_var_piv[1]
+				H_var_func[0] = H_var_func[1]
+				H_var_grad[0] = H_var_grad[1]
+
+	return A, coeff_recon
+
+
+def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncube=3, vlim=3, recon=0):
 					
 	"""
 	build_surface(xmol, ymol, zmol, dim, nmol, mol_sigma, qm, n0, phi, tau, max_r, ncube=3, vlim=3)
@@ -353,19 +462,8 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 
 	start = time.time()
 	
-	n_waves = 2*qm+1
-
-	"Form the diagonal xi^2 terms"
-	u = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
-	v = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
-
-	diag = vcheck(u, v) * (u**2 * dim[1] / dim[0] + v**2 * dim[0] / dim[1])
-	diag = 4 * np.pi**2 * phi * np.diagflat(diag)
-
-	"Create empty A matrix and b vector for linear algebra equation Ax = b"
-	A = np.zeros((2, n_waves**2, n_waves**2))
-	b = np.zeros((2, n_waves**2))
-	coeff = np.zeros((2, n_waves**2))
+	if recon == 1: A, b, diag, coeff, curve_diag, H_var = initialise_surface(qm, phi, dim, recon)
+	else: A, b, diag, coeff = initialise_surface(qm, phi, dim, 0)
 
 	if vlim == 0:
 		piv_n1 = mol_list[zmol[mol_list] < 0]
@@ -381,7 +479,7 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 		print "_" * 105
 
 		"Update A matrix and b vector"
-		temp_A, temp_b = update_A_b(xmol, ymol, zmol, dim, qm, n_waves, piv_n1, piv_n2)
+		temp_A, temp_b, fuv1, fuv2 = update_A_b(xmol, ymol, zmol, dim, qm, piv_n1, piv_n2)
 
 		A += temp_A
 		b += temp_b
@@ -462,7 +560,7 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 			start1 = time.time()
 
 			"Update A matrix and b vector"
-			temp_A, temp_b = update_A_b(xmol, ymol, zmol, dim, qm, n_waves, new_piv1, new_piv2)
+			temp_A, temp_b, fuv1, fuv2 = update_A_b(xmol, ymol, zmol, dim, qm, new_piv1, new_piv2)
 
 			A += temp_A
 			b += temp_b
@@ -515,6 +613,10 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 
 			end = time.time()
 
+			if recon == 1:
+				if build_surf1: A[0], coeff[0] = recon_algorithm(coeff[0], np.dot(fuv1, fuv1.T), diag, curve_diag, qm, n0)
+				if build_surf2: A[1], coeff[1] = recon_algorithm(coeff[1], np.dot(fuv2, fuv2.T), diag, curve_diag, qm, n0)
+				
 			"Calculate surface areas excess"
 			area1 = intrinsic_area(coeff[0], qm, qm, dim)
 			area2 = intrinsic_area(coeff[1], qm, qm, dim)
@@ -575,143 +677,19 @@ def surface_reconstruction(coeff, pivot, xmol, ymol, zmol, dim, qm, n0, phi, psi
 
 	start = time.time()	
 
-	"Form the diagonal xi^2 terms and b vector solutions"
-	A = np.zeros((2, n_waves**2, n_waves**2))
-	fuv = np.zeros((2, n_waves**2, n0))
-	ffuv = np.zeros((2, n_waves**2, n_waves**2))
-	b = np.zeros((2, n_waves**2))
+	A, b, diag, coeff, curve_diag, H_var = initialise_surface(qm, phi, dim, True)
+	coeff_recon = np.zeros(coeff.shape)
 
+	"Form the diagonal xi^2 terms and b vector solutions"
+	
 	for i in xrange(2):
+		fuv = np.zeros((n_waves**2, n0))
+
 		for j in xrange(n_waves**2):
 		        fuv[i][j] = wave_function(xmol[pivot[i]], int(j/n_waves)-qm, dim[0]) * wave_function(ymol[pivot[i]], int(j%n_waves)-qm, dim[1])
 		        b[i][j] += np.sum(zmol[pivot[i]] * fuv[i][j])
 
-		ffuv[i] = np.dot(fuv[i], fuv[i].T)
-
-	"Create arrays of wave frequency indicies u and v"
-	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
-	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
-
-	uv_check = vcheck(u_array, v_array)
-
-	"Make diagonal terms of A matrix"
-	diag = uv_check * (phi * (u_array**2 * dim[1] / dim[0] + v_array**2 * dim[0] / dim[1]))
-	diag = 4 * np.pi**2 * np.diagflat(diag)
-
-	"Create matrix of wave frequency indicies (u,v)**2"
-	u_matrix = np.tile(u_array, (n_waves**2, 1))
-	v_matrix = np.tile(v_array, (n_waves**2, 1))
-
-	"Make curvature diagonal terms of A matrix"
-	curve_diag = 16 * np.pi**4 * (u_matrix**2 * u_matrix.T**2 / dim[0]**4 + v_matrix**2 * v_matrix.T**2 / dim[1]**4 +
-				     (u_matrix**2 * v_matrix.T**2 + u_matrix.T**2 * v_matrix**2) / (dim[0]**2 * dim[1]**2))
-
-	end_setup1 = time.time()
-
-	print "{:^74s} | {:^21s} | {:^43s} | {:^21s}".format('TIMINGS (s)', 'PSI', 'VAR(H)', 'INT AREA' )
-	print ' {:20s} {:20s} {:20s} {:10s} | {:10s} {:10s} | {:10s} {:10s} {:10s} {:10s} | {:10s} {:10s}'.format('Matrix Formation', 'LU Decomposition', 
-				'Var Estimation', 'TOTAL', 'surf1', 'surf2', 'surf1', 'piv1', 'surf2', 'piv2','surf1', 'surf2')
-	print "_" * 168
-
-	H_var_coeff = np.zeros((2, 2))
-	H_var_piv = np.zeros((2, 2))
-	H_var_func = np.zeros((2, 2))
-	H_var_grad = np.zeros((2, 2))
-	area = np.zeros((2))
-
-	H_var = 4 * np.pi**4 * uv_check * (u_array**4 / dim[0]**4 + v_array**4 / dim[1]**4 + 2 * u_array**2 * v_array**2 / (dim[0]**2 * dim[1]**2))
-	for i in xrange(2): 
-		"Calculate variance of curvature across entire surface from coefficients"
-		H_var_coeff[0][i] = np.sum(H_var * coeff[i]**2)
-		"Calculate variance of curvature at pivot sites only"
-		coeff_matrix = np.tile(coeff[i], (n_waves**2, 1))
-		H_var_piv[0][i] = np.sum(coeff_matrix * coeff_matrix.T * ffuv[i] * curve_diag / n0)
-		"Calculate intrinsic surface area"
-		area[i] = intrinsic_area(coeff[i], qm, qm, dim)
-		"Calculate optimisation function (diff between coeff and pivot variance)"
-		H_var_func[0][i] = abs(H_var_coeff[0][i] - H_var_piv[0][i])
-		"Calculate gradient of optimistation function wrt psi"
-		H_var_grad[0][i] = 1
-
-	end_setup2 = time.time()
-
-	print ' {:20.3f} {:20.3f} {:20.3f} {:10.3f} | {:10.6f} {:10.6f} | {:10.4f} {:10.4f} {:10.4f} {:10.4f} | {:10.3f} {:10.3f}'.format(end_setup1-start, 
-			0, end_setup2-end_setup1, end_setup2-start, 0, 0, H_var_coeff[0][0], H_var_piv[0][0], H_var_coeff[0][1], H_var_piv[0][1], area[0], area[1])
-
-	reconstructing = True
-	recon_array = [True, True]
-	psi_array = np.array([(0, 0), (psi, psi)])
-	coeff_recon = np.zeros(coeff.shape)
-	step = np.zeros(2)
-	weight = np.ones(2) * 0.9
-	
-	"Amend psi weighting coefficient until H_var == H_piv_var"
-	while reconstructing:
-
-		start1 = time.time()
-        
-		"Update A matrix and b vector" 
-		for i in xrange(2): A[i] = ffuv[i] * (1. + curve_diag * psi_array[1][i] / n0)
-
-		end1 = time.time()
-
-		"Update coeffs by performing LU decomosition to solve Ax = b"
-		for i, recon in enumerate(recon_array):
-			if recon: coeff_recon[i] = LU_decomposition(A[i] + diag, b[i])
-
-		end2 = time.time()
-
-		for i, recon in enumerate(recon_array):
-			"Recalculate variance of curvature across entire surface from coefficients"
-			H_var_coeff[1][i] = np.sum(H_var * coeff_recon[i]**2)
-			if recon:
-				"Recalculate variance of curvature at pivot sites only"
-				coeff_matrix_recon = np.tile(coeff_recon[i], (n_waves**2, 1))
-				H_var_piv[1][i] = np.sum(coeff_matrix_recon * coeff_matrix_recon.T * ffuv[i] * curve_diag / n0)
-				"Recalculate intrinsic surface area"
-				area[i] = intrinsic_area(coeff_recon[i], qm, qm, dim)
-				"Recalculate optimisation function (diff between coeff and pivot variance)"
-				H_var_func[1][i] = abs(H_var_coeff[1][i] - H_var_piv[1][i])
-				"Recalculate gradient of optimistation function wrt psi"
-				H_var_grad[1][i] = (H_var_func[1][i] - H_var_func[0][i]) / (psi_array[1][i] - psi_array[0][i])
-
-		end3 = time.time()
-
-		print ' {:20.3f} {:20.3f} {:20.3f} {:10.3f} | {:10.6f} {:10.6f} | {:10.4f} {:10.4f} {:10.4f} {:10.4f} | {:10.3f} {:10.3f}'.format(end1 - start1, 
-				end2 - end1, end3 - end2, end3 - start1, psi_array[1][0], psi_array[1][1],  H_var_coeff[1][0], H_var_piv[1][0], H_var_coeff[1][1], H_var_piv[1][1], area[0], area[1])
-
-
-		for i, recon in enumerate(recon_array):
-			if abs(H_var_func[1][i]) <= precision: recon_array[i] = False
-			else:
-				step[i] += 1
-
-				if step[i] >= max_step:
-					"Reconstruction routine failed to find minimum. Restart using smaller psi"
-					psi_array[0][i] = 0
-					psi_array[1][i] = psi * weight[i]
-					"Calculate original values of Curvature variances"
-					H_var_coeff[0][i] = np.sum(H_var * coeff[i]**2)
-					H_var_piv[0][i] = np.sum(coeff_matrix * coeff_matrix.T * ffuv[i] * curve_diag / n0)
-					area[i] = intrinsic_area(coeff[i], qm, qm, dim)
-					H_var_func[0][i] = abs(H_var_coeff[0][i] - H_var_piv[0][i])
-					H_var_grad[0][i] = 1
-					"Decrease psi weighting for next run"
-					weight[i] *= 0.9
-					"Reset number of steps"
-					step[i] = 0
-				else:
-					gamma =  H_var_func[1][i] / H_var_grad[1][i]
-
-					psi_array[0][i] = psi_array[1][i]
-					psi_array[1][i] -= gamma
-
-					H_var_coeff[0][i] = H_var_coeff[1][i]
-					H_var_piv[0][i] = H_var_piv[1][i]
-					H_var_func[0][i] = H_var_func[1][i]
-					H_var_grad[0][i] = H_var_grad[1][i]
-
-		if not np.any(recon_array): reconstructing = False
+		coeff_recon[i] = recon_algorithm(coeff[i], np.dot(fuv, fuv.T), diag, curve_diag, qm, n0)
 
 	end = time.time()
 
@@ -1291,7 +1269,7 @@ def mol_exchange(piv_1, piv_2, nframe, n0):
 
 
 
-def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=True, ncube=3, vlim=3, tau=0.5, max_r=1.5, ow_coeff=False, ow_recon=False):
+def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=0, ncube=3, vlim=3, tau=0.5, max_r=1.5, ow_coeff=False, ow_recon=False):
 	"""
 	create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=True, ow_coeff=False, ow_recon=False)
 
@@ -1337,30 +1315,46 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 	max_r *= mol_sigma
 	tau *= mol_sigma
 
-	"Make coefficient and pivot files"
-	if not os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_coeff)):
-		ut.make_hdf5(surf_dir + file_name_coeff + '_coeff', (2, n_waves**2), tables.Float64Atom())
-		ut.make_hdf5(surf_dir + file_name_coeff + '_pivot', (2, n0), tables.Int64Atom())
-		file_check = False
-	elif not ow_coeff:
-		"Checking number of frames in current coefficient files"
-		try:
-			file_check = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_coeff') == (nframe, 2, n_waves**2))
-			file_check *= (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_pivot') == (nframe, 2, n0))
-		except: file_check = False
-	else: file_check = False
-
-	if recon:
-		psi = phi * dim[0] * dim[1]
-		"Make recon coefficient file"
-		if not os.path.exists('{}/surface/{}_R_coeff.hdf5'.format(directory, file_name_coeff)):
-			ut.make_hdf5(surf_dir + file_name_coeff + '_R_coeff', (2, n_waves**2), tables.Float64Atom())
+	if recon != 1:
+		"Make coefficient and pivot files"
+		if not os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_coeff)):
+			ut.make_hdf5(surf_dir + file_name_coeff + '_coeff', (2, n_waves**2), tables.Float64Atom())
+			ut.make_hdf5(surf_dir + file_name_coeff + '_pivot', (2, n0), tables.Int64Atom())
 			file_check = False
-		elif not ow_recon:
-			"Checking number of frames in current recon coefficient files"
-			try: file_check = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_R_coeff') == (nframe, 2, n_waves**2))
+		elif not ow_coeff:
+			"Checking number of frames in current coefficient files"
+			try:
+				file_check = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_coeff') == (nframe, 2, n_waves**2))
+				file_check *= (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_pivot') == (nframe, 2, n0))
 			except: file_check = False
 		else: file_check = False
+
+		if recon == 2:
+			psi = phi * dim[0] * dim[1]
+			"Make recon coefficient file"
+			if not os.path.exists('{}/surface/{}_R_coeff.hdf5'.format(directory, file_name_coeff)):
+				ut.make_hdf5(surf_dir + file_name_coeff + '_R_coeff', (2, n_waves**2), tables.Float64Atom())
+				file_check = False
+			elif not ow_recon:
+				"Checking number of frames in current recon coefficient files"
+				try: file_check = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_R_coeff') == (nframe, 2, n_waves**2))
+				except: file_check = False
+			else: file_check = False
+
+	else:
+
+		if not os.path.exists('{}/surface/{}_r_coeff.hdf5'.format(directory, file_name_coeff)):
+			ut.make_hdf5(surf_dir + file_name_coeff + '_r_coeff', (2, n_waves**2), tables.Float64Atom())
+			ut.make_hdf5(surf_dir + file_name_coeff + '_r_pivot', (2, n0), tables.Int64Atom())
+			file_check = False
+		elif not ow_coeff:
+			"Checking number of frames in current coefficient files"
+			try:
+				file_check = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_r_coeff') == (nframe, 2, n_waves**2))
+				file_check *= (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_r_pivot') == (nframe, 2, n0))
+			except: file_check = False
+		else: file_check = False
+
 
 	if not file_check:
 		print "IMPORTING GLOBAL POSITION DISTRIBUTIONS\n"
@@ -1375,8 +1369,12 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 		for frame in xrange(nframe):
 
 			"Checking number of frames in coeff and pivot files"
-			frame_check_coeff = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_coeff')[0] <= frame)
-			frame_check_pivot = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_pivot')[0] <= frame)
+			if recon != 1:
+				frame_check_coeff = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_coeff')[0] <= frame)
+				frame_check_pivot = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_pivot')[0] <= frame)
+			else:
+				frame_check_coeff = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_r_coeff')[0] <= frame)
+				frame_check_pivot = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_r_pivot')[0] <= frame)
 
 			if frame_check_coeff: mode_coeff = 'a'
 			elif ow_coeff: mode_coeff = 'r+'
@@ -1391,30 +1389,36 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 				sys.stdout.write("Optimising Intrinsic Surface coefficients: frame {}\n".format(frame))
 				sys.stdout.flush()
                         
-				coeff, pivot = build_surface(xmol[frame], ymol[frame], zmol[frame], dim, mol_sigma, qm, n0, phi, tau, max_r, ncube=ncube, vlim=vlim)
+				coeff, pivot = build_surface(xmol[frame], ymol[frame], zmol[frame], dim, mol_sigma, qm, n0, phi, tau, max_r, ncube=ncube, vlim=vlim, recon=recon)
 
 				#ut.view_surface(coeff[0], qm, qm, xmol[frame][pivot[0]], ymol[frame][pivot[0]], zmol[frame][pivot[0]], 50, dim)
 				#ut.view_surface(coeff[1], qm, qm, xmol[frame][pivot[1]], ymol[frame][pivot[1]], zmol[frame][pivot[1]], 50, dim)
-
+			if recon != 1:
 				ut.save_hdf5(surf_dir + file_name_coeff + '_coeff', coeff, frame, mode_coeff)
 				ut.save_hdf5(surf_dir + file_name_coeff + '_pivot', pivot, frame, mode_pivot)
 
-			if recon:
-				frame_check_recon = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_R_coeff')[0] <= frame)
+				if recon == 2:
+					frame_check_recon = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_R_coeff')[0] <= frame)
 
-				if frame_check_recon: mode_recon = 'a'
-				elif ow_coeff or ow_recon: mode_recon = 'r+'
-				else: mode_recon = False
+					if frame_check_recon: mode_recon = 'a'
+					elif ow_coeff or ow_recon: mode_recon = 'r+'
+					else: mode_recon = False
 
-				if not mode_recon: pass
-				else:
-					sys.stdout.write("Reconstructing Intrinsic Surface coefficients: frame {}\r".format(frame))
-					sys.stdout.flush()
+					if not mode_recon: pass
+					else:
+						sys.stdout.write("Reconstructing Intrinsic Surface coefficients: frame {}\r".format(frame))
+						sys.stdout.flush()
 
-					coeff = ut.load_hdf5(surf_dir + file_name_coeff + '_coeff', frame)
-					pivot = ut.load_hdf5(surf_dir + file_name_coeff + '_pivot', frame)
-					coeff_R = surface_reconstruction(coeff, pivot, xmol[frame], ymol[frame], zmol[frame], dim, qm, n0, phi, psi)
-					ut.save_hdf5(surf_dir + file_name_coeff + '_R_coeff', coeff_R, frame, mode_coeff)
+						coeff = ut.load_hdf5(surf_dir + file_name_coeff + '_coeff', frame)
+						pivot = ut.load_hdf5(surf_dir + file_name_coeff + '_pivot', frame)
+						coeff_R = surface_reconstruction(coeff, pivot, xmol[frame], ymol[frame], zmol[frame], dim, qm, n0, phi, psi)
+						ut.save_hdf5(surf_dir + file_name_coeff + '_R_coeff', coeff_R, frame, mode_coeff)
+
+			else:
+				ut.save_hdf5(surf_dir + file_name_coeff + '_r_coeff', coeff, frame, mode_coeff)
+				ut.save_hdf5(surf_dir + file_name_coeff + '_r_pivot', pivot, frame, mode_pivot)
+
+			
 
 
 def make_pos_dxdy(directory, file_name_pos, xmol, ymol, coeff, nmol, dim, qm):
