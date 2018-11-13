@@ -531,6 +531,8 @@ def shape_check_hdf5(file_path):
 
 def view_surface(coeff, pivot, qm, qu, xmol, ymol, zmol, nxy, dim):
 
+	import matplotlib
+	#matplotlib.use('Agg')
 	import matplotlib.pyplot as plt
 	import matplotlib.animation as anim
 	from mpl_toolkits.mplot3d import Axes3D
@@ -562,7 +564,7 @@ def view_surface(coeff, pivot, qm, qu, xmol, ymol, zmol, nxy, dim):
 	ax.set_zlabel(r'$z$ (\AA)')
 	ax.set_xlim3d(0, dim[0])
 	ax.set_ylim3d(0, dim[1])
-	#ax.set_zlim3d(-Delta*4, Delta*4)
+	ax.set_zlim3d(-dim[2]/2, dim[2]/2)
 	X_grid, Y_grid = np.meshgrid(X, Y)		
 
 	def update(frame):
@@ -573,6 +575,7 @@ def view_surface(coeff, pivot, qm, qu, xmol, ymol, zmol, nxy, dim):
 		ax.scatter(xmol[pivot[1]], ymol[pivot[1]], zmol[pivot[1]], color='b')
 
 	a = anim.FuncAnimation(fig, update, frames=1, repeat=False)
+	#plt.savefig('plot_{}_{}.png'.format(len(pivot[0]), len(pivot[1])))
 	plt.show()
 
 

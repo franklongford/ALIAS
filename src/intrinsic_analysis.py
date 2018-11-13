@@ -131,7 +131,7 @@ def make_pos_dxdy(xmol, ymol, coeff, nmol, dim, qm):
 	return int_z_mol, int_dxdy_mol, int_ddxddy_mol
 
 
-def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0, phi, dim, recon=False, ow_pos=False):
+def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0, phi, dim, recon=0, ow_pos=False):
 	"""
 	create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0, phi, dim, recon, ow_pos)
 
@@ -174,7 +174,10 @@ def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0,
 
 	file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
 	file_name_pos = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1/phi + 0.5), nframe)
-	if recon: 
+	if recon == 1: 
+		file_name_coeff += '_r'
+		file_name_pos += '_r'
+	elif recon == 2: 
 		file_name_coeff += '_R'
 		file_name_pos += '_R'
 
@@ -372,7 +375,7 @@ def den_curve_hist(zmol, int_z_mol, int_ddxddy_mol, nmol, nslice, nz, qm, dim, m
 	return count_corr_array
 
 
-def create_intrinsic_den_curve_hist(directory, file_name, qm, n0, phi, nframe, nslice, dim, nz=100, recon=False, ow_hist=False):
+def create_intrinsic_den_curve_hist(directory, file_name, qm, n0, phi, nframe, nslice, dim, nz=100, recon=0, ow_hist=False):
 	"""
 	create_intrinsic_den_curve_hist(directory, file_name, qm, n0, phi, nframe, nslice, dim, nz=100, recon=False, ow_hist=False)
 
@@ -418,7 +421,10 @@ def create_intrinsic_den_curve_hist(directory, file_name, qm, n0, phi, nframe, n
 	file_name_pos = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
 	file_name_hist = '{}_{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)	
 
-	if recon:
+	if recon == 1:
+		file_name_pos += '_r'
+		file_name_hist += '_r'
+	elif recon == 2:
 		file_name_pos += '_R'
 		file_name_hist += '_R'
 
@@ -442,12 +448,12 @@ def create_intrinsic_den_curve_hist(directory, file_name, qm, n0, phi, nframe, n
 		for frame in xrange(nframe):
 
 			"Checking number of frames in hdf5 files"
-			frame_check_count_corr = (ut.shape_check_hdf5(intden_dir + file_name_hist + '_count_corr') <= frame)
+			frame_check_count_corr = (ut.shape_check_hdf5(intden_dir + file_name_hist + '_count_corr')[0] <= frame)
 
 			if frame_check_count_corr: mode_count_corr = 'a'
 			elif ow_hist: mode_count_corr = 'r+'
 			else: mode_count_corr = False
-
+			
 			if not mode_count_corr:pass
 			else:
 				sys.stdout.write("Calculating position and curvature distributions: frame {}\r".format(frame))
@@ -460,7 +466,7 @@ def create_intrinsic_den_curve_hist(directory, file_name, qm, n0, phi, nframe, n
 				ut.save_hdf5(intden_dir + file_name_hist + '_count_corr', count_corr_array, frame, mode_count_corr)
 				
 
-def av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, nframe, nsample, nz=100, recon=False, ow_dist=False):
+def av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, nframe, nsample, nz=100, recon=0, ow_dist=False):
 	"""
 	av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, nframe, nsample, nz=100, recon=False, ow_dist=False)
 
@@ -511,7 +517,10 @@ def av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, n
 	file_name_hist = '{}_{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)
 	file_name_dist = '{}_{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nsample)
 
-	if recon: 
+	if recon == 1: 
+		file_name_hist += '_r'
+		file_name_dist += '_r'
+	elif recon == 2: 
 		file_name_hist += '_R'
 		file_name_dist += '_R'
 
@@ -839,7 +848,7 @@ def power_spectrum_coeff(coeff_2, qm, qu, dim):
 	return q_set, p_spec_hist
 
 
-def surface_tension_coeff(coeff_2, qm, qu, dim, T):
+def surface_tension_coeff(coeff_2, qm, qu, dim, T, error=False, std=None):
 	"""
 	surface_tension_coeff(coeff_2, qm, qu, dim, T)
 
@@ -880,13 +889,19 @@ def surface_tension_coeff(coeff_2, qm, qu, dim, T):
 			set_index = np.round(u**2*dim[1]/dim[0] + v**2*dim[0]/dim[1], 4)
 
 			if set_index != 0:
-				gamma = 1. / (check_uv(u, v) * coeff_2[j] * 1E-20 * dot_prod)
-				gamma_hist[q2_set == set_index] += gamma
+				if error: 
+					gamma = con.k * T * 1E23 / (check_uv(u, v) * coeff_2[j]**2 * dot_prod)
+					gamma_hist[q2_set == set_index] += (gamma * std[j])#**2
+				else: 
+					gamma = con.k * T * 1E23 / (check_uv(u, v) * coeff_2[j] * dot_prod)
+					gamma_hist[q2_set == set_index] += gamma
 				gamma_count[q2_set == set_index] += 1
 
-	for i in xrange(len(q2_set)):
-		if gamma_count[i] != 0: gamma_hist[i] *= con.k * 1E3 * T / gamma_count[i]
+	#if error: gamma_hist = np.sqrt(gamma_hist)
 
+	for i in xrange(len(q2_set)):
+		if gamma_count[i] != 0: gamma_hist[i] /= gamma_count[i]
+	
 	return q_set, gamma_hist 
 
 
@@ -915,9 +930,9 @@ def coeff_slice(coeff, qm, qu):
 	return coeff_qu
 	
 
-def coeff_to_fouier(coeff, qm, dim):
+def coeff_to_fourier(coeff, qm, dim):
 	"""
-	coeff_to_fouier(coeff, nm)
+	coeff_to_fourier(coeff, nm)
 
 	Returns Fouier coefficients for Fouier series representing intrinsic surface from linear algebra coefficients
 
@@ -969,7 +984,7 @@ def coeff_to_fouier(coeff, qm, dim):
         return amplitudes, frequencies 
 
 
-def coeff_to_fouier_2(coeff_2, qm, dim):
+def coeff_to_fourier_2(coeff_2, qm, dim):
 	"""
 	coeff_to_fouier_2(coeff_2, qm)
 
@@ -978,13 +993,28 @@ def coeff_to_fouier_2(coeff_2, qm, dim):
 
 	n_waves = 2 * qm + 1
 	
-	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
-	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+	i_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int)
+	j_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int)
 
-	frequencies = np.pi * 2 * (u_array.reshape(n_waves, n_waves) / dim[0] + v_array.reshape(n_waves, n_waves) / dim[1])
-	amplitudes_2 = np.reshape(vcheck(u_array, v_array) * coeff_2 / 4., (n_waves, n_waves))
+	u_mat, v_mat = np.meshgrid(np.arange(-qm, qm+1), 
+				   np.arange(-qm, qm+1))
+	x_mat, y_mat = np.meshgrid(np.linspace(0, 1 / dim[0], n_waves), 
+				   np.linspace(0, 1 / dim[1], n_waves))
 
-	return amplitudes_2, frequencies 
+	print(x_mat, y_mat)
+
+	Psi = vcheck(u_mat.flatten(), v_mat.flatten()) / 4.
+	frequencies = np.pi * 2 * (u_mat * x_mat + y_mat * v_mat) / n_waves
+	amplitudes_2 = np.reshape(Psi * coeff_2, (n_waves, n_waves))
+
+	A = np.zeros((n_waves, n_waves))
+
+	for i in xrange(n_waves):
+		for j in xrange(n_waves):
+			A[i][j] += (amplitudes_2 * np.exp(-2 * np.pi * 1j * (u_mat * x_mat[i][j] + y_mat[i][j] * v_mat) / n_waves)).sum()
+	
+
+	return A, frequencies 
 
 
 def xy_correlation(coeff_2, qm, qu, dim):
@@ -1014,10 +1044,8 @@ def xy_correlation(coeff_2, qm, qu, dim):
 	coeff_2[len(coeff_2)/2] = 0
 	coeff_2_slice = coeff_slice(coeff_2, qm, qu)
 
-	_, f_2_qu = ut.coeff_to_fouier_2(coeff_2_slice, qu, dim)
-	xy_corr = np.fft.fftshift(np.fft.ifftn(f_2_qu))
+	xy_corr, frequencies = coeff_to_fourier_2(coeff_2_slice, qu, dim)
+	#xy_corr = np.abs(amplitudes_2) / np.mean(amplitudes_2)
 
-	xy_corr = np.abs(xy_corr) / np.mean(f_2_qu)
-
-	return xy_corr
+	return xy_corr, frequencies
 
