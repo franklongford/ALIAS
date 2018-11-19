@@ -340,9 +340,9 @@ def intrinsic_area(coeff, qm, qu, dim):
 	return int_A
 
 
-def initialise_surface(qm, phi, dim, recon=0):
+def initialise_surface(qm, phi, dim, recon=False):
 	"""
-	initialise_surface(qm, phi, dim, recon=0)
+	initialise_surface(qm, phi, dim, recon=False)
 
 	Calculate initial parameters for ISM and reconstructed ISM fitting proceedure 
 
@@ -355,14 +355,26 @@ def initialise_surface(qm, phi, dim, recon=0):
 		Weighting factor of minimum surface area term in surface optimisation function
 	dim:  float, array_like; shape=(3)
 		XYZ dimensions of simulation cell
-	recon:  int (optional)
+	recon:  bool (optional)
 		Surface reconstruction 
 
 	Returns
 	-------
 
-	int_A:  float
-		Relative size of intrinsic surface area, compared to cell cross section XY
+	coeff:	array_like (float); shape=(n_waves**2)
+		Optimised surface coefficients
+	A:  float, array_like; shape=(n_waves**2, n_waves**2)
+		Matrix containing wave product weightings f(x, u1, Lx).f(y, v1, Ly).f(x, u2, Lx).f(y, v2, Ly) 
+		for each coefficient in the linear algebra equation Ax = b for both surfaces
+	b:  float, array_like; shape=(n_waves**2)
+		Vector containing solutions z.f(x, u, Lx).f(y, v, Ly) to the linear algebra equation Ax = b 
+		for both surfaces
+	area_diag: float, array_like; shape=(n_waves**2)
+		Surface area diagonal terms for A matrix
+	curve_matrix: float, array_like; shape=(n_waves**2, n_waves**2)
+		Surface curvature terms for A matrix
+	H_var: float, array_like; shape=(n_waves**2)
+		Diagonal terms for global variance of mean curvature
 	"""
 
 	n_waves = 2*qm+1
@@ -382,7 +394,7 @@ def initialise_surface(qm, phi, dim, recon=0):
 	b = np.zeros((2, n_waves**2))
 	coeff = np.zeros((2, n_waves**2))
 
-	if recon != 0:
+	if recon:
 		u_matrix = np.tile(u_array, (n_waves**2, 1))
 		v_matrix = np.tile(v_array, (n_waves**2, 1))
 
@@ -464,10 +476,10 @@ def surface_reconstruction(coeff, A, b, area_diag, curve_matrix, H_var, qm, n0, 
 		for both surfaces
 	area_diag: float, array_like; shape=(n_waves**2)
 		Surface area diagonal terms for A matrix
-	curve_matrix: float, array_like; shape=(n_waves**2)
+	curve_matrix: float, array_like; shape=(n_waves**2, n_waves**2)
 		Surface curvature terms for A matrix
-	H_var: float
-		Global variance of mean curvature
+	H_var: float, array_like; shape=(n_waves**2)
+		Diagonal terms for global variance of mean curvature
 	qm:  int
 		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
 	n0:  int
@@ -478,7 +490,6 @@ def surface_reconstruction(coeff, A, b, area_diag, curve_matrix, H_var, qm, n0, 
 		Threshold value determining target similarity of global and sample curvatures
 	max_step:  int
 		Maximum iterative steps without solution until algorithm is restarted with a reduced psi
-
 
 	Returns
 	-------
@@ -545,7 +556,7 @@ def surface_reconstruction(coeff, A, b, area_diag, curve_matrix, H_var, qm, n0, 
 				H_var_func[0] = H_var_func[1]
 				H_var_grad[0] = H_var_grad[1]
 
-	return A_recon, coeff_recon
+	return coeff_recon, A_recon
 
 
 def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncube=3, vlim=3, recon=0, surf_0=[0, 0]):
@@ -693,11 +704,11 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 		if build_surf1: coeff[0] = LU_decomposition(A[0] + area_diag, b[0])
 		if build_surf2: coeff[1] = LU_decomposition(A[1] + area_diag, b[1])
 
-		if recon == 1:
+		if recon:
 			if build_surf1: 
-				_, coeff[0] = recon_algorithm(coeff[0], A[0], b[0], area_diag, curve_matrix, H_var, qm, len(piv_n1), psi)
+				coeff[0], _ = surface_reconstruction(coeff[0], A[0], b[0], area_diag, curve_matrix, H_var, qm, len(piv_n1), psi)
 			if build_surf2:
-				_, coeff[1] = recon_algorithm(coeff[1], A[1], b[1], area_diag, curve_matrix, H_var, qm, len(piv_n2), psi)
+				coeff[1], _ = surface_reconstruction(coeff[1], A[1], b[1], area_diag, curve_matrix, H_var, qm, len(piv_n2), psi)
 
 		end2 = time.time()
 
