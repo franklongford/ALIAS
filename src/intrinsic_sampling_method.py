@@ -1189,9 +1189,9 @@ def mol_exchange(piv_1, piv_2, nframe, n0):
 
 
 
-def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=0, ncube=3, vlim=3, tau=0.5, max_r=1.5, ow_coeff=False, ow_recon=False):
+def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=False, ncube=3, vlim=3, tau=0.5, max_r=1.5, ow_coeff=False, ow_recon=False):
 	"""
-	create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=0, ow_coeff=False, ow_recon=False)
+	create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=False, ow_coeff=False, ow_recon=False)
 
 	Routine to find optimised pivot density coefficient ns and pivot number n0 based on lowest pivot diffusion rate
 
