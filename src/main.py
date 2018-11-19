@@ -84,7 +84,8 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 		natom = len(atoms)
 		nmol = len(molecules)
 		sys_M = [atom.element.mass for atom in traj.topology.atoms]
-		nframe = int(raw_input("\nEnter number of simulation frames: "))
+		nframe = int(raw_input("\nEnter number of simulation frames in trajectory: "))
+		N0 = [0, 0]
 
 		checkfile = ut.update_checkfile(checkfile_name, 'dim', dim)
 		checkfile = ut.update_checkfile(checkfile_name, 'mol', mol)
@@ -95,6 +96,7 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 		checkfile = ut.update_checkfile(checkfile_name, 'AT', AT)
 		checkfile = ut.update_checkfile(checkfile_name, 'at_index', at_index)
 		checkfile = ut.update_checkfile(checkfile_name, 'sys_M', sys_M)
+		checkfile = ut.update_checkfile(checkfile_name, 'N0', N0)
 
 	else:
 
@@ -108,6 +110,10 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 		sys_M = checkfile['sys_M']
 		AT = checkfile['AT']
 		at_index = checkfile['at_index']
+		try: N0 = checkfile['N0']
+		except:
+			N0 = [0, 0]
+			checkfile = ut.update_checkfile(checkfile_name, 'N0', N0)			
 
 		print "Number of simulation frames: {}".format(nframe)
 		print "Simulation cell xyz dimensions in Angstoms: {}\n".format(dim)
@@ -208,51 +214,23 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 		checkfile = ut.update_checkfile(checkfile_name, 'phi', phi)
 
 	if ('-n0' in sys.argv):
-                n0 = int(sys.argv[sys.argv.index('-n0') + 1])
-                checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
+                N0[recon] = int(sys.argv[sys.argv.index('-n0') + 1])
+                checkfile = ut.update_checkfile(checkfile_name, 'N0', N0)
         else:
 		try:
-			if bool(raw_input("\nUse surface pivot number found in checkfile? {} pivots (Y/N): ".format(checkfile['n0'])).upper() == 'Y'):
-				n0 = checkfile['n0']
+			if bool(raw_input("\nUse surface pivot number found in checkfile? {} pivots (Y/N): ".format(N0[recon])).upper() == 'Y'): pass
 			else: raise Exception
 		except:
 			if bool(raw_input("\nManually enter in new surface pivot number? (search will commence otherwise): (Y/N)").upper() == 'Y'):
-				n0 = int(raw_input("\nEnter number of surface pivots: "))
-				checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
+				N0[recon] = int(raw_input("\nEnter number of surface pivots: "))
 			else:
 				print "\n-------OPTIMISING SURFACE DENSITY-------\n"
 
 				start_ns = 0.5
 				step_ns = 0.05
-				ns, n0 = ism.optimise_ns_diff(data_dir, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, 1,
+				ns, N0[recon] = ism.optimise_ns_diff(data_dir, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, recon,
 												ncube=ncube, vlim=vlim, tau=tau, max_r=max_r)
-				checkfile = ut.update_checkfile(checkfile_name, 'n0', n0)
-	if recon:
-		RECON = [0, 1, 2]
-		if ('-n0_r' in sys.argv):
-		        n0_r = int(sys.argv[sys.argv.index('-n0_r') + 1])
-		        checkfile = ut.update_checkfile(checkfile_name, 'n0_r', n0)
-		else:
-			try:
-				if bool(raw_input("\nUse reconstructed surface pivot number found in checkfile? {} pivots (Y/N): ".format(checkfile['n0_r'])).upper() == 'Y'):
-					n0_r = checkfile['n0_r']
-				else: raise Exception
-			except:
-				if bool(raw_input("\nManually enter in new reconstructed surface pivot number? (search will commence otherwise): (Y/N)").upper() == 'Y'):
-					n0_r = int(raw_input("\nEnter number of surface pivots: "))
-					checkfile = ut.update_checkfile(checkfile_name, 'n0_r', n0_r)
-				else:
-					print "\n-------OPTIMISING SURFACE DENSITY-------\n"
-
-					start_ns = 0.5
-					step_ns = 0.05
-					ns_r, n0_r = ism.optimise_ns_diff(data_dir, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, 1,
-													ncube=ncube, vlim=vlim, tau=tau, max_r=max_r)
-					checkfile = ut.update_checkfile(checkfile_name, 'n0_r', n0_r)
-		N0 = [n0, n0_r, n0]
-	else:
-		RECON = [0]
-		N0 = [n0]
+			checkfile = ut.update_checkfile(checkfile_name, 'N0', N0)
 
 	QM = range(1, qm+1)
 	print "\nResolution parameters:"
@@ -261,12 +239,12 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 	for qu in QM: print "{:12d} | {:12.4f} | {:12.4f}".format(qu, q_max / (qu*q_min), mol_sigma * q_max / (10*qu*q_min))
 	print ""
 
-	for i, recon in enumerate(RECON):
-		ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, N0[i], phi, mol_sigma, nframe, recon=recon, ncube=ncube, vlim=vlim, tau=tau, max_r=max_r, ow_coeff=ow_coeff, ow_recon=ow_recon)
-		ia.create_intrinsic_positions_dxdyz(data_dir, file_name, nmol, nframe, qm, N0[i], phi, dim, recon=recon, ow_pos=ow_intpos)
-		ia.create_intrinsic_den_curve_hist(data_dir, file_name, qm, N0[i], phi, nframe, nslice, dim, recon=recon, ow_hist=ow_hist)
-		ia.av_intrinsic_distributions(data_dir, file_name, dim, nslice, qm, N0[i], phi, nframe, nframe, recon=recon, ow_dist=ow_dist)
-	#"""
+	ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, N0[recon], phi, mol_sigma, nframe, recon=recon, ncube=ncube, vlim=vlim,
+					 tau=tau, max_r=max_r, ow_coeff=ow_coeff, ow_recon=ow_recon)
+	ia.create_intrinsic_positions_dxdyz(data_dir, file_name, nmol, nframe, qm, N0[recon], phi, dim, recon=recon, ow_pos=ow_intpos)
+	ia.create_intrinsic_den_curve_hist(data_dir, file_name, qm, N0[recon], phi, nframe, nslice, dim, recon=recon, ow_hist=ow_hist)
+	ia.av_intrinsic_distributions(data_dir, file_name, dim, nslice, qm, N0[recon], phi, nframe, nframe, recon=recon, ow_dist=ow_dist)
+
 	print"\n---- ENDING PROGRAM ----\n"
 
 if __name__ == '__main__':
