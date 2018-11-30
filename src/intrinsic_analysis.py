@@ -577,7 +577,7 @@ def xi_var(coeff, qm, qu, dim):
 	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
 	wave_filter = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
 	indices = np.argwhere(wave_filter).flatten()
-	Psi = vcheck(u_array, v_array)[indices] / 4.
+	Psi = vcheck(u_array[indices], v_array[indices]) / 4.
 
 	coeff_filter = coeff[:,:,indices]
 	mid_point = len(indices) / 2 
@@ -751,9 +751,9 @@ def H_var_mol(xmol, ymol, coeff, qm, qu, dim):
 	return H_var
 
 
-def get_frequency_set(qm, dim):
+def get_frequency_set(qm, qu, dim):
 	"""
-	get_frequency_set(qm, dim)
+	get_frequency_set(qm, qu, dim)
 
 	Returns set of unique frequencies in Fourier series
 
@@ -774,20 +774,18 @@ def get_frequency_set(qm, dim):
 		Set of unique frequencies to bin coefficients to
 	"""
 
-	q_set = []
-	q2_set = []
-
-	for u in xrange(-qm, qm):
-		for v in xrange(-qm, qm):
-			q = 4 * np.pi**2 * (u**2 / dim[0]**2 + v**2/dim[1]**2)
-			q2 = u**2 * dim[1]/dim[0] + v**2 * dim[0]/dim[1]
-
-			if q2 not in q2_set:
-				q_set.append(q)
-				q2_set.append(np.round(q2, 4))
-
-	q_set = np.sqrt(np.sort(q_set, axis=None))
-	q2_set = np.sort(q2_set, axis=None)
+	n_waves = 2 * qm +1
+	
+	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
+	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+	wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+	indices = np.argwhere(wave_check).flatten()
+	
+	q2 = 4 * np.pi**2 * (u_array[indices]**2 / dim[0]**2 + v_array[indices]**2 / dim[1]**2) 
+	q = np.sqrt(q2)
+	
+	q_set = np.unique(q)[1:]
+	q2_set = np.unique(q2)[1:]
 
 	return q_set, q2_set
 
@@ -819,28 +817,32 @@ def power_spectrum_coeff(coeff_2, qm, qu, dim):
 	
 	"""
 
-	q_set, q2_set = get_frequency_set(qm, dim)
+	n_waves = 2 * qm +1
+	
+	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
+	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+	wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+	indices = np.argwhere(wave_check).flatten()
+	
+	q2 = 4 * np.pi**2 * (u_array[indices]**2 / dim[0]**2 + v_array[indices]**2 / dim[1]**2) 
+	q = np.sqrt(q2)
+	fourier = coeff_2[indices] * vcheck(u_array[indices], v_array[indices]) / 4
 
-	p_spec_hist = np.zeros(len(q2_set))
-	p_spec_count = np.zeros(len(q2_set))
+	unique_q = np.unique(q)[1:]
+	fourier_sum = np.zeros(unique_q.shape)
+	fourier_count = np.zeros(unique_q.shape)
+	
+	for i, qi in enumerate(q):
+		index = np.where(unique_q == qi)
+		fourier_sum[index] += fourier[i]
+		fourier_count[index] += 1 
+	
+	av_fourier = fourier_sum / fourier_count 
 
-	for u in xrange(-qu, qu+1):
-		for v in xrange(-qu, qu+1):
-			j = (2 * qm + 1) * (u + qm) + (v + qm)
-			set_index = np.round(u**2*dim[1]/dim[0] + v**2*dim[0]/dim[1], 4)
-
-			if set_index != 0:
-				p_spec = coeff_2[j] * check_uv(u, v) / 4.
-				p_spec_hist[q2_set == set_index] += p_spec
-				p_spec_count[q2_set == set_index] += 1
-
-	for i in xrange(len(q2_set)):
-		if p_spec_count[i] != 0: p_spec_hist[i] *= 1. / p_spec_count[i]
-
-	return q_set, p_spec_hist
+	return unique_q, av_fourier
 
 
-def surface_tension_coeff(coeff_2, qm, qu, dim, T, error=False, std=None):
+def surface_tension_coeff(coeff_2, qm, qu, dim, T):
 	"""
 	surface_tension_coeff(coeff_2, qm, qu, dim, T)
 
@@ -862,39 +864,37 @@ def surface_tension_coeff(coeff_2, qm, qu, dim, T, error=False, std=None):
 
 	Returns
 	-------
-	q_set:  float, array_like
+	unique_q:  float, array_like
 		Set of frequencies for power spectrum histogram
-	gamma_hist:  float, array_like
+	av_gamma:  float, array_like
 		Surface tension histogram of Fouier series frequencies
 	
 	"""
 
-	q_set, q2_set = get_frequency_set(qm, dim)
-
-	gamma_hist = np.zeros(len(q2_set))
-	gamma_count = np.zeros(len(q2_set))
-
-	for u in xrange(-qu, qu+1):
-		for v in xrange(-qu, qu+1):
-			j = (2 * qm + 1) * (u + qm) + (v + qm)
-			dot_prod = np.pi**2 * (u**2 * dim[1] / dim[0] + v**2 * dim[0] / dim[1])
-			set_index = np.round(u**2*dim[1]/dim[0] + v**2*dim[0]/dim[1], 4)
-
-			if set_index != 0:
-				if error: 
-					gamma = con.k * T * 1E23 / (check_uv(u, v) * coeff_2[j]**2 * dot_prod)
-					gamma_hist[q2_set == set_index] += (gamma * std[j])#**2
-				else: 
-					gamma = con.k * T * 1E23 / (check_uv(u, v) * coeff_2[j] * dot_prod)
-					gamma_hist[q2_set == set_index] += gamma
-				gamma_count[q2_set == set_index] += 1
-
-	#if error: gamma_hist = np.sqrt(gamma_hist)
-
-	for i in xrange(len(q2_set)):
-		if gamma_count[i] != 0: gamma_hist[i] /= gamma_count[i]
+	n_waves = 2 * qm +1
 	
-	return q_set, gamma_hist 
+	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
+	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+	wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+	indices = np.argwhere(wave_check).flatten()
+	
+	q2 = 4 * np.pi**2 * (u_array[indices]**2 / dim[0]**2 + v_array[indices]**2 / dim[1]**2) 
+	q = np.sqrt(q2)
+	int_A = dim[0] * dim[1] * q2 * coeff_2[indices] * vcheck(u_array[indices], v_array[indices]) / 4
+	gamma = con.k * T * 1E23 / int_A
+
+	unique_q = np.unique(q)[1:]
+	gamma_sum = np.zeros(unique_q.shape)
+	gamma_count = np.zeros(unique_q.shape)
+	
+	for i, qi in enumerate(q):
+		index = np.where(unique_q == qi)
+		gamma_sum[index] += gamma[i]
+		gamma_count[index] += 1 
+	
+	av_gamma = gamma_sum / gamma_count 
+
+	return unique_q, av_gamma
 
 
 def cw_gamma_sr(q, gamma, kappa): return gamma + kappa * q**2

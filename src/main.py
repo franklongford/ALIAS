@@ -85,7 +85,7 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 		nmol = len(molecules)
 		sys_M = [atom.element.mass for atom in traj.topology.atoms]
 		nframe = int(raw_input("\nEnter number of simulation frames in trajectory: "))
-		N0 = [0, 0]
+		N0 = [None, None]
 
 		checkfile = ut.update_checkfile(checkfile_name, 'dim', dim)
 		checkfile = ut.update_checkfile(checkfile_name, 'mol', mol)
@@ -137,11 +137,9 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 				mol_M = np.zeros(nsite)
 				for i in range(nsite):
 					mol_M[i] = float(raw_input("   Enter mass for site {} g mol-1: ".format(AT[i])))
-
+			print "Using atomic site masses: {} g mol-1".format(mol_M)
 			checkfile = ut.update_checkfile(checkfile_name, 'mol_M', mol_M)
 	
-
-	print "Using atomic site masses: {} g mol-1".format(mol_M)
 	print "Molar mass: {}  g mol-1".format(np.sum(mol_M))
 
 	if ('-mol_com' in sys.argv): 

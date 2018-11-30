@@ -572,7 +572,7 @@ def view_surface(coeff, pivot, qm, qu, xmol, ymol, zmol, nxy, dim):
 		ax.plot_wireframe(X_grid, Y_grid, surface[0], color='r')
 		ax.scatter(xmol[pivot[0]], ymol[pivot[0]], zmol[pivot[0]], color='b')
 		ax.plot_wireframe(X_grid, Y_grid, surface[1], color='r')
-		ax.scatter(xmol[pivot[1]], ymol[pivot[1]], zmol[pivot[1]], color='b')
+		ax.scatter(xmol[pivot[1]], ymol[pivot[1]], zmol[pivot[1]], color='g')
 
 	a = anim.FuncAnimation(fig, update, frames=1, repeat=False)
 	#plt.savefig('plot_{}_{}.png'.format(len(pivot[0]), len(pivot[1])))
