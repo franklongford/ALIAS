@@ -43,7 +43,7 @@ def print_alias():
         print ""
 
 
-def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False, ow_intpos=False, ow_hist=False, ow_dist=False):
+def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False, ow_pos=False, ow_intpos=False, ow_hist=False, ow_dist=False):
 
 	file_end = max([0] + [pos for pos, char in enumerate(traj_file) if char == '/'])
 	traj_dir = traj_file[:file_end]
@@ -65,9 +65,9 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 	if not os.path.exists('{}.pkl'.format(checkfile_name)):
 		ut.make_checkfile(checkfile_name)
 
-		traj, MOL, dim = ut.get_sim_param('{}/{}'.format(traj_dir, traj_file), '{}/{}'.format(top_dir, top_file))
+		traj, MOL = ut.get_sim_param('{}/{}'.format(traj_dir, traj_file), '{}/{}'.format(top_dir, top_file))
 
-		print "Simulation cell xyz dimensions in Angstoms: {}\n".format(dim)
+		#print "Simulation cell xyz dimensions in Angstoms: {}\n".format(dim)
 		print "Residue types found: {}".format(len(MOL))
 		print "List of residues found: {}".format(MOL)
 
@@ -83,16 +83,15 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 		nsite = molecules[0].n_atoms
 		natom = len(atoms)
 		nmol = len(molecules)
+		nframe = 0
 		sys_M = [atom.element.mass for atom in traj.topology.atoms]
-		nframe = int(raw_input("\nEnter number of simulation frames in trajectory: "))
 		N0 = [None, None]
 
-		checkfile = ut.update_checkfile(checkfile_name, 'dim', dim)
 		checkfile = ut.update_checkfile(checkfile_name, 'mol', mol)
 		checkfile = ut.update_checkfile(checkfile_name, 'natom', natom)
 		checkfile = ut.update_checkfile(checkfile_name, 'nmol', nmol)
-		checkfile = ut.update_checkfile(checkfile_name, 'nframe', nframe)
 		checkfile = ut.update_checkfile(checkfile_name, 'nsite', nsite)
+		checkfile = ut.update_checkfile(checkfile_name, 'nframe', nframe)
 		checkfile = ut.update_checkfile(checkfile_name, 'AT', AT)
 		checkfile = ut.update_checkfile(checkfile_name, 'at_index', at_index)
 		checkfile = ut.update_checkfile(checkfile_name, 'sys_M', sys_M)
@@ -106,7 +105,6 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 		mol = checkfile['mol']
 		nframe = checkfile['nframe']
 		nsite = checkfile['nsite']
-		dim = checkfile['dim']
 		sys_M = checkfile['sys_M']
 		AT = checkfile['AT']
 		at_index = checkfile['at_index']
@@ -116,7 +114,6 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 			checkfile = ut.update_checkfile(checkfile_name, 'N0', N0)			
 
 		print "Number of simulation frames: {}".format(nframe)
-		print "Simulation cell xyz dimensions in Angstoms: {}\n".format(dim)
 		print "Using residue {} for surface identification".format(mol)
 
 	print "{} {} residues found, each containing {} atoms".format(nmol, mol, nsite)
@@ -151,13 +148,24 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 				mol_com = checkfile['mol_com']
 			else: raise Exception
 		except:
-			if bool(raw_input("\nUse atomic site as centre of molecular mass? (Y/N): ").upper() == 'Y'):
-				mol_com = AT.index(raw_input("   Site name: "))
-			else: mol_com = 'COM'
+			if bool(raw_input("\nUse atomic sites as centre of molecular mass? (Y/N): ").upper() == 'Y'):
+				sites = raw_input("   Site names: ").split()
+				mol_com = [AT.index(site) for site in sites]
+			else: mol_com = ['COM']
 			checkfile = ut.update_checkfile(checkfile_name, 'mol_com', mol_com)
 
-	file_name = "{}_{}_{}".format(traj_file.split('.')[0], mol, mol_com)
-	ut.make_mol_com('{}/{}'.format(traj_dir, traj_file), '{}/{}'.format(top_dir, top_file), data_dir, file_name, natom, nmol, at_index, nframe, dim, nsite, mol_M, sys_M, mol_com) 
+	file_name = "{}_{}_{}".format(traj_file.split('.')[0], mol, '_'.join([str(m) for m in mol_com]))
+
+	if nframe == 0 or ow_pos:
+		nframe = ut.make_mol_com('{}/{}'.format(traj_dir, traj_file), '{}/{}'.format(top_dir, top_file), data_dir, file_name, natom, nmol, AT, at_index, nsite, mol_M, sys_M, mol_com) 
+		checkfile = ut.update_checkfile(checkfile_name, 'nframe', nframe)
+		print "Number of simulation frames: {}".format(nframe)
+
+		dim = ut.load_npy(data_dir + '/pos/{}_{}_dim'.format(file_name, nframe)).mean(axis=0)
+		checkfile = ut.update_checkfile(checkfile_name, 'dim', dim)
+
+	dim = checkfile['dim']
+	print "Simulation cell xyz dimensions in Angstoms: {}\n".format(dim)
 
 	if ('-mol_sigma' in sys.argv): 
                 mol_sigma = float(sys.argv[sys.argv.index('-mol_sigma') + 1])
@@ -224,9 +232,8 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 			else:
 				print "\n-------OPTIMISING SURFACE DENSITY-------\n"
 
-				start_ns = 0.5
-				step_ns = 0.05
-				ns, N0[recon] = ism.optimise_ns_diff(data_dir, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, recon,
+				start_ns = 0.85
+				ns, N0[recon] = ism.optimise_ns_diff(data_dir, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, recon=recon,
 												ncube=ncube, vlim=vlim, tau=tau, max_r=max_r)
 			checkfile = ut.update_checkfile(checkfile_name, 'N0', N0)
 
@@ -239,9 +246,9 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 
 	ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, N0[recon], phi, mol_sigma, nframe, recon=recon, ncube=ncube, vlim=vlim,
 					 tau=tau, max_r=max_r, ow_coeff=ow_coeff, ow_recon=ow_recon)
-	ia.create_intrinsic_positions_dxdyz(data_dir, file_name, nmol, nframe, qm, N0[recon], phi, dim, recon=recon, ow_pos=ow_intpos)
-	ia.create_intrinsic_den_curve_hist(data_dir, file_name, qm, N0[recon], phi, nframe, nslice, dim, recon=recon, ow_hist=ow_hist)
-	ia.av_intrinsic_distributions(data_dir, file_name, dim, nslice, qm, N0[recon], phi, nframe, nframe, recon=recon, ow_dist=ow_dist)
+	#ia.create_intrinsic_positions_dxdyz(data_dir, file_name, nmol, nframe, qm, N0[recon], phi, dim, recon=recon, ow_pos=ow_intpos)
+	#ia.create_intrinsic_den_curve_hist(data_dir, file_name, qm, N0[recon], phi, nframe, nslice, dim, recon=recon, ow_hist=ow_hist)
+	#ia.av_intrinsic_distributions(data_dir, file_name, dim, nslice, qm, N0[recon], phi, nframe, nframe, recon=recon, ow_dist=ow_dist)
 
 	print"\n---- ENDING PROGRAM ----\n"
 
@@ -259,8 +266,9 @@ if __name__ == '__main__':
 	recon = ('-recon' in sys.argv)
         ow_coeff = ('-ow_coeff' in sys.argv)
         ow_recon = ('-ow_recon' in sys.argv)
+	ow_pos = ('-ow_pos' in sys.argv)
         ow_intpos = ('-ow_intpos' in sys.argv)
         ow_hist = ('-ow_hist' in sys.argv)
         ow_dist = ('-ow_dist' in sys.argv or ow_hist)
 
-	run_alias(traj_file, top_file, recon, ow_coeff, ow_recon, ow_intpos, ow_hist, ow_dist)
+	run_alias(traj_file, top_file, recon, ow_coeff, ow_recon, ow_pos, ow_intpos, ow_hist, ow_dist)

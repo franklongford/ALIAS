@@ -121,10 +121,9 @@ def get_sim_param(traj_file, top_file):
 	"""
 
 	traj = md.load_frame(traj_file, 0, top=top_file)
-	mol = list(set([molecule.name for molecule in traj.topology.residues]))
-	dim = np.array(traj.unitcell_lengths[0]) * 10
+	mol = list(set([molecule.name for molecule in traj.topology.residues]))	
 
-	return traj, mol, dim
+	return traj, mol
 
 
 def molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com):
@@ -163,19 +162,65 @@ def molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com):
 
 	"""
 	if mol_com == 'COM':
-		"USE CENTRE OF MASS AS MOLECULAR POSITION"
+		"USE COM of MOLECULE AS MOLECULAR POSITION"
 		xmol = np.sum(np.reshape(xat * mol_M, (nmol, nsite)), axis=1) * nmol / mol_M.sum()
 		ymol = np.sum(np.reshape(yat * mol_M, (nmol, nsite)), axis=1) * nmol / mol_M.sum()
 		zmol = np.sum(np.reshape(zat * mol_M, (nmol, nsite)), axis=1) * nmol / mol_M.sum()
 	
-	else:
+	elif len(mol_com) > 1:
+		"USE COM of GROUP OF ATOMS WITHIN MOLECULE MOLECULAR POSITION"
+		mol_list = np.arange(nmol) * nsite
+		mol_list = mol_list.repeat(len(mol_com)) + np.tile(mol_com, nmol)
+
+		xmol = np.sum(np.reshape(xat[mol_list] * mol_M[mol_list], 
+				(nmol, len(mol_com))), axis=1) * nmol / mol_M[mol_list].sum()
+		ymol = np.sum(np.reshape(yat[mol_list] * mol_M[mol_list], 
+				(nmol, len(mol_com))), axis=1) * nmol / mol_M[mol_list].sum()
+		zmol = np.sum(np.reshape(zat[mol_list] * mol_M[mol_list], 
+				(nmol, len(mol_com))), axis=1) * nmol / mol_M[mol_list].sum()
+	
+	elif len(mol_com) == 1:
 		"USE SINGLE ATOM AS MOLECULAR POSITION"
-		mol_list = np.arange(nmol) * nsite + int(mol_com)
+		mol_list = np.arange(nmol) * nsite + int(mol_com[0])
 		xmol = xat[mol_list]
 		ymol = yat[mol_list]
 		zmol = zat[mol_list]
 
 	return xmol, ymol, zmol
+
+
+def orientation(traj, AT):
+	"""
+	Calculates orientational unit vector for lipid models, based on vector between phosphorus group
+	and carbon backbone.
+	"""
+
+	if len(AT) == 134:
+		P_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'P')]
+		C1_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'C218')]
+		C2_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'C316')]
+
+	elif len(AT) == 138:
+		P_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'P')]
+		C1_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'C218')]
+		C2_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'C318')]
+	else:
+		P_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'PO4')]
+		C1_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'C4A')]
+		C2_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'C4B')]
+		
+	XYZ = traj.xyz * 10
+	dim = traj.unitcell_lengths * 10
+	u_vectors = np.zeros((XYZ.shape[0], len(P_atoms), 3))
+
+	for j in range(XYZ.shape[0]):
+		midpoint = (XYZ[j][C1_atoms] + XYZ[j][C2_atoms]) / 2 
+		vector = XYZ[j][P_atoms] - midpoint
+		for i, l in enumerate(dim[j]): vector[:, i] -= l * np.array(2 * vector[:, i] / l, dtype=int)
+		u_vectors[j] = unit_vector(vector)
+
+	return u_vectors
+
 
 
 def save_npy(file_path, array):
@@ -224,7 +269,7 @@ def load_npy(file_path, frames=[]):
 	return array
 
 
-def make_mol_com(traj_file, top_file, directory, file_name, natom, nmol, at_index, nframe, dim, nsite, mol_M, sys_M, mol_com):
+def make_mol_com(traj_file, top_file, directory, file_name, natom, nmol, AT, at_index, nsite, mol_M, sys_M, mol_com, nframe=0):
 	"""
 	make_mol_com(traj, directory, file_name, natom, nmol, at_index, nframe, dim, nsite, M, mol_com)
 
@@ -247,8 +292,6 @@ def make_mol_com(traj_file, top_file, directory, file_name, natom, nmol, at_inde
 		Indicies of atoms that are in molecules selected to determine intrinsic surface
 	nframe:  int
 		Number of frames in simulation trajectory
-	dim:  float, array_like; shape=(3)
-		XYZ dimensions of simulation cell
 	nsite:  int
 		Number of atomic sites in molecule
 	M:  float, array_like; shape=(nsite)
@@ -259,18 +302,19 @@ def make_mol_com(traj_file, top_file, directory, file_name, natom, nmol, at_inde
 	"""
 	print "\n-----------CREATING POSITIONAL FILES------------\n"
 	
-
 	pos_dir = directory + 'pos/'
 	if not os.path.exists(pos_dir): os.mkdir(pos_dir)
 
 	file_name_pos = file_name + '_{}'.format(nframe)
 
-	if not os.path.exists(pos_dir + file_name_pos + '_xmol.npy'):
+	if not os.path.exists(pos_dir + file_name_pos + '_zvec.npy'):
 
-		xmol = np.zeros((nframe, nmol))
-		ymol = np.zeros((nframe, nmol))
-		zmol = np.zeros((nframe, nmol))
-		COM = np.zeros((nframe, 3))
+		dim = np.zeros((0, 3))
+		xmol = np.zeros((0, nmol))
+		ymol = np.zeros((0, nmol))
+		zmol = np.zeros((0, nmol))
+		COM = np.zeros((0, 3))
+		zvec = np.zeros((0, nmol))
 
 		mol_M = np.array(mol_M * nmol)
 		sys_M = np.array(sys_M)
@@ -281,32 +325,49 @@ def make_mol_com(traj_file, top_file, directory, file_name, natom, nmol, at_inde
 
 		#for frame in xrange(nframe):
 		for i, traj in enumerate(md.iterload(traj_file, chunk=chunk, top=top_file)):
+
+			lengths = np.array(traj.unitcell_lengths)
+			zvec = np.concatenate((zvec, orientation(traj, AT)[:,:,2]))
 			chunk_index = np.arange(i*chunk, i*chunk + traj.n_frames)
 
 			XYZ = np.moveaxis(traj.xyz, 1, 2) * 10
 
 			for j, frame in enumerate(chunk_index):
-				sys.stdout.write("PROCESSING {} out of {} IMAGES\r".format(frame, nframe) )
+				sys.stdout.write("PROCESSING IMAGE {} \r".format(frame))
 				sys.stdout.flush()
 
-				COM[frame, :] = traj.xyz[j].astype('float64').T.dot(sys_M / sys_M.sum()) * 10
+				COM = np.concatenate((COM, [traj.xyz[j].astype('float64').T.dot(sys_M / sys_M.sum()) * 10]))
+				dim = np.concatenate((dim, [lengths[j] * 10]))
 
 				xat = XYZ[j][0][at_index]
 				yat = XYZ[j][1][at_index]
 				zat = XYZ[j][2][at_index]
 
-				if nsite > 1: xmol[frame], ymol[frame], zmol[frame] = molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com)
-				else: xmol[frame], ymol[frame], zmol[frame] = xat, yat, zat
+				if nsite > 1: 
+					xyz_mol = molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com)
+					xmol = np.concatenate((xmol, [xyz_mol[0]]))
+					ymol = np.concatenate((ymol, [xyz_mol[1]]))
+					zmol = np.concatenate((zmol, [xyz_mol[2]]))
 
+				else: 
+					xmol = np.concatenate((xmol, [xat]))
+					ymol = np.concatenate((ymol, [yat]))
+					zmol = np.concatenate((zmol, [zat]))
+
+		nframe = zmol.shape[0]
 		file_name_pos = file_name + '_{}'.format(nframe)
 
 		print '\nSAVING OUTPUT MOLECULAR POSITION FILES\n'
 
+		save_npy(pos_dir + file_name_pos + '_dim', dim)
 		save_npy(pos_dir + file_name_pos + '_xmol', xmol)
 		save_npy(pos_dir + file_name_pos + '_ymol', ymol)
 		save_npy(pos_dir + file_name_pos + '_zmol', zmol)
 		save_npy(pos_dir + file_name_pos + '_com', COM)
+		save_npy(pos_dir + file_name_pos + '_zvec', zvec)
 
+	return nframe
+	
 
 def bubble_sort(array, key):
 	"""
@@ -537,7 +598,9 @@ def view_surface(coeff, pivot, qm, qu, xmol, ymol, zmol, nxy, dim):
 	import matplotlib.animation as anim
 	from mpl_toolkits.mplot3d import Axes3D
 	
-	from intrinsic_sampling_method import check_uv, xi
+	from intrinsic_sampling_method import check_uv, xi, check_pbc
+
+	zmol = check_pbc(xmol, ymol, zmol, pivot, dim)
 
 	X = np.linspace(0, dim[0], nxy)
 	Y = np.linspace(0, dim[1], nxy)

@@ -71,7 +71,7 @@ def dd_wave_function(x, u, Lx):
 	return - 4 * np.pi**2 * u**2 / Lx**2 * wave_function(x, u, Lx)
 
 
-def check_pbc(zmol, surf_0, Lz):
+def check_pbc(xmol, ymol, zmol, pivots, dim, max_r=30):
 	"""
 	check_pbc(zmol, surf_0, Lz)
 
@@ -95,30 +95,35 @@ def check_pbc(zmol, surf_0, Lz):
 	zmol:  float, array_like; shape=(nmol)
 		Molecular coordinates in z dimension using most appropriate PBC
 	"""
-	
-	"Calculate shortest distance along the z axis to each surface"
-	dz1 = zmol - surf_0[0]
-	dz1 -= Lz * np.array(2 * dz1 / Lz, dtype=int) 
-	dz2 = zmol - surf_0[1]
-	dz2 -= Lz * np.array(2 * dz2 / Lz, dtype=int)  
 
-	"""
-	Find pivots where absolute shortest distance would be achieved by
-	relaxing periodic boundary conditions
-	"""
-	d_piv1 = np.where((zmol > 0) * (abs(dz1) < abs(dz2)))
-	d_piv2 = np.where((zmol < 0) * (abs(dz1) > abs(dz2)))
+	"Create pivot map"
 
-	"Relax PBC enforcement"
-	zmol[d_piv1] -= Lz
-	zmol[d_piv2] += Lz
+	for i, pivot in enumerate(pivots):
+		p_map = np.isin(np.arange(zmol.size), pivot)
 
+		for check in range(2):
+			for j, n in enumerate(pivot):
+
+				dxyz = np.stack((xmol[p_map] - xmol[n], 
+						 ymol[p_map] - ymol[n], 
+						 zmol[p_map] - zmol[n]))
+				for i, l in enumerate(dim[:2]): dxyz[i] -= l * np.array(2 * dxyz[i] / l, dtype=int)
+				dr2 = np.sum(dxyz**2, axis=0)
+				neighbour_count = np.count_nonzero(dr2 < max_r**2)
+
+				dxyz[2] += dim[2] * np.array([-1, 1])[i]
+				dr2 = np.sum(dxyz**2, axis=0)
+				neighbour_count_flip = np.count_nonzero(dr2 < max_r**2)
+
+				if neighbour_count_flip > neighbour_count: 
+					zmol[n] += dim[2] * np.array([1, -1])[i]
+			
 	return zmol
 
 
-def update_A_b(xmol, ymol, zmol, dim, qm, new_piv1, new_piv2):
+def update_A_b(xmol, ymol, zmol, dim, qm, new_pivot):
 	"""
-	update_A_b(xmol, ymol, zmol, dim, qm, n_waves, new_piv1, new_piv2)
+	update_A_b(xmol, ymol, zmol, dim, qm, n_waves, new_pivot)
 	
 	Update A matrix and b vector for new pivot selection
 
@@ -137,10 +142,9 @@ def update_A_b(xmol, ymol, zmol, dim, qm, new_piv1, new_piv2):
 		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
 	n_waves:  int
 		Number of coefficients / waves in surface
-	new_piv1:  int, array_like
-		Indices of new pivot molecules for surface 1
-	new_piv2:  int, array_like
-		Indices of new pivot molecules for surface 2
+	new_pivot:  int, array_like
+		Indices of new pivot molecules for both surfaces
+
 
 	Returns
 	-------
@@ -161,14 +165,14 @@ def update_A_b(xmol, ymol, zmol, dim, qm, new_piv1, new_piv2):
 	A = np.zeros((2, n_waves**2, n_waves**2))
 	b = np.zeros((2, n_waves**2))
 
-	fuv1 = np.zeros((n_waves**2, len(new_piv1)))
-	fuv2 = np.zeros((n_waves**2, len(new_piv2)))
+	fuv1 = np.zeros((n_waves**2, len(new_pivot[0])))
+	fuv2 = np.zeros((n_waves**2, len(new_pivot[1])))
 
 	for j in xrange(n_waves**2):
-		fuv1[j] = wave_function(xmol[new_piv1], u_array[j], dim[0]) * wave_function(ymol[new_piv1], v_array[j], dim[1])
-		b[0][j] += np.sum(zmol[new_piv1] * fuv1[j])
-		fuv2[j] = wave_function(xmol[new_piv2], u_array[j], dim[0]) * wave_function(ymol[new_piv2], v_array[j], dim[1])
-		b[1][j] += np.sum(zmol[new_piv2] * fuv2[j])
+		fuv1[j] = wave_function(xmol[new_pivot[0]], u_array[j], dim[0]) * wave_function(ymol[new_pivot[0]], v_array[j], dim[1])
+		b[0][j] += np.sum(zmol[new_pivot[0]] * fuv1[j])
+		fuv2[j] = wave_function(xmol[new_pivot[1]], u_array[j], dim[0]) * wave_function(ymol[new_pivot[1]], v_array[j], dim[1])
+		b[1][j] += np.sum(zmol[new_pivot[1]] * fuv2[j])
 
 	A[0] += np.dot(fuv1, fuv1.T)
 	A[1] += np.dot(fuv2, fuv2.T)
@@ -281,8 +285,8 @@ def pivot_selection(mol_list, zeta_list, piv_n, tau, n0):
 	new_piv = mol_list[zeta_list <= tau]
 	dz_new_piv = zeta_list[zeta_list <= tau]
 
-	#"Order pivots by zeta (shortest to longest)"
-	#ut.bubble_sort(new_piv, dz_new_piv)
+	"Order pivots by zeta (shortest to longest)"
+	ut.bubble_sort(new_piv, dz_new_piv)
 
 	"Add new pivots to pivoy list and check whether max n0 pivots are selected"
 	piv_n = np.concatenate((piv_n, new_piv))
@@ -300,6 +304,37 @@ def pivot_selection(mol_list, zeta_list, piv_n, tau, n0):
 	assert np.sum(np.isin(new_piv, mol_list)) == 0
 
 	return mol_list, new_piv, piv_n
+
+
+def pivot_swap(xmol, ymol, zmol, pivots, dim, max_r, n0):
+
+	assert (pivots[0].size + pivots[1].size == 2 * n0), (pivots[0].size + pivots[1].size, 2 * n0)
+
+	"Check equal number of pivots exists for each surface"
+	while pivots[0].size != n0 or pivots[1].size != n0:
+
+		"Identify the overloaded surface"
+		surf_g = int(pivots[0].size < pivots[1].size)
+		surf_l = int(pivots[0].size > pivots[1].size)
+		piv_g = pivots[surf_g]
+
+		"Calculate radial distances between each pivot in the surface"
+		dxyz = np.reshape(np.tile(np.stack((xmol[piv_g], ymol[piv_g], zmol[piv_g])), 
+						   (1, pivots[surf_g].size)),
+						   (3, pivots[surf_g].size, pivots[surf_g].size))
+		dxyz = np.transpose(dxyz, axes=(0, 2, 1)) - dxyz
+		for i, l in enumerate(dim[:2]): dxyz[i] -= l * np.array(2 * dxyz[i] / l, dtype=int)
+		dr2 = np.sum(dxyz**2, axis=0)
+
+		"Compose a nearest neighbour list, ordered by number of neighbours"
+		vapour_list = np.argsort(np.count_nonzero(dr2 < max_r**2, axis=1))[:1]
+		piv = pivots[surf_g][vapour_list]
+
+		"Swap the pivot molecule with the smallest number of neighbours to the other surface"
+		pivots[surf_l] = np.concatenate((pivots[surf_l], piv))
+		pivots[surf_g] = np.delete(pivots[surf_g], vapour_list)
+
+	return zmol, pivots
 
 
 def initialise_surface(qm, phi, dim, recon=False):
@@ -369,9 +404,9 @@ def initialise_surface(qm, phi, dim, recon=False):
 	return coeff, A, b, area_diag
 
 
-def H_var_values(coeff, A, curve_diag, H_var, qm, n0):
+def H_var_values(coeff, A, curve_matrix, H_var, qm, n0):
 	"""
-	H_var_values(coeff, A, curve_diag, H_var, qm, n0)
+	H_var_values(coeff, A, curve_matrix, H_var, qm, n0)
 
 	Returns values involved in iterative optimisation of mean curvature variance
 
@@ -517,7 +552,10 @@ def surface_reconstruction(coeff, A, b, area_diag, curve_matrix, H_var, qm, n0, 
 				H_var_func[0] = H_var_func[1]
 				H_var_grad[0] = H_var_grad[1]
 
+		#print( ' {:10.8f} {:10.4f} {:10.4f}'.format(psi_array[1],  H_var_coeff[0], H_var_piv[0]))
+
 	return coeff_recon, A_recon
+
 
 def intrinsic_area(coeff, qm, qu, dim):
 	"""
@@ -558,7 +596,107 @@ def intrinsic_area(coeff, qm, qu, dim):
 	return int_A
 
 
-def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncube=3, vlim=3, recon=0, surf_0=[0, 0]):
+def self_consistent_cycle(coeff, A, b, dim, qm, tau, xmol, ymol, zmol, pivot, mol_list1, mol_list2, new_piv1=[], new_piv2=[], recon=False):
+
+	print "{:^77s} | {:^43s} | {:^21s} | {:^21s}".format('TIMINGS (s)', 'PIVOTS', 'TAU', 'INT AREA')
+	print ' {:20s}  {:20s}  {:20s}  {:10s} | {:10s} {:10s} {:10s} {:10s} | {:10s} {:10s} | {:10s} {:10s}'.format('Matrix Formation', 'LU Decomposition', 'Pivot selection', 'TOTAL', 'n_piv1', '(new)', 'n_piv2', '(new)', 'surf1', 'surf2', 'surf1', 'surf2')
+	print "_" * 170
+
+	tau1 = tau
+	tau2 = tau
+	inc = 0.1 * tau
+
+	surf_param = initialise_surface(qm, phi, dim, recon)
+
+	if recon == 1: 
+		psi = phi * dim[0] * dim[1]
+		coeff, A, b, area_diag, curve_matrix, H_var = surf_param
+	else: coeff, A, b, area_diag = surf_param
+
+	building_surface = True
+	build_surf1 = True
+	build_surf2 = True
+
+	while building_surface:
+
+		start1 = time.time()
+
+		"Update A matrix and b vector"
+		temp_A, temp_b, fuv1, fuv2 = update_A_b(xmol, ymol, zmol, dim, qm, [new_piv1, new_piv2])
+
+		A += temp_A
+		b += temp_b
+
+		end1 = time.time()
+
+		"Perform LU decomosition to solve Ax = b"
+		if build_surf1: coeff[0] = LU_decomposition(A[0] + area_diag, b[0])
+		if build_surf2: coeff[1] = LU_decomposition(A[1] + area_diag, b[1])
+
+		if recon:
+			if build_surf1: 
+				coeff[0], _ = surface_reconstruction(coeff[0], A[0], b[0], area_diag, curve_matrix, H_var, qm, len(pivot[0]), psi)
+			if build_surf2:
+				coeff[1], _ = surface_reconstruction(coeff[1], A[1], b[1], area_diag, curve_matrix, H_var, qm, len(pivot[1]), psi)
+
+		end2 = time.time()
+
+		#ut.view_surface(coeff, [piv_n1, piv_n2], qm, qm, xmol, ymol, zmol, 30, dim)
+
+		"Calculate surface areas excess"
+		area1 = intrinsic_area(coeff[0], qm, qm, dim)
+		area2 = intrinsic_area(coeff[1], qm, qm, dim)
+
+		"Check whether more pivots are needed"
+		if len(pivot[0]) == n0: 
+			build_surf1 = False
+			new_piv1 = []
+		if len(pivot[1]) == n0: 
+			build_surf2 = False
+			new_piv2 = []
+
+		if build_surf1 or build_surf2:
+			finding_pivots = True
+			piv_search1 = True
+			piv_search2 = True
+		else:
+			finding_pivots = False
+			building_surface = False
+			print "ENDING SEARCH"
+
+		"Calculate distance between molecular z positions and intrinsic surface"
+		if build_surf1: zeta_list1 = make_zeta_list(xmol, ymol, zmol, dim, mol_list1, coeff[0], qm, qm)
+		if build_surf2: zeta_list2 = make_zeta_list(xmol, ymol, zmol, dim, mol_list2, coeff[1], qm, qm)
+
+		"Search for more molecular pivot sites"
+
+		while finding_pivots:
+			"Perform pivot selectrion"
+			if piv_search1 and build_surf1: mol_list1, new_piv1, pivot[0] = pivot_selection(mol_list1, zeta_list1, pivot[0], tau1, n0)
+			if piv_search2 and build_surf2: mol_list2, new_piv2, pivot[1] = pivot_selection(mol_list2, zeta_list2, pivot[1], tau2, n0)
+
+			"Check whether threshold distance tau needs to be increased"
+			if len(new_piv1) == 0 and len(pivot[0]) < n0: tau1 += inc
+			else: piv_search1 = False
+
+			if len(new_piv2) == 0 and len(pivot[1]) < n0: tau2 += inc
+			else: piv_search2 = False
+
+			if piv_search1 or piv_search2: finding_pivots = True
+			else: finding_pivots = False
+
+		end = time.time()
+
+		print ' {:20.3f}  {:20.3f}  {:20.3f}  {:10.3f} | {:10d} {:10d} {:10d} {:10d} | {:10.3f} {:10.3f} | {:10.3f} {:10.3f}'.format(end1 - start1, end2 - end1, end - end2, end - start1, len(pivot[0]), len(new_piv1), len(pivot[1]), len(new_piv2), tau1, tau2, area1, area2)			
+
+	print '\nTOTAL time: {:7.2f} s \n'.format(end - start)
+
+	pivot = np.array(pivot, dtype=int)
+
+	return coeff, pivot
+
+
+def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncube=3, vlim=3, recon=0, surf_0=[0, 0], zvec=None):
 					
 	"""
 	build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncube=3, vlim=3, recon=0, surf_0=[0, 0])
@@ -624,66 +762,54 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 	print 'Lx = {:5.3f}   Ly = {:5.3f}   qm = {:5d}\nphi = {}   n_piv = {:5d}   vlim = {:5d}   max_r = {:5.3f}'.format(dim[0], dim[1], qm, phi, n0, vlim, max_r) 
 	print 'Surface plane initial guess = {} {}'.format(surf_0[0], surf_0[1]) 
 
-	zmol = check_pbc(zmol, surf_0, dim[2])
 	pivot_search = (ncube > 0)
 
 	if not pivot_search:
+		
+		print "\n{:^74s} | {:^21s} | {:^21s}".format('TIMINGS (s)', 'PIVOTS', 'INT AREA')
+		print ' {:20s} {:20s} {:20s} {:10s} | {:10s} {:10s} | {:10s} {:10s}'.format('Pivot selection', 'Matrix Formation', 'LU Decomposition', 'TOTAL', 'n_piv1', 'n_piv2', 'surf1', 'surf2')
+		print "_" * 120
 
 		start1 = time.time()
 
-		print "\n{:^54s} | {:^21s} | {:^21s}".format('TIMINGS (s)', 'PIVOTS', 'INT AREA')
-		print ' {:20s}  {:20s} {:10s} | {:10s} {:10s} | {:10s} {:10s}'.format('Matrix Formation', 'LU Decomposition', 'TOTAL', 'n_piv1', 'n_piv2', 'surf1', 'surf2')
-		print "_" * 100
-		
-		"Divide the molecules based on proximity to each surface plane"
-		d_piv = [np.where(zmol < 0)[0], 
-			 np.where(zmol >= 0)[0]]
+		if (zvec != None).any():
+			"Separate pivots based on orientational vector"
+			piv_n1 = np.argwhere(zvec < 0).flatten()
+			piv_n2 = np.argwhere(zvec >= 0).flatten()
+			
+		else:
+			"Separate pivots based on position"
+			piv_n1 = np.argwhere(zmol < 0).flatten()
+			piv_n2 = np.argwhere(zmol >= 0).flatten()
 
-		assert (d_piv[0].size + d_piv[1].size == 2 * n0), (d_piv[0].size + d_piv[1].size, 2 * n0)
+		pivot = [piv_n1, piv_n2]
 
-		"Check equal number of pivots exists for each surface"
-		while d_piv[0].size != d_piv[1].size:
+		if not (len(pivot[0]) == n0) * (len(pivot[1]) == n0):
+			#ut.view_surface(coeff, pivot, qm, qm, xmol, ymol, zmol, 2, dim)
+			zmol, pivot = pivot_swap(xmol, ymol, zmol, pivot, dim, max_r, n0)
 
-			"Identify the overloaded surface"
-			surf_g = int(d_piv[0].size < d_piv[1].size)
-			surf_l = int(d_piv[0].size > d_piv[1].size)
-			piv_g = d_piv[surf_g]
+		zmol = check_pbc(xmol, ymol, zmol, pivot, dim)
+		pivot = np.array(pivot, dtype=int)
 
-			"Calculate radial distances between each pivot in the surface"
-			dxyz = np.reshape(np.tile(np.stack((xmol[piv_g], ymol[piv_g], zmol[piv_g])), (1, d_piv[surf_g].size)),
-							   (3, d_piv[surf_g].size, d_piv[surf_g].size))
-			dxyz = np.transpose(dxyz, axes=(0, 2, 1)) - dxyz
-			for i, l in enumerate(dim[:2]): dxyz[i] -= l * np.array(2 * dxyz[i] / l, dtype=int)
-			dr2 = np.sum(dxyz**2, axis=0)
-
-			"Compose a nearest neighbour list, ordered by number of neighbours"
-			vapour_list = np.argsort(np.count_nonzero(dr2 < max_r**2, axis=1))[:1]
-			piv = d_piv[surf_g][vapour_list]
-
-			"Swap the pivot molecule with the smallest number of neighbours to the other surface"
-			d_piv[surf_l] = np.concatenate((d_piv[surf_l], piv))
-			d_piv[surf_g] = np.delete(d_piv[surf_g], vapour_list)
-			zmol[piv] += dim[2] * np.array([-1, 1])[surf_l]
-
-		piv_n1, piv_n2 = d_piv
+		end1 = time.time()
 
 		"Update A matrix and b vector"
-		temp_A, temp_b, fuv1, fuv2 = update_A_b(xmol, ymol, zmol, dim, qm, piv_n1, piv_n2)
+		temp_A, temp_b, fuv1, fuv2 = update_A_b(xmol, ymol, zmol, dim, qm, pivot)
 
 		A += temp_A
 		b += temp_b
 
-		end1 = time.time()
+		end2 = time.time()
 
 		"Perform LU decomosition to solve Ax = b"
 		coeff[0] = LU_decomposition(A[0] + area_diag, b[0])
 		coeff[1] = LU_decomposition(A[1] + area_diag, b[1])
-
+	
 		if recon:
-			coeff[0], _ = surface_reconstruction(coeff[0], A[0], b[0], area_diag, curve_matrix, H_var, qm, len(piv_n1), psi)
-			coeff[1], _ = surface_reconstruction(coeff[1], A[1], b[1], area_diag, curve_matrix, H_var, qm, len(piv_n2), psi)
+			coeff[0], _ = surface_reconstruction(coeff[0], A[0], b[0], area_diag, curve_matrix, H_var, qm, pivot[0].size, psi)
+			coeff[1], _ = surface_reconstruction(coeff[1], A[1], b[1], area_diag, curve_matrix, H_var, qm, pivot[1].size, psi)
 
-		end2 = time.time()
+		end3 = time.time()
 
 		"Calculate surface areas excess"
 		area1 = intrinsic_area(coeff[0], qm, qm, dim)
@@ -691,12 +817,11 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 		
 		end = time.time()
 
-		print ' {:20.3f}  {:20.3f} {:10.3f} | {:10d} {:10d} | {:10.3f} {:10.3f}'.format(end1 - start1, end2 - end1, end - start1, len(piv_n1), len(piv_n2), area1, area2)
+		print ' {:20.3f} {:20.3f} {:20.3f} {:10.3f} | {:10d} {:10d} | {:10.3f} {:10.3f}'.format(end1 - start1, end2 - end1, end3 - end2, end - start1, len(pivot[0]), len(pivot[1]), area1, area2)
+
+		#ut.view_surface(coeff, pivot, qm, qm, xmol, ymol, zmol, 50, dim)
 
 	else:
-		tau1 = tau
-		tau2 = tau
-		inc = 0.1 * tau
 		piv_n1 = np.arange(ncube**2)
 		piv_n2 = np.arange(ncube**2)
 		piv_z1 = np.zeros(ncube**2)
@@ -707,7 +832,7 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 
 		dxyz = np.reshape(np.tile(np.stack((xmol, ymol, zmol)), (1, nmol)), (3, nmol, nmol))
 		dxyz = np.transpose(dxyz, axes=(0, 2, 1)) - dxyz
-		for i, l in enumerate(dim): dxyz[i] -= l * np.array(2 * dxyz[i] / l, dtype=int)
+		for i, l in enumerate(dim[:2]): dxyz[i] -= l * np.array(2 * dxyz[i] / l, dtype=int)
 		dr2 = np.sum(dxyz**2, axis=0)
 
 		vapour_list = np.where(np.count_nonzero(dr2 < max_r**2, axis=1) < vlim)
@@ -720,10 +845,10 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 		index_y = np.array(ymol * ncube / dim[1], dtype=int) % ncube
 
 		for n in mol_list:
-			if abs(zmol[n] - surf_0[0]) < abs(piv_z1[ncube*index_x[n] + index_y[n]] - surf_0[0]): 
+			if zmol[n] < piv_z1[ncube*index_x[n] + index_y[n]]: 
 				piv_n1[ncube*index_x[n] + index_y[n]] = n
 				piv_z1[ncube*index_x[n] + index_y[n]] = zmol[n]
-			elif abs(zmol[n] - surf_0[1]) < abs(piv_z2[ncube*index_x[n] + index_y[n]] - surf_0[1]): 
+			elif zmol[n] > piv_z2[ncube*index_x[n] + index_y[n]]: 
 				piv_n2[ncube*index_x[n] + index_y[n]] = n
 				piv_z2[ncube*index_x[n] + index_y[n]] = zmol[n]
 
@@ -747,90 +872,9 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 		assert piv_n1 not in mol_list1
 		assert piv_n2 not in mol_list2
 
-		print "{:^77s} | {:^43s} | {:^21s} | {:^21s}".format('TIMINGS (s)', 'PIVOTS', 'TAU', 'INT AREA')
-		print ' {:20s}  {:20s}  {:20s}  {:10s} | {:10s} {:10s} {:10s} {:10s} | {:10s} {:10s} | {:10s} {:10s}'.format('Matrix Formation', 'LU Decomposition', 'Pivot selection', 'TOTAL', 'n_piv1', '(new)', 'n_piv2', '(new)', 'surf1', 'surf2', 'surf1', 'surf2')
-		print "_" * 170
+		coeff, pivot = self_consistent_cycle(coeff, A, b, dim, qm, tau, xmol, ymol, zmol, piv_n1, piv_n2, mol_list1, mol_list2, new_piv1=[], new_piv2=[], recon=False)  
 
-		building_surface = True
-		build_surf1 = True
-		build_surf2 = True
-
-		while building_surface:
-
-			start1 = time.time()
-
-			"Update A matrix and b vector"
-			temp_A, temp_b, fuv1, fuv2 = update_A_b(xmol, ymol, zmol, dim, qm, new_piv1, new_piv2)
-
-			A += temp_A
-			b += temp_b
-
-			end1 = time.time()
-
-			"Perform LU decomosition to solve Ax = b"
-			if build_surf1: coeff[0] = LU_decomposition(A[0] + area_diag, b[0])
-			if build_surf2: coeff[1] = LU_decomposition(A[1] + area_diag, b[1])
-
-			if recon:
-				if build_surf1: 
-					coeff[0], _ = surface_reconstruction(coeff[0], A[0], b[0], area_diag, curve_matrix, H_var, qm, len(piv_n1), psi)
-				if build_surf2:
-					coeff[1], _ = surface_reconstruction(coeff[1], A[1], b[1], area_diag, curve_matrix, H_var, qm, len(piv_n2), psi)
-
-			end2 = time.time()
-
-			#ut.view_surface(coeff, [piv_n1, piv_n2], qm, qm, xmol, ymol, zmol, 30, dim)
-
-			"Check whether more pivots are needed"
-			if len(piv_n1) == n0: 
-				build_surf1 = False
-				new_piv1 = []
-			if len(piv_n2) == n0: 
-				build_surf2 = False
-				new_piv2 = []
-
-			if build_surf1 or build_surf2:
-				finding_pivots = True
-				piv_search1 = True
-				piv_search2 = True
-			else:
-				finding_pivots = False
-				building_surface = False
-				print "ENDING SEARCH"
-
-			"Calculate distance between molecular z positions and intrinsic surface"
-			if build_surf1: zeta_list1 = make_zeta_list(xmol, ymol, zmol, dim, mol_list1, coeff[0], qm, qm)
-			if build_surf2: zeta_list2 = make_zeta_list(xmol, ymol, zmol, dim, mol_list2, coeff[1], qm, qm)
-
-			"Search for more molecular pivot sites"
-
-			while finding_pivots:
-				"Perform pivot selectrion"
-				if piv_search1 and build_surf1: mol_list1, new_piv1, piv_n1 = pivot_selection(mol_list1, zeta_list1, piv_n1, tau1, n0)
-				if piv_search2 and build_surf2: mol_list2, new_piv2, piv_n2 = pivot_selection(mol_list2, zeta_list2, piv_n2, tau2, n0)
-
-				"Check whether threshold distance tau needs to be increased"
-				if len(new_piv1) == 0 and len(piv_n1) < n0: tau1 += inc
-				else: piv_search1 = False
-
-				if len(new_piv2) == 0 and len(piv_n2) < n0: tau2 += inc
-				else: piv_search2 = False
-
-				if piv_search1 or piv_search2: finding_pivots = True
-				else: finding_pivots = False
-
-			end = time.time()
-
-			"Calculate surface areas excess"
-			area1 = intrinsic_area(coeff[0], qm, qm, dim)
-			area2 = intrinsic_area(coeff[1], qm, qm, dim)
-
-			print ' {:20.3f}  {:20.3f}  {:20.3f}  {:10.3f} | {:10d} {:10d} {:10d} {:10d} | {:10.3f} {:10.3f} | {:10.3f} {:10.3f}'.format(end1 - start1, end2 - end1, end - end2, end - start1, len(piv_n1), len(new_piv1), len(piv_n2), len(new_piv2), tau1, tau2, area1, area2)			
-
-	print '\nTOTAL time: {:7.2f} s \n'.format(end - start)
-
-	pivot = np.array((piv_n1, piv_n2), dtype=int)
-
+	print('\n')
 
 	return coeff, pivot
 
@@ -1048,10 +1092,10 @@ def ddxy_ddxi(x, y, coeff, qm, qu, dim):
 	return ddx_ddxi, ddy_ddxi
 
 
-def optimise_ns_diff(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns, recon,
-			nframe_ns = 20, ncube=3, vlim=3, tau=0.5, max_r=1.5, precision=0.0005, gamma=0.5):
+def optimise_ns_diff(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, step_ns=0.05, recon=False,
+			nframe_ns = 20, ncube=3, vlim=3, tau=0.5, max_r=1.5, precision=5E-4, gamma=0.5):
 	"""
-	optimise_ns(directory, file_name, nmol, nframe, qm, phi, ncube, dim, mol_sigma, start_ns, step_ns, nframe_ns = 20, vlim=3)
+	optimise_ns(directory, file_name, nmol, nframe, qm, phi, ncube, dim, mol_sigma, start_ns, step_ns=0.05, nframe_ns=20, vlim=3)
 
 	Routine to find optimised pivot density coefficient ns and pivot number n0 based on lowest pivot diffusion rate
 
@@ -1109,6 +1153,7 @@ def optimise_ns_diff(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma
 	ymol = ut.load_npy(pos_dir + file_name + '_{}_ymol'.format(nframe), frames=range(nframe_ns))
 	zmol = ut.load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe), frames=range(nframe_ns))
 	COM = ut.load_npy(pos_dir + file_name + '_{}_com'.format(nframe), frames=range(nframe_ns))
+	zvec = ut.load_npy(pos_dir + file_name + '_{}_zvec'.format(nframe), frames=range(nframe_ns))
 
 	com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
 	zmol = zmol - com_tile
@@ -1162,7 +1207,8 @@ def optimise_ns_diff(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma
 					surf_0 = [coeff[0][index], coeff[1][index]]
 
 				coeff, pivot = build_surface(xmol[frame], ymol[frame], zmol[frame], dim, mol_sigma,
-							 qm, n0, phi, tau, max_r, ncube=ncube, vlim=vlim, surf_0=surf_0)
+						qm, n0, phi, tau, max_r, ncube=ncube, vlim=vlim, surf_0=surf_0,
+						recon=recon, zvec=zvec[frame])
 
 				ut.save_hdf5(surf_dir + file_name_coeff + '_coeff', coeff, frame, mode_coeff)
 				ut.save_hdf5(surf_dir + file_name_coeff + '_pivot', pivot, frame, mode_pivot)
@@ -1207,7 +1253,7 @@ def optimise_ns_diff(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma
 		if ns != opt_ns:
 			n0 = int(dim[0] * dim[1] * ns / mol_sigma**2)
 			file_name_coeff = '{}_{}_{}_{}_{}'.format(file_name, qm, n0, int(1./phi + 0.5), nframe)
-			print(file_name_coeff)
+			if recon: file_name_coeff += '_r'
 			os.remove(surf_dir + file_name_coeff + '_coeff.hdf5')
 			os.remove(surf_dir + file_name_coeff + '_pivot.hdf5')
 
@@ -1322,6 +1368,7 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 		xmol = ut.load_npy(pos_dir + file_name + '_{}_xmol'.format(nframe))
 		ymol = ut.load_npy(pos_dir + file_name + '_{}_ymol'.format(nframe))
 		zmol = ut.load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe))
+		zvec = ut.load_npy(pos_dir + file_name + '_{}_zvec'.format(nframe))
 		COM = ut.load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
 		nmol = xmol.shape[1]
 		com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
@@ -1353,8 +1400,7 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 					surf_0 = [coeff[0][index], coeff[1][index]]
                         
 				coeff, pivot = build_surface(xmol[frame], ymol[frame], zmol[frame], dim, mol_sigma, 
-								qm, n0, phi, tau, max_r, ncube=ncube, vlim=vlim, recon=recon,
-								surf_0=surf_0)
+								qm, n0, phi, tau, max_r, ncube=ncube, vlim=vlim, recon=recon, surf_0=surf_0, zvec=zvec[frame])
 
 				ut.save_hdf5(surf_dir + file_name_coeff + '_coeff', coeff, frame, mode_coeff)
 				ut.save_hdf5(surf_dir + file_name_coeff + '_pivot', pivot, frame, mode_pivot)

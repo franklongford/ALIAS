@@ -897,6 +897,45 @@ def surface_tension_coeff(coeff_2, qm, qu, dim, T):
 	return unique_q, av_gamma
 
 
+def intrinsic_area_coeff(coeff_2, qm, qu, dim):
+	"""
+	intrinsic_area_coeff(coeff_2, qm, qu, dim)
+
+	Calculate the intrinsic surface area spectrum from coefficients at resolution qu
+
+	Parameters
+	----------
+
+	coeff:	float, array_like; shape=(n_waves**2)
+		Optimised surface coefficients
+	qm:  int
+		Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+	qu:  int
+		Upper limit of wave frequencies in Fouier Sum representing intrinsic surface
+	dim:  float, array_like; shape=(3)
+		XYZ dimensions of simulation cell
+
+	Returns
+	-------
+
+	int_A:  float
+		Relative size of intrinsic surface area, compared to cell cross section XY
+	"""
+
+	n_waves = 2 * qm +1
+	
+	u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
+	v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
+	wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
+	indices = np.argwhere(wave_check).flatten()
+
+	q2 = np.pi**2  * vcheck(u_array[indices], v_array[indices]) * (u_array[indices]**2 / dim[0]**2 + v_array[indices]**2 / dim[1]**2)
+	int_A = q2 * coeff_2[indices]
+	int_A = 1 + 0.5 * np.sum(int_A)
+
+	return int_A
+
+
 def cw_gamma_sr(q, gamma, kappa): return gamma + kappa * q**2
 
 
@@ -951,7 +990,7 @@ def coeff_to_fourier(coeff, qm, dim):
 
 	frequencies = np.pi * 2 * (u_array.reshape(n_waves, n_waves) / dim[0] + v_array.reshape(n_waves, n_waves) / dim[1])
 
-        amplitudes = np.zeros(n_waves**2, dtype=complex)
+        amplitudes = np.zeros(coeff.shape, dtype=complex)
 
         for u in xrange(-qm,qm+1):
                 for v in xrange(-qm, qm+1):
@@ -992,8 +1031,6 @@ def coeff_to_fourier_2(coeff_2, qm, dim):
 				   np.arange(-qm, qm+1))
 	x_mat, y_mat = np.meshgrid(np.linspace(0, 1 / dim[0], n_waves), 
 				   np.linspace(0, 1 / dim[1], n_waves))
-
-	print(x_mat, y_mat)
 
 	Psi = vcheck(u_mat.flatten(), v_mat.flatten()) / 4.
 	frequencies = np.pi * 2 * (u_mat * x_mat + y_mat * v_mat) / n_waves
