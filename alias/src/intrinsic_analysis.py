@@ -15,8 +15,13 @@ Last modified 27/2/2018 by Frank Longford
 import numpy as np
 import scipy as sp, scipy.constants as con
 
-import utilities as ut
-from intrinsic_sampling_method import xi, wave_function, d_wave_function, dd_wave_function, check_uv
+from .utilities import (
+	make_hdf5, shape_check_hdf5, load_npy, save_hdf5, load_hdf5,
+	save_npy, unit_vector
+)
+from .intrinsic_sampling_method import (
+	xi, wave_function, d_wave_function, dd_wave_function, check_uv
+)
 
 import os, sys, time, tables
 
@@ -65,7 +70,7 @@ def make_pos_dxdy(xmol, ymol, coeff, nmol, dim, qm):
 	tmp_dxdy_mol = np.zeros((4, nmol)) 
 	tmp_ddxddy_mol = np.zeros((4, nmol))
 	
-	for qu in xrange(qm+1):
+	for qu in range(qm+1):
 
 		if qu == 0:
 			j = (2 * qm + 1) * qm + qm
@@ -77,7 +82,7 @@ def make_pos_dxdy(xmol, ymol, coeff, nmol, dim, qm):
 
 		else:
 			for u in [-qu, qu]:
-				for v in xrange(-qu, qu+1):
+				for v in range(-qu, qu+1):
 					j = (2 * qm + 1) * (u + qm) + (v + qm)
 
 					f_x = wave_function(xmol, u, dim[0])
@@ -98,7 +103,7 @@ def make_pos_dxdy(xmol, ymol, coeff, nmol, dim, qm):
 					tmp_ddxddy_mol[2] += ddf_ddx * f_y * coeff[1][j]
 					tmp_ddxddy_mol[3] += f_x * ddf_ddy * coeff[1][j]
 
-			for u in xrange(-qu+1, qu):
+			for u in range(-qu+1, qu):
 				for v in [-qu, qu]:
 					j = (2 * qm + 1) * (u + qm) + (v + qm)
 
@@ -163,7 +168,7 @@ def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0,
 
 	"""
 
-	print"\n--- Running Intrinsic Positions and Derivatives Routine ---\n"
+	print("\n--- Running Intrinsic Positions and Derivatives Routine ---\n")
 
 	n_waves = 2 * qm + 1
 	
@@ -180,30 +185,30 @@ def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0,
 		file_name_pos += '_r'
 
 	if not os.path.exists('{}/{}_int_z_mol.hdf5'.format(intpos_dir, file_name_pos)):
-		ut.make_hdf5(intpos_dir + file_name_pos + '_int_z_mol', (2, qm+1, nmol), tables.Float64Atom())
-		ut.make_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol', (4, qm+1, nmol), tables.Float64Atom())
-		ut.make_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol', (4, qm+1, nmol), tables.Float64Atom())
+		make_hdf5(intpos_dir + file_name_pos + '_int_z_mol', (2, qm+1, nmol), tables.Float64Atom())
+		make_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol', (4, qm+1, nmol), tables.Float64Atom())
+		make_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol', (4, qm+1, nmol), tables.Float64Atom())
 		file_check = False
 
 	elif not ow_pos:
 		"Checking number of frames in current distance files"
 		try:
-			file_check = (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_z_mol') == (nframe, 2, qm+1, nmol))
-			file_check *= (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol') == (nframe, 4, qm+1, nmol))
-			file_check *= (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol') == (nframe, 4, qm+1, nmol))
+			file_check = (shape_check_hdf5(intpos_dir + file_name_pos + '_int_z_mol') == (nframe, 2, qm+1, nmol))
+			file_check *= (shape_check_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol') == (nframe, 4, qm+1, nmol))
+			file_check *= (shape_check_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol') == (nframe, 4, qm+1, nmol))
 		except: file_check = False
 	else: file_check = False
 
 	if not file_check:
-		xmol = ut.load_npy(pos_dir + file_name + '_{}_xmol'.format(nframe), frames=range(nframe))
-		ymol = ut.load_npy(pos_dir + file_name + '_{}_ymol'.format(nframe), frames=range(nframe))
+		xmol = load_npy(pos_dir + file_name + '_{}_xmol'.format(nframe), frames=range(nframe))
+		ymol = load_npy(pos_dir + file_name + '_{}_ymol'.format(nframe), frames=range(nframe))
 
-		for frame in xrange(nframe):
+		for frame in range(nframe):
 
 			"Checking number of frames in int_z_mol file"
-			frame_check_int_z_mol = (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_z_mol')[0] <= frame)
-			frame_check_int_dxdy_mol = (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol')[0] <= frame)
-			frame_check_int_ddxddy_mol = (ut.shape_check_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol')[0] <= frame)
+			frame_check_int_z_mol = (shape_check_hdf5(intpos_dir + file_name_pos + '_int_z_mol')[0] <= frame)
+			frame_check_int_dxdy_mol = (shape_check_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol')[0] <= frame)
+			frame_check_int_ddxddy_mol = (shape_check_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol')[0] <= frame)
 
 			if frame_check_int_z_mol: mode_int_z_mol = 'a'
 			elif ow_pos: mode_int_z_mol = 'r+'
@@ -222,12 +227,12 @@ def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0,
 				sys.stdout.write("Calculating molecular distances and derivatives: frame {}\r".format(frame))
 				sys.stdout.flush()
 			
-				coeff = ut.load_hdf5(surf_dir + file_name_coeff + '_coeff', frame)
+				coeff = load_hdf5(surf_dir + file_name_coeff + '_coeff', frame)
 
 				int_z_mol, int_dxdy_mol, int_ddxddy_mol = make_pos_dxdy(xmol[frame], ymol[frame], coeff, nmol, dim, qm)
-				ut.save_hdf5(intpos_dir + file_name_pos + '_int_z_mol', int_z_mol, frame, mode_int_z_mol)
-				ut.save_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol', int_dxdy_mol, frame, mode_int_dxdy_mol)
-				ut.save_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol', int_ddxddy_mol, frame, mode_int_ddxddy_mol)
+				save_hdf5(intpos_dir + file_name_pos + '_int_z_mol', int_z_mol, frame, mode_int_z_mol)
+				save_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol', int_dxdy_mol, frame, mode_int_dxdy_mol)
+				save_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol', int_ddxddy_mol, frame, mode_int_ddxddy_mol)
 
 
 def make_int_mol_count(zmol, int_z_mol, nmol, nslice, qm, dim):
@@ -263,7 +268,7 @@ def make_int_mol_count(zmol, int_z_mol, nmol, nslice, qm, dim):
 	lslice = dim[2] / nslice
 	mol_count_array = np.zeros((qm+1, nslice))
 
-	for qu in xrange(qm+1):
+	for qu in range(qm+1):
 
 		temp_mol_count_array = np.zeros((nslice))
 
@@ -323,7 +328,7 @@ def den_curve_hist(zmol, int_z_mol, int_ddxddy_mol, nmol, nslice, nz, qm, dim, m
 
 	import matplotlib.pyplot as plt
 
-	for qu in xrange(qm+1):
+	for qu in range(qm+1):
 
 		temp_count_corr_array = np.zeros((nslice, nz))
 
@@ -406,7 +411,7 @@ def create_intrinsic_den_curve_hist(directory, file_name, qm, n0, phi, nframe, n
 		Whether to overwrite density and curvature distributions (default=False)
 	"""
 
-	print"\n--- Running Intrinsic Density and Curvature Routine --- \n"
+	print("\n--- Running Intrinsic Density and Curvature Routine --- \n")
 
 	surf_dir = directory + 'surface/'
 	pos_dir = directory + 'pos/'
@@ -424,26 +429,26 @@ def create_intrinsic_den_curve_hist(directory, file_name, qm, n0, phi, nframe, n
 		file_name_hist += '_r'
 
 	if not os.path.exists(intden_dir + file_name_hist + '_count_corr.hdf5'):
-		ut.make_hdf5(intden_dir + file_name_hist + '_count_corr', (qm+1, nslice, nz), tables.Float64Atom())
+		make_hdf5(intden_dir + file_name_hist + '_count_corr', (qm+1, nslice, nz), tables.Float64Atom())
 		file_check = False
 
 	elif not ow_hist:
 		"Checking number of frames in current distribution files"
-		try: file_check = (ut.shape_check_hdf5(intden_dir + file_name_hist + '_count_corr') == (nframe, qm+1, nslice, nz))
+		try: file_check = (shape_check_hdf5(intden_dir + file_name_hist + '_count_corr') == (nframe, qm+1, nslice, nz))
 		except: file_check = False
 	else:file_check = False
 
 	if not file_check:
-		zmol = ut.load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe))
-		COM = ut.load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
+		zmol = load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe))
+		COM = load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
 		nmol = zmol.shape[1]
 		com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
 		zmol = zmol - com_tile
 
-		for frame in xrange(nframe):
+		for frame in range(nframe):
 
 			"Checking number of frames in hdf5 files"
-			frame_check_count_corr = (ut.shape_check_hdf5(intden_dir + file_name_hist + '_count_corr')[0] <= frame)
+			frame_check_count_corr = (shape_check_hdf5(intden_dir + file_name_hist + '_count_corr')[0] <= frame)
 
 			if frame_check_count_corr: mode_count_corr = 'a'
 			elif ow_hist: mode_count_corr = 'r+'
@@ -454,11 +459,11 @@ def create_intrinsic_den_curve_hist(directory, file_name, qm, n0, phi, nframe, n
 				sys.stdout.write("Calculating position and curvature distributions: frame {}\r".format(frame))
 				sys.stdout.flush()
 
-				int_z_mol = ut.load_hdf5(intpos_dir + file_name_pos + '_int_z_mol', frame)
-				int_ddxddy_mol = ut.load_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol', frame)
+				int_z_mol = load_hdf5(intpos_dir + file_name_pos + '_int_z_mol', frame)
+				int_ddxddy_mol = load_hdf5(intpos_dir + file_name_pos + '_int_ddxddy_mol', frame)
 
 				count_corr_array = den_curve_hist(zmol[frame], int_z_mol, int_ddxddy_mol, nmol, nslice, nz, qm, dim)
-				ut.save_hdf5(intden_dir + file_name_hist + '_count_corr', count_corr_array, frame, mode_count_corr)
+				save_hdf5(intden_dir + file_name_hist + '_count_corr', count_corr_array, frame, mode_count_corr)
 				
 
 def av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, nframe, nsample, nz=100, recon=0, ow_dist=False):
@@ -520,22 +525,22 @@ def av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, n
 
 		int_den_curve_matrix = np.zeros((qm+1, nslice, nz))
 
-		print "\n--- Loading in Density and Curvature Distributions ---\n"
+		print("\n--- Loading in Density and Curvature Distributions ---\n")
 
 		lslice = dim[2] / nslice
 		Vslice = dim[0] * dim[1] * lslice
 
-		for frame in xrange(nsample):
+		for frame in range(nsample):
 			sys.stdout.write("Frame {}\r".format(frame))
 			sys.stdout.flush()
 
-			count_corr_array = ut.load_hdf5(intden_dir + file_name_hist + '_count_corr', frame)
+			count_corr_array = load_hdf5(intden_dir + file_name_hist + '_count_corr', frame)
 			int_den_curve_matrix += count_corr_array / (nsample * Vslice)
 
-		ut.save_npy(intden_dir + file_name_dist + '_int_den_curve', int_den_curve_matrix)
+		save_npy(intden_dir + file_name_dist + '_int_den_curve', int_den_curve_matrix)
 
 	else:
-		int_den_curve_matrix = ut.load_npy(intden_dir + file_name_dist + '_int_den_curve')
+		int_den_curve_matrix = load_npy(intden_dir + file_name_dist + '_int_den_curve')
 
 	int_density = np.sum(int_den_curve_matrix, axis=2) / 2.
 	int_curvature = np.sum(np.moveaxis(int_den_curve_matrix, 1, 2), axis=2) / 2.
@@ -631,8 +636,8 @@ def H_xy(x, y, coeff, qm, qu, dim):
 		H = -4 * np.pi**2 * np.sum((u_array[indices]**2 / dim[0]**2 + v_array[indices]**2 / dim[1]**2) * fuv * coeff[indices])
 	else:
 		H_array = np.zeros(x.shape)
-		for u in xrange(-qu, qu+1):
-			for v in xrange(-qu, qu+1):
+		for u in range(-qu, qu+1):
+			for v in range(-qu, qu+1):
 				j = (2 * qm + 1) * (u + qm) + (v + qm)
 				H_array += wave_function(x, u, dim[0]) * wave_function(y, v, dim[1]) * (u**2 / dim[0]**2 + v**2 / dim[1]**2) * coeff[j]
 		H = -4 * np.pi**2 * H_array
@@ -739,8 +744,8 @@ def H_var_mol(xmol, ymol, coeff, qm, qu, dim):
 
 	"Form the diagonal xi^2 terms and b vector solutions"
         fuv = np.zeros((n_waves**2, nmol))
-        for u in xrange(-qu, qu+1):
-		for v in xrange(-qu, qu+1):
+        for u in range(-qu, qu+1):
+		for v in range(-qu, qu+1):
 			j = (2 * qm + 1) * (u + qm) + (v + qm)
                 	fuv[j] = ism.wave_function(xmol, u_array[j], dim[0]) * ism.wave_function(ymol, v_array[j], dim[1])
 	ffuv = np.dot(fuv[indices], fuv[indices].T)
@@ -992,8 +997,8 @@ def coeff_to_fourier(coeff, qm, dim):
 
         amplitudes = np.zeros(coeff.shape, dtype=complex)
 
-        for u in xrange(-qm,qm+1):
-                for v in xrange(-qm, qm+1):
+        for u in range(-qm,qm+1):
+                for v in range(-qm, qm+1):
                         index = n_waves * (u + qm) + (v + qm)
 
                         j1 = n_waves * (abs(u) + qm) + (abs(v) + qm)
@@ -1038,8 +1043,8 @@ def coeff_to_fourier_2(coeff_2, qm, dim):
 
 	A = np.zeros((n_waves, n_waves))
 
-	for i in xrange(n_waves):
-		for j in xrange(n_waves):
+	for i in range(n_waves):
+		for j in range(n_waves):
 			A[i][j] += (amplitudes_2 * np.exp(-2 * np.pi * 1j * (u_mat * x_mat[i][j] + y_mat[i][j] * v_mat) / n_waves)).sum()
 	
 
@@ -1121,7 +1126,7 @@ def make_den_curve(directory, zmol, int_z_mol, int_dxdy_mol, coeff, nmol, nslice
 
 	count_corr_array = np.zeros((qm+1, nslice, nz))
 
-	for qu in xrange(qm+1):
+	for qu in range(qm+1):
 
 		temp_count_corr_array = np.zeros((nslice, nz))
 
@@ -1139,8 +1144,8 @@ def make_den_curve(directory, zmol, int_z_mol, int_dxdy_mol, coeff, nmol, nslice
 		index1_mol = np.array((z1 + dim[2]/2.) * nslice / dim[2], dtype=int) % nslice
 		index2_mol = np.array((z2 + dim[2]/2.) * nslice / dim[2], dtype=int) % nslice
 
-		normal1 = ut.unit_vector(np.array([-dzx1, -dzy1, np.ones(nmol)]))
-		normal2 = ut.unit_vector(np.array([-dzx2, -dzy2, np.ones(nmol)]))
+		normal1 = unit_vector(np.array([-dzx1, -dzy1, np.ones(nmol)]))
+		normal2 = unit_vector(np.array([-dzx2, -dzy2, np.ones(nmol)]))
 
 		index1_nz = np.array(abs(normal1[2]) * nz, dtype=int) % nz
 		index2_nz = np.array(abs(normal2[2]) * nz, dtype=int) % nz
@@ -1186,7 +1191,7 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 		Whether to overwrite density and curvature distributions (default=False)
 	"""
 
-	print"\n--- Running Intrinsic Density and Curvature Routine --- \n"
+	print("\n--- Running Intrinsic Density and Curvature Routine --- \n")
 
 	surf_dir = directory + 'surface/'
 	pos_dir = directory + 'pos/'
@@ -1206,26 +1211,26 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 		file_name_coeff += '_r'
 
 	if not os.path.exists(intden_dir + file_name_hist + '_count_corr.hdf5'):
-		ut.make_hdf5(intden_dir + file_name_hist + '_count_corr', (qm+1, nslice, nz), tables.Float64Atom())
+		make_hdf5(intden_dir + file_name_hist + '_count_corr', (qm+1, nslice, nz), tables.Float64Atom())
 		file_check = False
 
 	elif not ow_hist:
 		"Checking number of frames in current distribution files"
-		try: file_check = (ut.shape_check_hdf5(intden_dir + file_name_hist + '_count_corr') == (nframe, qm+1, nslice, nz))
+		try: file_check = (shape_check_hdf5(intden_dir + file_name_hist + '_count_corr') == (nframe, qm+1, nslice, nz))
 		except: file_check = False
 	else:file_check = False
 
 	if not file_check:
-		zmol = ut.load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe))
-		COM = ut.load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
+		zmol = load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe))
+		COM = load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
 		nmol = zmol.shape[1]
 		com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
 		zmol = zmol - com_tile
 
-		for frame in xrange(nframe):
+		for frame in range(nframe):
 
 			"Checking number of frames in hdf5 files"
-			frame_check_count_corr = (ut.shape_check_hdf5(intden_dir + file_name_hist + '_count_corr') <= frame)
+			frame_check_count_corr = (shape_check_hdf5(intden_dir + file_name_hist + '_count_corr') <= frame)
 
 			if frame_check_count_corr: mode_count_corr = 'a'
 			elif ow_hist: mode_count_corr = 'r+'
@@ -1236,10 +1241,9 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe, n
 				sys.stdout.write("Calculating position and curvature distributions: frame {}\r".format(frame))
 				sys.stdout.flush()
 
-				coeff = ut.load_hdf5(surf_dir + file_name_coeff + '_coeff', frame)
-				int_z_mol = ut.load_hdf5(intpos_dir + file_name_pos + '_int_z_mol', frame)
-				int_dxdy_mol = ut.load_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol', frame)
+				coeff = load_hdf5(surf_dir + file_name_coeff + '_coeff', frame)
+				int_z_mol = load_hdf5(intpos_dir + file_name_pos + '_int_z_mol', frame)
+				int_dxdy_mol = load_hdf5(intpos_dir + file_name_pos + '_int_dxdy_mol', frame)
 
 				count_corr_array = make_den_curve(directory, zmol[frame], int_z_mol, int_dxdy_mol, coeff, nmol, nslice, nz, qm, dim)
-				ut.save_hdf5(intden_dir + file_name_hist + '_count_corr', count_corr_array, frame, mode_count_corr)
-
+				save_hdf5(intden_dir + file_name_hist + '_count_corr', count_corr_array, frame, mode_count_corr)

@@ -25,22 +25,20 @@ import numpy as np
 import sys, os, subprocess
 import mdtraj as md
 
-import utilities as ut
-import intrinsic_sampling_method as ism
-import intrinsic_analysis as ia
+import alias.src.utilities as ut
+import alias.src.intrinsic_sampling_method as ism
+import alias.src.intrinsic_analysis as ia
 
 def print_alias():
 
-	print ' '+ '_' * 43
-        print "|                   __ __             ____  |"
-        print "|     /\     |        |       /\     /      |"
-        print "|    /  \    |        |      /  \    \___   |"
-        print "|   /___ \   |        |     /___ \       \  |"
-        print "|  /      \  |____  __|__  /      \  ____/  |"
-        print '|'+ '_' * 43 + '|' + '  v1.2.1'
-        print ""
-        print "    Air-Liquid Interface Analysis Suite"
-        print ""
+	print(' '+ '_' * 43)
+        print("|                   __ __             ____  |")
+        print("|     /\     |        |       /\     /      |")
+        print("|    /  \    |        |      /  \    \___   |")
+        print("|   /___ \   |        |     /___ \       \  |")
+        print("|  /      \  |____  __|__  /      \  ____/  |")
+        print('|'+ '_' * 43 + '|' + '  v1.2.1')
+        print("\n    Air-Liquid Interface Analysis Suite \n")
 
 
 def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False, ow_pos=False, ow_intpos=False, ow_hist=False, ow_dist=False):
@@ -60,7 +58,7 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 	if not os.path.exists(data_dir): os.mkdir(data_dir)
 	if not os.path.exists(figure_dir): os.mkdir(figure_dir)
 
-	print "Loading trajectory file {} using {} topology".format(traj_file, top_file)
+	print("Loading trajectory file {} using {} topology".format(traj_file, top_file))
 	checkfile_name = alias_dir + traj_file.split('.')[0] + '_chk'
 	if not os.path.exists('{}.pkl'.format(checkfile_name)):
 		ut.make_checkfile(checkfile_name)
@@ -68,13 +66,13 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 		traj, MOL = ut.get_sim_param('{}/{}'.format(traj_dir, traj_file), '{}/{}'.format(top_dir, top_file))
 
 		#print "Simulation cell xyz dimensions in Angstoms: {}\n".format(dim)
-		print "Residue types found: {}".format(len(MOL))
-		print "List of residues found: {}".format(MOL)
+		print("Residue types found: {}".format(len(MOL)))
+		print("List of residues found: {}".format(MOL))
 
-		if len(MOL) > 1: mol = raw_input("\nChoose residue to use for surface identification: ")
+		if len(MOL) > 1: mol = input("\nChoose residue to use for surface identification: ")
 		else: 
 			mol = MOL[0]
-			print "Using residue {} for surface identification".format(mol)
+			print("Using residue {} for surface identification".format(mol))
 		atoms = [atom for atom in traj.topology.atoms if (atom.residue.name == mol)]
 		molecules = [molecule for molecule in traj.topology.residues if (molecule.name == mol)]
 
@@ -113,71 +111,71 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 			N0 = [0, 0]
 			checkfile = ut.update_checkfile(checkfile_name, 'N0', N0)			
 
-		print "Number of simulation frames: {}".format(nframe)
-		print "Using residue {} for surface identification".format(mol)
+		print("Number of simulation frames: {}".format(nframe))
+		print("Using residue {} for surface identification".format(mol))
 
-	print "{} {} residues found, each containing {} atoms".format(nmol, mol, nsite)
-	print "Atomic sites: {}".format(AT)
+	print("{} {} residues found, each containing {} atoms".format(nmol, mol, nsite))
+	print("Atomic sites: {}".format(AT))
 
 	if ('-M' in sys.argv): 
 		mol_M = sys.argv[sys.argv.index('[') + 1 : sys.argv.index(']')]
 		mol_M = [float(m) for m in mol_M]
 	else:
 		try:
-			if bool(raw_input("\nUse elemental masses found in checkfile? {} g mol-1 (Y/N): ".format(checkfile['mol_M'])).upper() == 'Y'):
+			if bool(input("\nUse elemental masses found in checkfile? {} g mol-1 (Y/N): ".format(checkfile['mol_M'])).upper() == 'Y'):
 				mol_M = checkfile['mol_M']
 			else: raise Exception
 		except:
-			if bool(raw_input("\nUse standard elemental masses? (Y/N): ").upper() == 'Y'):
+			if bool(input("\nUse standard elemental masses? (Y/N): ").upper() == 'Y'):
 				mol_M = [mass for mass in sys_M][:nsite]
 			else:
 				mol_M = np.zeros(nsite)
 				for i in range(nsite):
-					mol_M[i] = float(raw_input("   Enter mass for site {} g mol-1: ".format(AT[i])))
-			print "Using atomic site masses: {} g mol-1".format(mol_M)
+					mol_M[i] = float(input("   Enter mass for site {} g mol-1: ".format(AT[i])))
+			print("Using atomic site masses: {} g mol-1".format(mol_M))
 			checkfile = ut.update_checkfile(checkfile_name, 'mol_M', mol_M)
 	
-	print "Molar mass: {}  g mol-1".format(np.sum(mol_M))
+	print("Molar mass: {}  g mol-1".format(np.sum(mol_M)))
 
 	if ('-mol_com' in sys.argv): 
                 mol_com = int(sys.argv[sys.argv.index('-mol_com') + 1])
                 checkfile = ut.update_checkfile(checkfile_name, 'mol_com', mol_com)
         else:
-		try:
-			if bool(raw_input("\nUse centre of molecular mass in checkfile? {} (Y/N): ".format(checkfile['mol_com'])).upper() == 'Y'):
-				mol_com = checkfile['mol_com']
-			else: raise Exception
-		except:
-			if bool(raw_input("\nUse atomic sites as centre of molecular mass? (Y/N): ").upper() == 'Y'):
-				sites = raw_input("   Site names: ").split()
-				mol_com = [AT.index(site) for site in sites]
-			else: mol_com = ['COM']
-			checkfile = ut.update_checkfile(checkfile_name, 'mol_com', mol_com)
+			try:
+				if bool(input("\nUse centre of molecular mass in checkfile? {} (Y/N): ".format(checkfile['mol_com'])).upper() == 'Y'):
+					mol_com = checkfile['mol_com']
+				else: raise Exception
+			except:
+				if bool(input("\nUse atomic sites as centre of molecular mass? (Y/N): ").upper() == 'Y'):
+					sites = input("   Site names: ").split()
+					mol_com = [AT.index(site) for site in sites]
+				else: mol_com = ['COM']
+				checkfile = ut.update_checkfile(checkfile_name, 'mol_com', mol_com)
 
 	file_name = "{}_{}_{}".format(traj_file.split('.')[0], mol, '_'.join([str(m) for m in mol_com]))
 
 	if nframe == 0 or ow_pos:
 		nframe = ut.make_mol_com('{}/{}'.format(traj_dir, traj_file), '{}/{}'.format(top_dir, top_file), data_dir, file_name, natom, nmol, AT, at_index, nsite, mol_M, sys_M, mol_com) 
 		checkfile = ut.update_checkfile(checkfile_name, 'nframe', nframe)
-		print "Number of simulation frames: {}".format(nframe)
+		print("Number of simulation frames: {}".format(nframe))
 
 		dim = ut.load_npy(data_dir + '/pos/{}_{}_dim'.format(file_name, nframe)).mean(axis=0)
 		checkfile = ut.update_checkfile(checkfile_name, 'dim', dim)
 
 	dim = checkfile['dim']
-	print "Simulation cell xyz dimensions in Angstoms: {}\n".format(dim)
+	print("Simulation cell xyz dimensions in Angstoms: {}\n".format(dim))
 
 	if ('-mol_sigma' in sys.argv): 
                 mol_sigma = float(sys.argv[sys.argv.index('-mol_sigma') + 1])
                 checkfile = ut.update_checkfile(checkfile_name, 'mol_sigma', mol_sigma)
         else:
-		try:
-			if bool(raw_input("\nUse molecular radius found in checkfile? {} Angstroms (Y/N): ".format(checkfile['mol_sigma'])).upper() == 'Y'):
-				mol_sigma = checkfile['mol_sigma']
-			else: raise Exception
-		except: 
-			mol_sigma = float(raw_input("Enter molecular radius: (Angstroms) "))
-			checkfile = ut.update_checkfile(checkfile_name, 'mol_sigma', mol_sigma)
+			try:
+				if bool(input("\nUse molecular radius found in checkfile? {} Angstroms (Y/N): ".format(checkfile['mol_sigma'])).upper() == 'Y'):
+					mol_sigma = checkfile['mol_sigma']
+				else: raise Exception
+			except:
+				mol_sigma = float(input("Enter molecular radius: (Angstroms) "))
+				checkfile = ut.update_checkfile(checkfile_name, 'mol_sigma', mol_sigma)
 
 	lslice = 0.05 * mol_sigma
 	nslice = int(dim[2] / lslice)
@@ -187,9 +185,9 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 	q_min = 2 * np.pi / np.sqrt(dim[0] * dim[1])
 	qm = int(q_max / q_min)
 
-	print "\n------STARTING INTRINSIC SAMPLING-------\n"
-	print "Max wavelength = {:12.4f} sigma   Min wavelength = {:12.4f} sigma".format(q_max, q_min)
-	print "Max frequency qm = {:6d}".format(qm)
+	print("\n------STARTING INTRINSIC SAMPLING-------\n")
+	print("Max wavelength = {:12.4f} sigma   Min wavelength = {:12.4f} sigma".format(q_max, q_min))
+	print("Max frequency qm = {:6d}".format(qm))
 
 	if ('-vlim' in sys.argv): 
                 vlim = int(sys.argv[sys.argv.index('-vlim') + 1])
@@ -224,13 +222,13 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
                 checkfile = ut.update_checkfile(checkfile_name, 'N0', N0)
         else:
 		try:
-			if bool(raw_input("\nUse surface pivot number found in checkfile? {} pivots (Y/N): ".format(N0[recon])).upper() == 'Y'): pass
+			if bool(input("\nUse surface pivot number found in checkfile? {} pivots (Y/N): ".format(N0[recon])).upper() == 'Y'): pass
 			else: raise Exception
 		except:
-			if bool(raw_input("\nManually enter in new surface pivot number? (search will commence otherwise): (Y/N)").upper() == 'Y'):
-				N0[recon] = int(raw_input("\nEnter number of surface pivots: "))
+			if bool(input("\nManually enter in new surface pivot number? (search will commence otherwise): (Y/N)").upper() == 'Y'):
+				N0[recon] = int(input("\nEnter number of surface pivots: "))
 			else:
-				print "\n-------OPTIMISING SURFACE DENSITY-------\n"
+				print("\n-------OPTIMISING SURFACE DENSITY-------\n")
 
 				start_ns = 0.85
 				ns, N0[recon] = ism.optimise_ns_diff(data_dir, file_name, nmol, nframe, qm, phi, dim, mol_sigma, start_ns, recon=recon,
@@ -238,11 +236,11 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 			checkfile = ut.update_checkfile(checkfile_name, 'N0', N0)
 
 	QM = range(1, qm+1)
-	print "\nResolution parameters:"
-	print "\n{:12s} | {:12s} | {:12s}".format('qu', "lambda (sigma)", "lambda (nm)")
-	print "-" * 14 * 5 
-	for qu in QM: print "{:12d} | {:12.4f} | {:12.4f}".format(qu, q_max / (qu*q_min), mol_sigma * q_max / (10*qu*q_min))
-	print ""
+	print("\nResolution parameters:")
+	print("\n{:12s} | {:12s} | {:12s}".format('qu', "lambda (sigma)", "lambda (nm)"))
+	print("-" * 14 * 5 )
+	for qu in QM: print("{:12d} | {:12.4f} | {:12.4f}".format(qu, q_max / (qu*q_min), mol_sigma * q_max / (10*qu*q_min)))
+	print("")
 
 	ism.create_intrinsic_surfaces(data_dir, file_name, dim, qm, N0[recon], phi, mol_sigma, nframe, recon=recon, ncube=ncube, vlim=vlim,
 					 tau=tau, max_r=max_r, ow_coeff=ow_coeff, ow_recon=ow_recon)
@@ -250,25 +248,31 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 	#ia.create_intrinsic_den_curve_hist(data_dir, file_name, qm, N0[recon], phi, nframe, nslice, dim, recon=recon, ow_hist=ow_hist)
 	#ia.av_intrinsic_distributions(data_dir, file_name, dim, nslice, qm, N0[recon], phi, nframe, nframe, recon=recon, ow_dist=ow_dist)
 
-	print"\n---- ENDING PROGRAM ----\n"
+	print("\n---- ENDING PROGRAM ----\n")
 
-if __name__ == '__main__':
+
+def alias():
 	print_alias()
 
-	if len(sys.argv) < 2: traj_file = raw_input("Enter trajectory file: ")
-	else: traj_file = sys.argv[1]
-	while not os.path.exists(traj_file): traj_file = raw_input("\nTrajectory file not recognised: Re-enter file path: ")
+	if len(sys.argv) < 2:
+		traj_file = input("Enter trajectory file: ")
+	else:
+		traj_file = sys.argv[1]
+	while not os.path.exists(traj_file): traj_file = input("\nTrajectory file not recognised: Re-enter file path: ")
 
-	if len(sys.argv) < 3: top_file = raw_input("\nEnter topology file: ")
-	else: top_file = sys.argv[2]
-	while not os.path.exists(top_file): top_file = raw_input("\nTopology file not recognised: Re-enter file path: ")
+	if len(sys.argv) < 3:
+		top_file = input("\nEnter topology file: ")
+	else:
+		top_file = sys.argv[2]
+	while not os.path.exists(top_file): top_file = input("\nTopology file not recognised: Re-enter file path: ")
 
 	recon = ('-recon' in sys.argv)
-        ow_coeff = ('-ow_coeff' in sys.argv)
-        ow_recon = ('-ow_recon' in sys.argv)
+	ow_coeff = ('-ow_coeff' in sys.argv)
+	ow_recon = ('-ow_recon' in sys.argv)
 	ow_pos = ('-ow_pos' in sys.argv)
-        ow_intpos = ('-ow_intpos' in sys.argv)
-        ow_hist = ('-ow_hist' in sys.argv)
-        ow_dist = ('-ow_dist' in sys.argv or ow_hist)
+	ow_intpos = ('-ow_intpos' in sys.argv)
+	ow_hist = ('-ow_hist' in sys.argv)
+	ow_dist = ('-ow_dist' in sys.argv or ow_hist)
 
 	run_alias(traj_file, top_file, recon, ow_coeff, ow_recon, ow_pos, ow_intpos, ow_hist, ow_dist)
+
