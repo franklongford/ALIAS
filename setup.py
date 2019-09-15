@@ -11,11 +11,6 @@ PLATFORMS = ['Linux', 'Unix', 'Mac OS X']
 PACKAGE_DIR = {'alias/src': '.'}
 VERSION = '1.3.0.dev'
 
-with open('README.rst') as f:
-    readme = f.read()
-
-with open('LICENSE') as f:
-    license = f.read()
 
 def write_version_py():
 
@@ -31,8 +26,15 @@ def write_version_py():
 
 write_version_py()
 
+with open('README.md') as f:
+    readme = f.read()
+
+with open('LICENSE') as f:
+    license = f.read()
+
 with open('requirements.txt', 'r') as infile:
     REQUIREMENTS = infile.readlines()
+
 
 setup(
 	name='ALIAS',

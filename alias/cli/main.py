@@ -21,10 +21,16 @@ top_file:  str
 
 
 """
+import click
+import logging
+import sys
+import os
+import subprocess
+
 import numpy as np
-import sys, os, subprocess
 import mdtraj as md
 
+from alias.version import __version__
 import alias.src.utilities as ut
 import alias.src.intrinsic_sampling_method as ism
 import alias.src.intrinsic_analysis as ia
@@ -41,7 +47,8 @@ def print_alias():
         print("\n    Air-Liquid Interface Analysis Suite \n")
 
 
-def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False, ow_pos=False, ow_intpos=False, ow_hist=False, ow_dist=False):
+def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False, ow_pos=False,
+			  ow_intpos=False, ow_hist=False, ow_dist=False):
 
 	file_end = max([0] + [pos for pos, char in enumerate(traj_file) if char == '/'])
 	traj_dir = traj_file[:file_end]
@@ -137,8 +144,8 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 	
 	print("Molar mass: {}  g mol-1".format(np.sum(mol_M)))
 
-	if ('-mol_com' in sys.argv): 
-                mol_com = int(sys.argv[sys.argv.index('-mol_com') + 1])
+	if ('--mol_com' in sys.argv):
+                mol_com = int(sys.argv[sys.argv.index('--mol_com') + 1])
                 checkfile = ut.update_checkfile(checkfile_name, 'mol_com', mol_com)
         else:
 			try:
@@ -165,8 +172,8 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 	dim = checkfile['dim']
 	print("Simulation cell xyz dimensions in Angstoms: {}\n".format(dim))
 
-	if ('-mol_sigma' in sys.argv): 
-                mol_sigma = float(sys.argv[sys.argv.index('-mol_sigma') + 1])
+	if ('--mol_sigma' in sys.argv):
+                mol_sigma = float(sys.argv[sys.argv.index('--mol_sigma') + 1])
                 checkfile = ut.update_checkfile(checkfile_name, 'mol_sigma', mol_sigma)
         else:
 			try:
@@ -189,27 +196,27 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 	print("Max wavelength = {:12.4f} sigma   Min wavelength = {:12.4f} sigma".format(q_max, q_min))
 	print("Max frequency qm = {:6d}".format(qm))
 
-	if ('-vlim' in sys.argv): 
+	if ('--vlim' in sys.argv):
                 vlim = int(sys.argv[sys.argv.index('-vlim') + 1])
                 checkfile = ut.update_checkfile(checkfile_name, 'vlim', vlim)
 	else: vlim = 3
 
-	if ('-ncube' in sys.argv): 
+	if ('--ncube' in sys.argv):
                 ncube = int(sys.argv[sys.argv.index('-ncube') + 1])
                 checkfile = ut.update_checkfile(checkfile_name, 'ncube', ncube)
 	else: ncube = 3
 
-	if ('-tau' in sys.argv): 
+	if ('--tau' in sys.argv):
                 vlim = int(sys.argv[sys.argv.index('-tau') + 1])
                 checkfile = ut.update_checkfile(checkfile_name, 'tau', vlim)
 	else: tau = 0.5
 
-	if ('-max_r' in sys.argv): 
+	if ('--max_r' in sys.argv):
                 vlim = int(sys.argv[sys.argv.index('-max_r') + 1])
                 checkfile = ut.update_checkfile(checkfile_name, 'max_r', vlim)
 	else: max_r = 1.5
 
-	if ('-phi' in sys.argv): 
+	if ('--phi' in sys.argv):
                 phi = float(sys.argv[sys.argv.index('-phi') + 1])
                 checkfile = ut.update_checkfile(checkfile_name, 'phi', phi)
         elif 'phi' in checkfile.keys():phi = checkfile['phi']
@@ -217,7 +224,7 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 		phi = 5E-8
 		checkfile = ut.update_checkfile(checkfile_name, 'phi', phi)
 
-	if ('-n0' in sys.argv):
+	if ('--n0' in sys.argv):
                 N0[recon] = int(sys.argv[sys.argv.index('-n0') + 1])
                 checkfile = ut.update_checkfile(checkfile_name, 'N0', N0)
         else:
@@ -251,28 +258,74 @@ def run_alias(traj_file, top_file, recon=False, ow_coeff=False, ow_recon = False
 	print("\n---- ENDING PROGRAM ----\n")
 
 
-def alias():
+@click.command()
+@click.version_option(version=__version__)
+@click.option(
+    '--debug', is_flag=True, default=False,
+    help="Prints extra debug information in pyfibre.log"
+)
+@click.option(
+    '--recon', is_flag=True, default=False,
+    help='Toggles surface reconstruction routine'
+)
+@click.option(
+    '--ow_coeff', is_flag=True, default=False,
+    help='Toggles overwrite of intrinsic surface coefficients'
+)
+@click.option(
+    '--ow_recon', is_flag=True, default=False,
+    help='Toggles overwrite of reconstructed intrinsic surface coefficients'
+)
+@click.option(
+    '--ow_pos', is_flag=True, default=False,
+    help='Toggles overwrite positions'
+)
+@click.option(
+    '--ow_intpos', is_flag=True, default=False,
+    help='Toggles overwrite intrinsic positions'
+)
+@click.option(
+    '--ow_intpos', is_flag=True, default=False,
+    help='Toggles overwrite network extraction'
+)
+@click.option(
+    '--ow_hist', is_flag=True, default=False,
+    help='Toggles overwrite histograms of position and angles'
+)
+@click.option(
+    '--ow_dist', is_flag=True, default=False,
+    help='Toggles overwrite intrinsic probability distributions'
+)
+@click.argument(
+    'traj_file', type=click.Path(exists=True),
+    required=True, default='.'
+)
+@click.argument(
+    'top_file', type=click.Path(exists=True),
+    required=True, default='.'
+)
+def alias(traj_file, top_file, recon, ow_coeff, ow_recon, ow_pos, ow_intpos, ow_hist,
+		  ow_dist, debug):
+
+	if debug:
+		logging.basicConfig(filename="pyfibre.log", filemode="w",
+							level=logging.DEBUG)
+	else:
+		logging.basicConfig(filename="pyfibre.log", filemode="w",
+							level=logging.INFO)
+
+	logger = logging.getLogger(__name__)
+
 	print_alias()
 
-	if len(sys.argv) < 2:
-		traj_file = input("Enter trajectory file: ")
-	else:
-		traj_file = sys.argv[1]
-	while not os.path.exists(traj_file): traj_file = input("\nTrajectory file not recognised: Re-enter file path: ")
+	while not os.path.exists(traj_file):
+		traj_file = input("\nTrajectory file not recognised: Re-enter file path: ")
 
-	if len(sys.argv) < 3:
-		top_file = input("\nEnter topology file: ")
-	else:
-		top_file = sys.argv[2]
-	while not os.path.exists(top_file): top_file = input("\nTopology file not recognised: Re-enter file path: ")
+	while not os.path.exists(top_file):
+		top_file = input("\nTopology file not recognised: Re-enter file path: ")
 
-	recon = ('-recon' in sys.argv)
-	ow_coeff = ('-ow_coeff' in sys.argv)
-	ow_recon = ('-ow_recon' in sys.argv)
-	ow_pos = ('-ow_pos' in sys.argv)
-	ow_intpos = ('-ow_intpos' in sys.argv)
-	ow_hist = ('-ow_hist' in sys.argv)
-	ow_dist = ('-ow_dist' in sys.argv or ow_hist)
+	if ow_hist:
+		ow_dist = True
 
-	run_alias(traj_file, top_file, recon, ow_coeff, ow_recon, ow_pos, ow_intpos, ow_hist, ow_dist)
-
+	run_alias(traj_file, top_file, recon, ow_coeff, ow_recon, ow_pos,
+			  ow_intpos, ow_hist, ow_dist)
