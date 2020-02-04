@@ -4,8 +4,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as anim
 
-from .intrinsic_sampling_method import (
-    check_uv, xi, check_pbc)
+from alias.src.wave_function import check_uv
+from alias.src.intrinsic_surface import xi
+from alias.src.positions import check_pbc
 
 
 def view_surface(coeff, pivot, qm, qu, xmol, ymol, zmol, nxy, dim):

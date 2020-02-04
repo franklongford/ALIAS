@@ -286,3 +286,55 @@ def orientation(traj, AT):
         u_vectors[j] = unit_vector(vector)
 
     return u_vectors
+
+
+def check_pbc(xmol, ymol, zmol, pivots, dim, max_r=30):
+    """
+    Check periodic boundary conditions of molecule positions to ensure most
+    appropriate position along is used wrt each surface.
+
+    Parameters
+    ----------
+    xmol:  float, array_like; shape=(nmol)
+        Molecular coordinates in x dimension
+    ymol:  float, array_like; shape=(nmol)
+        Molecular coordinates in y dimension
+    zmol:  float, array_like; shape=(nmol)
+        Molecular coordinates in z dimension
+    surf_0: float, array_like; shape=(2)
+        Intial guess for mean position of surface along z axis
+    Lz:  float
+        Cell dimension of z axis
+
+    Returns
+    -------
+    zmol:  float, array_like; shape=(nmol)
+        Molecular coordinates in z dimension using most appropriate PBC
+    """
+
+    # Create pivot map
+    for index_i, pivot in enumerate(pivots):
+        p_map = np.isin(np.arange(zmol.size), pivot)
+
+        for check in range(2):
+            for index_j, n in enumerate(pivot):
+
+                dxyz = np.stack(
+                    (xmol[p_map] - xmol[n],
+                     ymol[p_map] - ymol[n],
+                     zmol[p_map] - zmol[n])
+                )
+                for index_k, l in enumerate(dim[:2]):
+                    dxyz[index_k] -= l * np.array(2 * dxyz[index_k] / l, dtype=int)
+
+                dr2 = np.sum(dxyz**2, axis=0)
+                neighbour_count = np.count_nonzero(dr2 < max_r**2)
+
+                dxyz[2] += dim[2] * np.array([-1, 1])[index_i]
+                dr2 = np.sum(dxyz**2, axis=0)
+                neighbour_count_flip = np.count_nonzero(dr2 < max_r**2)
+
+                if neighbour_count_flip > neighbour_count:
+                    zmol[n] += dim[2] * np.array([1, -1])[index_i]
+
+    return zmol

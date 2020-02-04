@@ -11,8 +11,9 @@ from alias.src.positions import make_mol_com
 from alias.io.numpy_io import load_npy
 from alias.io.checkfile_io import make_checkfile, read_checkfile, update_checkfile
 from alias.src.intrinsic_sampling_method import (
-    optimise_ns_diff, create_intrinsic_surfaces
+    create_intrinsic_surfaces
 )
+from alias.src.pivot_density import optimise_ns_diff
 from alias.src.intrinsic_analysis import (
     create_intrinsic_positions_dxdyz,
     create_intrinsic_den_curve_hist,
