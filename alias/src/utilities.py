@@ -21,14 +21,14 @@ import scipy.constants as con
 
 import mdtraj as md
 
+from alias.version import __version__
+
 SQRT2 = np.sqrt(2.)
 SQRTPI = np.sqrt(np.pi)
 
 
 def numpy_remove(list1, list2):
 	"""
-	numpy_remove(list1, list2)
-
 	Deletes overlapping elements of list2 from list1
 	"""
 
@@ -37,35 +37,29 @@ def numpy_remove(list1, list2):
 
 def make_checkfile(checkfile_name):
 	"""
-	make_checkfile(checkfile_name)
-
 	Creates checkfile for analysis, storing key paramtere
 	"""
 
 	checkfile = {}
-	with file(checkfile_name + '.pkl', 'wb') as outfile:
+	with open(checkfile_name + '.pkl', 'wb') as outfile:
 		pickle.dump(checkfile, outfile, pickle.HIGHEST_PROTOCOL)
+
 
 def read_checkfile(checkfile_name):
 	"""
-	read_checkfile(checkfile_name)
-
 	Reads checkfile to lookup stored key paramters
-
 	"""
 
-	with file(checkfile_name + '.pkl', 'rb') as infile:
-        	return pickle.load(infile)
+	with open(checkfile_name + '.pkl', 'rb') as infile:
+		return pickle.load(infile)
+
 
 def update_checkfile(checkfile_name, symb, obj):
 	"""
-	update_checkfile(checkfile_name, symb, obj)
-
 	Updates checkfile parameter
 
 	Parameters
 	----------
-
 	checkfile_name:  str
 			Checkfile path + name
 	symb:  str
@@ -75,29 +69,25 @@ def update_checkfile(checkfile_name, symb, obj):
 
 	Returns
 	-------
-
 	checkfile:  dict
 			Dictionary of key parameters
-
 	"""
 
-	with file(checkfile_name + '.pkl', 'rb') as infile:
-        	checkfile = pickle.load(infile)
+	with open(checkfile_name + '.pkl', 'rb') as infile:
+		checkfile = pickle.load(infile)
 	checkfile[symb] = obj
-	with file(checkfile_name + '.pkl', 'wb') as outfile:
-        	pickle.dump(checkfile, outfile, pickle.HIGHEST_PROTOCOL)
+
+	with open(checkfile_name + '.pkl', 'wb') as outfile:
+		pickle.dump(checkfile, outfile, pickle.HIGHEST_PROTOCOL)
 	return checkfile
 
 
 def get_sim_param(traj_file, top_file):
 	"""
-	get_sim_param(traj_dir, top_dir, traj_file, top_file)
-
 	Returns selected parameters of input trajectory and topology file using mdtraj
 	
 	Parameters
 	----------
-
 	top_dir:  str
 			Directory of topology file
 	traj_dir:  str
@@ -109,7 +99,6 @@ def get_sim_param(traj_file, top_file):
 
 	Returns
 	-------
-
 	traj:  mdtraj obj
 			Mdtraj trajectory object
 	mol:  str, list
@@ -128,8 +117,6 @@ def get_sim_param(traj_file, top_file):
 
 def molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com):
 	"""
-	molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com)
-
 	Returns XYZ arrays of molecular positions"
 
 	Parameters
@@ -222,26 +209,6 @@ def orientation(traj, AT):
 	return u_vectors
 
 
-
-def save_npy(file_path, array):
-	"""
-	save_npy(file_path, array)
-
-	General purpose algorithm to save an array to a npy file
-
-	Parameters
-	----------
-
-	file_path:  str
-		Path name of npy file
-	array:  array_like (float);
-		Data array to be saved
-	"""
-
-	with file(file_path + '.npy', 'w') as outfile:
-		np.save(outfile, array)
-
-
 def load_npy(file_path, frames=[]):
 	"""
 	load_npy(file_path, frames=[])
@@ -263,8 +230,10 @@ def load_npy(file_path, frames=[]):
 		Data array to be loaded
 	"""
 
-	if len(frames) == 0: array = np.load(file_path + '.npy', mmap_mode='r')
-	else: array = np.load(file_path + '.npy', mmap_mode='r')[frames]
+	if len(frames) == 0:
+		array = np.load(file_path + '.npy', mmap_mode='r')
+	else:
+		array = np.load(file_path + '.npy', mmap_mode='r')[frames]
 
 	return array
 
@@ -300,7 +269,7 @@ def make_mol_com(traj_file, top_file, directory, file_name, natom, nmol, AT, at_
 		Mode of calculation: if 'COM', centre of mass is used, otherwise atomic site index is used
 
 	"""
-	print "\n-----------CREATING POSITIONAL FILES------------\n"
+	print("\n-----------CREATING POSITIONAL FILES------------\n")
 	
 	pos_dir = directory + 'pos/'
 	if not os.path.exists(pos_dir): os.mkdir(pos_dir)
@@ -357,14 +326,14 @@ def make_mol_com(traj_file, top_file, directory, file_name, natom, nmol, AT, at_
 		nframe = zmol.shape[0]
 		file_name_pos = file_name + '_{}'.format(nframe)
 
-		print '\nSAVING OUTPUT MOLECULAR POSITION FILES\n'
+		print('\nSAVING OUTPUT MOLECULAR POSITION FILES\n')
 
-		save_npy(pos_dir + file_name_pos + '_dim', dim)
-		save_npy(pos_dir + file_name_pos + '_xmol', xmol)
-		save_npy(pos_dir + file_name_pos + '_ymol', ymol)
-		save_npy(pos_dir + file_name_pos + '_zmol', zmol)
-		save_npy(pos_dir + file_name_pos + '_com', COM)
-		save_npy(pos_dir + file_name_pos + '_zvec', zvec)
+		np.save(pos_dir + file_name_pos + '_dim.npy', dim)
+		np.save(pos_dir + file_name_pos + '_xmol.npy', xmol)
+		np.save(pos_dir + file_name_pos + '_ymol.npy', ymol)
+		np.save(pos_dir + file_name_pos + '_zmol.npy', zmol)
+		np.save(pos_dir + file_name_pos + '_com.npy', COM)
+		np.save(pos_dir + file_name_pos + '_zvec.npy', zvec)
 
 	return nframe
 	
@@ -401,21 +370,21 @@ def unit_vector(vector, axis=-1):
 
 	return u_vector
 
-def linear(x, m, c): return m * x + c
+
+def linear(x, m, c):
+	return m * x + c
 
 
-def gaussian(x, mean, std): return np.exp(-(x-mean)**2 / (2 * std**2)) / (SQRT2 * std * SQRTPI)
+def gaussian(x, mean, std):
+	return np.exp(-(x-mean)**2 / (2 * std**2)) / (SQRT2 * std * SQRTPI)
 
 
 def gaussian_convolution(array, centre, delta, dim, nslice):
 	"""
-	gaussian_convolution(array, centre, delta, dim, nslice)
-
 	Convolution of distributions 'arrays' using a normal probability distribution with mean=centres and variance=deltas
 
 	Parameters
 	----------
-
 	array:  float, array_like; shape=(nslice)
 		Array to convolute
 	centre: float
@@ -429,7 +398,6 @@ def gaussian_convolution(array, centre, delta, dim, nslice):
 
 	Returns
 	-------
-
 	conv_array:  float, array_like; shape=(nslice)
 		Convoluted array
 	"""
@@ -459,13 +427,10 @@ def gaussian_convolution(array, centre, delta, dim, nslice):
 
 def make_earray(file_name, arrays, atom, sizes):
 	"""
-	make_earray(file_name, arrays, atom, sizes)
-
 	General purpose algorithm to create an empty earray
 
 	Parameters
 	----------
-
 	file_name:  str
 		Name of file
 	arrays:  str, list
@@ -476,7 +441,6 @@ def make_earray(file_name, arrays, atom, sizes):
 		Shape of arrays in data set
 	"""
 
-
 	with tables.open_file(file_name, 'w') as outfile:
 		for i, array in enumerate(arrays):
 			outfile.create_earray(outfile.root, array, atom, sizes[i])
@@ -484,13 +448,10 @@ def make_earray(file_name, arrays, atom, sizes):
 
 def make_hdf5(file_path, shape, datatype):
 	"""
-	make_hdf5(directory, file_name, array, shape)
-
 	General purpose algorithm to create an empty hdf5 file
 
 	Parameters
 	----------
-
 	file_path:  str
 		Path name of hdf5 file
 	shape:  int, tuple
@@ -506,13 +467,10 @@ def make_hdf5(file_path, shape, datatype):
 
 def load_hdf5(file_path, frame='all'):
 	"""
-	load_hdf5(file_path, frame='all')
-
 	General purpose algorithm to load an array from a hdf5 file
 
 	Parameters
 	----------
-
 	file_path:  str
 		Path name of hdf5 file
 	frame:  int (optional)
@@ -520,7 +478,6 @@ def load_hdf5(file_path, frame='all'):
 
 	Returns
 	-------
-
 	array:  array_like (float);
 		Data array to be loaded, same shape as object 'dataset' in hdf5 file
 	"""
@@ -534,13 +491,10 @@ def load_hdf5(file_path, frame='all'):
 
 def save_hdf5(file_path, array, frame, mode='a'):
 	"""
-	save_hdf5(file_path, array, dataset, frame, mode='a')
-
 	General purpose algorithm to save an array from a single frame a hdf5 file
 
 	Parameters
 	----------
-
 	file_path:  str
 		Path name of hdf5 file
 	array:  array_like (float);
@@ -567,19 +521,15 @@ def save_hdf5(file_path, array, frame, mode='a'):
 
 def shape_check_hdf5(file_path):
 	"""
-	shape_check_hdf5(file_path)
-
 	General purpose algorithm to check the shape the dataset in a hdf5 file 
 
 	Parameters
 	----------
-
 	file_path:  str
 		Path name of hdf5 file
 
 	Returns
 	-------
-
 	shape_hdf5:  int, tuple
 		Shape of object dataset in hdf5 file
 	"""
@@ -598,7 +548,7 @@ def view_surface(coeff, pivot, qm, qu, xmol, ymol, zmol, nxy, dim):
 	import matplotlib.animation as anim
 	from mpl_toolkits.mplot3d import Axes3D
 	
-	from intrinsic_sampling_method import check_uv, xi, check_pbc
+	from .intrinsic_sampling_method import check_uv, xi, check_pbc
 
 	zmol = check_pbc(xmol, ymol, zmol, pivot, dim)
 
@@ -616,7 +566,7 @@ def view_surface(coeff, pivot, qm, qu, xmol, ymol, zmol, nxy, dim):
 	surface = np.zeros((2, nxy, nxy))
 	
 	for i, x in enumerate(X): 
-		for j in xrange(2): surface[j][i] += xi(np.ones(nxy) * x, Y, coeff[j], qm, qu, dim)
+		for j in range(2): surface[j][i] += xi(np.ones(nxy) * x, Y, coeff[j], qm, qu, dim)
 
 	surface = np.moveaxis(surface, 1, 2)
 
@@ -642,3 +592,13 @@ def view_surface(coeff, pivot, qm, qu, xmol, ymol, zmol, nxy, dim):
 	plt.show()
 
 
+def print_alias():
+
+	print(' '+ '_' * 43)
+	print("|                   __ __             ____  |")
+	print("|     /\     |        |       /\     /      |")
+	print("|    /  \    |        |      /  \    \___   |")
+	print("|   /___ \   |        |     /___ \       \  |")
+	print("|  /      \  |____  __|__  /      \  ____/  |")
+	print(f"|'+ '_' * 43 + '|' + '  v{__version__}")
+	print("\n    Air-Liquid Interface Analysis Suite \n")

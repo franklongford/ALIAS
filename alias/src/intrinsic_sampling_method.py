@@ -11,13 +11,19 @@ Contributors: Frank Longford
 
 Last modified 27/2/2018 by Frank Longford
 """
+import os
+import sys
+import time
+import tables
 
 import numpy as np
-import scipy as sp, scipy.constants as con
+import scipy as sp
+import scipy.constants as con
 
-import utilities as ut
-
-import os, sys, time, tables
+from .utilities import (
+	numpy_remove, bubble_sort, load_npy, make_hdf5, load_hdf5,
+	shape_check_hdf5, save_hdf5
+)
 
 
 def check_uv(u, v):
@@ -168,7 +174,7 @@ def update_A_b(xmol, ymol, zmol, dim, qm, new_pivot):
 	fuv1 = np.zeros((n_waves**2, len(new_pivot[0])))
 	fuv2 = np.zeros((n_waves**2, len(new_pivot[1])))
 
-	for j in xrange(n_waves**2):
+	for j in range(n_waves**2):
 		fuv1[j] = wave_function(xmol[new_pivot[0]], u_array[j], dim[0]) * wave_function(ymol[new_pivot[0]], v_array[j], dim[1])
 		b[0][j] += np.sum(zmol[new_pivot[0]] * fuv1[j])
 		fuv2[j] = wave_function(xmol[new_pivot[1]], u_array[j], dim[0]) * wave_function(ymol[new_pivot[1]], v_array[j], dim[1])
@@ -286,7 +292,7 @@ def pivot_selection(mol_list, zeta_list, piv_n, tau, n0):
 	dz_new_piv = zeta_list[zeta_list <= tau]
 
 	"Order pivots by zeta (shortest to longest)"
-	ut.bubble_sort(new_piv, dz_new_piv)
+	bubble_sort(new_piv, dz_new_piv)
 
 	"Add new pivots to pivoy list and check whether max n0 pivots are selected"
 	piv_n = np.concatenate((piv_n, new_piv))
@@ -299,7 +305,7 @@ def pivot_selection(mol_list, zeta_list, piv_n, tau, n0):
 	
 	"Remove pivots far from molecular search list"
 	far_piv = mol_list[zeta_list > far_tau]
-	if len(new_piv) > 0: mol_list = ut.numpy_remove(mol_list, np.concatenate((new_piv, far_piv)))
+	if len(new_piv) > 0: mol_list = numpy_remove(mol_list, np.concatenate((new_piv, far_piv)))
 	
 	assert np.sum(np.isin(new_piv, mol_list)) == 0
 
@@ -598,9 +604,13 @@ def intrinsic_area(coeff, qm, qu, dim):
 
 def self_consistent_cycle(coeff, A, b, dim, qm, tau, xmol, ymol, zmol, pivot, mol_list1, mol_list2, new_piv1=[], new_piv2=[], recon=False):
 
-	print "{:^77s} | {:^43s} | {:^21s} | {:^21s}".format('TIMINGS (s)', 'PIVOTS', 'TAU', 'INT AREA')
-	print ' {:20s}  {:20s}  {:20s}  {:10s} | {:10s} {:10s} {:10s} {:10s} | {:10s} {:10s} | {:10s} {:10s}'.format('Matrix Formation', 'LU Decomposition', 'Pivot selection', 'TOTAL', 'n_piv1', '(new)', 'n_piv2', '(new)', 'surf1', 'surf2', 'surf1', 'surf2')
-	print "_" * 170
+	start = time.time()
+
+	print("{:^77s} | {:^43s} | {:^21s} | {:^21s}".format('TIMINGS (s)', 'PIVOTS', 'TAU', 'INT AREA'))
+	print(' {:20s}  {:20s}  {:20s}  {:10s} | {:10s} {:10s} {:10s} {:10s} | {:10s} {:10s} | {:10s} {:10s}'.format(
+		'Matrix Formation', 'LU Decomposition', 'Pivot selection', 'TOTAL', 'n_piv1',
+		'(new)', 'n_piv2', '(new)', 'surf1', 'surf2', 'surf1', 'surf2'))
+	print("_" * 170)
 
 	tau1 = tau
 	tau2 = tau
@@ -662,7 +672,7 @@ def self_consistent_cycle(coeff, A, b, dim, qm, tau, xmol, ymol, zmol, pivot, mo
 		else:
 			finding_pivots = False
 			building_surface = False
-			print "ENDING SEARCH"
+			print("ENDING SEARCH")
 
 		"Calculate distance between molecular z positions and intrinsic surface"
 		if build_surf1: zeta_list1 = make_zeta_list(xmol, ymol, zmol, dim, mol_list1, coeff[0], qm, qm)
@@ -687,9 +697,11 @@ def self_consistent_cycle(coeff, A, b, dim, qm, tau, xmol, ymol, zmol, pivot, mo
 
 		end = time.time()
 
-		print ' {:20.3f}  {:20.3f}  {:20.3f}  {:10.3f} | {:10d} {:10d} {:10d} {:10d} | {:10.3f} {:10.3f} | {:10.3f} {:10.3f}'.format(end1 - start1, end2 - end1, end - end2, end - start1, len(pivot[0]), len(new_piv1), len(pivot[1]), len(new_piv2), tau1, tau2, area1, area2)			
+		print(' {:20.3f}  {:20.3f}  {:20.3f}  {:10.3f} | {:10d} {:10d} {:10d} {:10d} | {:10.3f} {:10.3f} | {:10.3f} {:10.3f}'.format(
+			end1 - start1, end2 - end1, end - end2, end - start1, len(pivot[0]), len(new_piv1),
+			len(pivot[1]), len(new_piv2), tau1, tau2, area1, area2))
 
-	print '\nTOTAL time: {:7.2f} s \n'.format(end - start)
+	print('\nTOTAL time: {:7.2f} s \n'.format(end - start))
 
 	pivot = np.array(pivot, dtype=int)
 
@@ -759,16 +771,17 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 	else: coeff, A, b, area_diag = surf_param
 
 	"Remove molecules from vapour phase and assign an initial grid of pivots furthest away from centre of mass"
-	print 'Lx = {:5.3f}   Ly = {:5.3f}   qm = {:5d}\nphi = {}   n_piv = {:5d}   vlim = {:5d}   max_r = {:5.3f}'.format(dim[0], dim[1], qm, phi, n0, vlim, max_r) 
-	print 'Surface plane initial guess = {} {}'.format(surf_0[0], surf_0[1]) 
+	print('Lx = {:5.3f}   Ly = {:5.3f}   qm = {:5d}\nphi = {}   n_piv = {:5d}   vlim = {:5d}   max_r = {:5.3f}'.format(dim[0], dim[1], qm, phi, n0, vlim, max_r))
+	print('Surface plane initial guess = {} {}'.format(surf_0[0], surf_0[1]))
 
 	pivot_search = (ncube > 0)
 
 	if not pivot_search:
 		
-		print "\n{:^74s} | {:^21s} | {:^21s}".format('TIMINGS (s)', 'PIVOTS', 'INT AREA')
-		print ' {:20s} {:20s} {:20s} {:10s} | {:10s} {:10s} | {:10s} {:10s}'.format('Pivot selection', 'Matrix Formation', 'LU Decomposition', 'TOTAL', 'n_piv1', 'n_piv2', 'surf1', 'surf2')
-		print "_" * 120
+		print("\n{:^74s} | {:^21s} | {:^21s}".format('TIMINGS (s)', 'PIVOTS', 'INT AREA'))
+		print(' {:20s} {:20s} {:20s} {:10s} | {:10s} {:10s} | {:10s} {:10s}'.format(
+			'Pivot selection', 'Matrix Formation', 'LU Decomposition', 'TOTAL', 'n_piv1', 'n_piv2', 'surf1', 'surf2'))
+		print("_" * 120)
 
 		start1 = time.time()
 
@@ -817,7 +830,8 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 		
 		end = time.time()
 
-		print ' {:20.3f} {:20.3f} {:20.3f} {:10.3f} | {:10d} {:10d} | {:10.3f} {:10.3f}'.format(end1 - start1, end2 - end1, end3 - end2, end - start1, len(pivot[0]), len(pivot[1]), area1, area2)
+		print(' {:20.3f} {:20.3f} {:20.3f} {:10.3f} | {:10d} {:10d} | {:10.3f} {:10.3f}'.format(
+			end1 - start1, end2 - end1, end3 - end2, end - start1, len(pivot[0]), len(pivot[1]), area1, area2))
 
 		#ut.view_surface(coeff, pivot, qm, qm, xmol, ymol, zmol, 50, dim)
 
@@ -836,11 +850,11 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 		dr2 = np.sum(dxyz**2, axis=0)
 
 		vapour_list = np.where(np.count_nonzero(dr2 < max_r**2, axis=1) < vlim)
-		print 'Removing {} vapour molecules'.format(vapour_list[0].size)
-		mol_list = ut.numpy_remove(mol_list, vapour_list)
+		print('Removing {} vapour molecules'.format(vapour_list[0].size))
+		mol_list = numpy_remove(mol_list, vapour_list)
 		del dxyz, dr2
 
-		print 'Selecting initial {} pivots'.format(ncube**2)
+		print('Selecting initial {} pivots'.format(ncube**2))
 		index_x = np.array(xmol * ncube / dim[0], dtype=int) % ncube
 		index_y = np.array(ymol * ncube / dim[1], dtype=int) % ncube
 
@@ -853,8 +867,8 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 				piv_z2[ncube*index_x[n] + index_y[n]] = zmol[n]
 
 		"Update molecular and pivot lists"
-		mol_list = ut.numpy_remove(mol_list, piv_n1)
-		mol_list = ut.numpy_remove(mol_list, piv_n2)
+		mol_list = numpy_remove(mol_list, piv_n1)
+		mol_list = numpy_remove(mol_list, piv_n2)
 
 		new_piv1 = piv_n1
 		new_piv2 = piv_n2
@@ -863,7 +877,7 @@ def build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncu
 		assert np.sum(np.isin(piv_n1, mol_list)) == 0
 		assert np.sum(np.isin(piv_n2, mol_list)) == 0
 
-		print 'Initial {} pivots selected: {:10.3f} s'.format(ncube**2, time.time() - start)
+		print('Initial {} pivots selected: {:10.3f} s'.format(ncube**2, time.time() - start))
 
 		"Split molecular position lists into two volumes for each surface"
 		mol_list1 = mol_list
@@ -969,8 +983,8 @@ def xi(x, y, coeff, qm, qu, dim):
 		xi_z = np.sum(fuv * coeff[indices])
 	else:
 		xi_z = np.zeros(x.shape)
-		for u in xrange(-qu, qu+1):
-			for v in xrange(-qu, qu+1):
+		for u in range(-qu, qu+1):
+			for v in range(-qu, qu+1):
 				j = (2 * qm + 1) * (u + qm) + (v + qm)
 				xi_z += wave_function(x, u, dim[0]) * wave_function(y, v, dim[1]) * coeff[j]	
 	return xi_z
@@ -1025,8 +1039,8 @@ def dxy_dxi(x, y, coeff, qm, qu, dim):
 	else:
 		dx_dxi = np.zeros(x.shape)
 		dy_dxi = np.zeros(x.shape)
-		for u in xrange(-qu, qu+1):
-			for v in xrange(-qu, qu+1):
+		for u in range(-qu, qu+1):
+			for v in range(-qu, qu+1):
 				j = (2 * qm + 1) * (u + qm) + (v + qm)
 				dx_dxi += d_wave_function(x, u, dim[0]) * wave_function(y, v, dim[1]) * coeff[j]
 				dy_dxi += wave_function(x, u, dim[0]) * d_wave_function(y, v, dim[1]) * coeff[j]
@@ -1083,8 +1097,8 @@ def ddxy_ddxi(x, y, coeff, qm, qu, dim):
 	else:
 		ddx_ddxi = np.zeros(x.shape)
 		ddy_ddxi = np.zeros(x.shape)
-		for u in xrange(-qu, qu+1):
-			for v in xrange(-qu, qu+1):
+		for u in range(-qu, qu+1):
+			for v in range(-qu, qu+1):
 				j = (2 * qm + 1) * (u + qm) + (v + qm)
 				ddx_ddxi += dd_wave_function(x, u, dim[0]) * wave_function(y, v, dim[1]) * coeff[j]
 				ddy_ddxi += wave_function(x, u, dim[0]) * dd_wave_function(y, v, dim[1]) * coeff[j]
@@ -1149,11 +1163,11 @@ def optimise_ns_diff(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma
 	max_r *= mol_sigma
 	tau *= mol_sigma
 	
-	xmol = ut.load_npy(pos_dir + file_name + '_{}_xmol'.format(nframe), frames=range(nframe_ns))
-	ymol = ut.load_npy(pos_dir + file_name + '_{}_ymol'.format(nframe), frames=range(nframe_ns))
-	zmol = ut.load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe), frames=range(nframe_ns))
-	COM = ut.load_npy(pos_dir + file_name + '_{}_com'.format(nframe), frames=range(nframe_ns))
-	zvec = ut.load_npy(pos_dir + file_name + '_{}_zvec'.format(nframe), frames=range(nframe_ns))
+	xmol = load_npy(pos_dir + file_name + '_{}_xmol'.format(nframe), frames=range(nframe_ns))
+	ymol = load_npy(pos_dir + file_name + '_{}_ymol'.format(nframe), frames=range(nframe_ns))
+	zmol = load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe), frames=range(nframe_ns))
+	COM = load_npy(pos_dir + file_name + '_{}_com'.format(nframe), frames=range(nframe_ns))
+	zvec = load_npy(pos_dir + file_name + '_{}_zvec'.format(nframe), frames=range(nframe_ns))
 
 	com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
 	zmol = zmol - com_tile
@@ -1180,13 +1194,13 @@ def optimise_ns_diff(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma
 		if recon: file_name_coeff += '_r'
 
 		if not os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_coeff)):
-			ut.make_hdf5(surf_dir + file_name_coeff + '_coeff', (2, n_waves**2), tables.Float64Atom())
-			ut.make_hdf5(surf_dir + file_name_coeff + '_pivot', (2, n0), tables.Int64Atom())
+			make_hdf5(surf_dir + file_name_coeff + '_coeff', (2, n_waves**2), tables.Float64Atom())
+			make_hdf5(surf_dir + file_name_coeff + '_pivot', (2, n0), tables.Int64Atom())
 
-		for frame in xrange(nframe_ns):
+		for frame in range(nframe_ns):
 			"Checking number of frames in coeff and pivot files"
-			frame_check_coeff = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_coeff')[0] <= frame)
-			frame_check_pivot = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_pivot')[0] <= frame)
+			frame_check_coeff = (shape_check_hdf5(surf_dir + file_name_coeff + '_coeff')[0] <= frame)
+			frame_check_pivot = (shape_check_hdf5(surf_dir + file_name_coeff + '_pivot')[0] <= frame)
 
 			if frame_check_coeff: mode_coeff = 'a'
 			else: mode_coeff = False
@@ -1195,7 +1209,7 @@ def optimise_ns_diff(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma
 			else: mode_pivot = False
 
 			if not mode_coeff and not mode_pivot:
-				pivot = ut.load_hdf5(surf_dir + file_name_coeff + '_pivot', frame)
+				pivot = load_hdf5(surf_dir + file_name_coeff + '_pivot', frame)
 			else:
 				sys.stdout.write("Optimising Intrinsic Surface coefficients: frame {}\n".format(frame))
 				sys.stdout.flush()
@@ -1203,15 +1217,15 @@ def optimise_ns_diff(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma
 				if frame == 0: surf_0 = [-dim[2]/4, dim[2]/4]
 				else: 
 					index = (2 * qm + 1)**2 / 2
-					coeff = ut.load_hdf5(surf_dir + file_name_coeff + '_coeff', frame-1)
+					coeff = load_hdf5(surf_dir + file_name_coeff + '_coeff', frame-1)
 					surf_0 = [coeff[0][index], coeff[1][index]]
 
 				coeff, pivot = build_surface(xmol[frame], ymol[frame], zmol[frame], dim, mol_sigma,
 						qm, n0, phi, tau, max_r, ncube=ncube, vlim=vlim, surf_0=surf_0,
 						recon=recon, zvec=zvec[frame])
 
-				ut.save_hdf5(surf_dir + file_name_coeff + '_coeff', coeff, frame, mode_coeff)
-				ut.save_hdf5(surf_dir + file_name_coeff + '_pivot', pivot, frame, mode_pivot)
+				save_hdf5(surf_dir + file_name_coeff + '_coeff', coeff, frame, mode_coeff)
+				save_hdf5(surf_dir + file_name_coeff + '_pivot', pivot, frame, mode_pivot)
 
 			tot_piv_n1[frame] += pivot[0]
 			tot_piv_n2[frame] += pivot[1]
@@ -1246,8 +1260,8 @@ def optimise_ns_diff(directory, file_name, nmol, nframe, qm, phi, dim, mol_sigma
 	opt_ns = NS[np.argmin(av_mol_ex)]
 	opt_n0 = int(dim[0] * dim[1] * opt_ns / mol_sigma**2)
 
-	print "Optimal pivot density found = {}\nSurface density coefficient step size = |{}| < {}\n".format(opt_ns, step_size, precision)
-	print "Optimal number of pivots = {}".format(opt_n0)
+	print("Optimal pivot density found = {}\nSurface density coefficient step size = |{}| < {}\n".format(opt_ns, step_size, precision))
+	print("Optimal number of pivots = {}".format(opt_n0))
 
 	for ns in NS:
 		if ns != opt_ns:
@@ -1290,7 +1304,7 @@ def mol_exchange(piv_1, piv_2, nframe, n0):
 	n_1 = 0
 	n_2 = 0
 
-	for frame in xrange(nframe-1):
+	for frame in range(nframe-1):
 
 		n_1 += len(set(piv_1[frame]) - set(piv_1[frame+1]))
 		n_2 += len(set(piv_2[frame]) - set(piv_2[frame+1]))
@@ -1336,7 +1350,7 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 
 	"""
 
-	print"\n--- Running Intrinsic Surface Routine ---\n"
+	print("\n--- Running Intrinsic Surface Routine ---\n")
 
 	surf_dir = directory + 'surface/'
 	pos_dir = directory + 'pos/'
@@ -1352,33 +1366,33 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 
 	"Make coefficient and pivot files"
 	if not os.path.exists('{}/surface/{}_coeff.hdf5'.format(directory, file_name_coeff)):
-		ut.make_hdf5(surf_dir + file_name_coeff + '_coeff', (2, n_waves**2), tables.Float64Atom())
-		ut.make_hdf5(surf_dir + file_name_coeff + '_pivot', (2, n0), tables.Int64Atom())
+		make_hdf5(surf_dir + file_name_coeff + '_coeff', (2, n_waves**2), tables.Float64Atom())
+		make_hdf5(surf_dir + file_name_coeff + '_pivot', (2, n0), tables.Int64Atom())
 		file_check = False
 	elif not ow_coeff:
 		"Checking number of frames in current coefficient files"
 		try:
-			file_check = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_coeff') == (nframe, 2, n_waves**2))
-			file_check *= (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_pivot') == (nframe, 2, n0))
+			file_check = (shape_check_hdf5(surf_dir + file_name_coeff + '_coeff') == (nframe, 2, n_waves**2))
+			file_check *= (shape_check_hdf5(surf_dir + file_name_coeff + '_pivot') == (nframe, 2, n0))
 		except: file_check = False
 	else: file_check = False
 
 	if not file_check:
-		print "IMPORTING GLOBAL POSITION DISTRIBUTIONS\n"
-		xmol = ut.load_npy(pos_dir + file_name + '_{}_xmol'.format(nframe))
-		ymol = ut.load_npy(pos_dir + file_name + '_{}_ymol'.format(nframe))
-		zmol = ut.load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe))
-		zvec = ut.load_npy(pos_dir + file_name + '_{}_zvec'.format(nframe))
-		COM = ut.load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
+		print("IMPORTING GLOBAL POSITION DISTRIBUTIONS\n")
+		xmol = load_npy(pos_dir + file_name + '_{}_xmol'.format(nframe))
+		ymol = load_npy(pos_dir + file_name + '_{}_ymol'.format(nframe))
+		zmol = load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe))
+		zvec = load_npy(pos_dir + file_name + '_{}_zvec'.format(nframe))
+		COM = load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
 		nmol = xmol.shape[1]
 		com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
 		zmol = zmol - com_tile
 
-		for frame in xrange(nframe):
+		for frame in range(nframe):
 
 			"Checking number of frames in coeff and pivot files"
-			frame_check_coeff = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_coeff')[0] <= frame)
-			frame_check_pivot = (ut.shape_check_hdf5(surf_dir + file_name_coeff + '_pivot')[0] <= frame)
+			frame_check_coeff = (shape_check_hdf5(surf_dir + file_name_coeff + '_coeff')[0] <= frame)
+			frame_check_pivot = (shape_check_hdf5(surf_dir + file_name_coeff + '_pivot')[0] <= frame)
 			
 			if frame_check_coeff: mode_coeff = 'a'
 			elif ow_coeff: mode_coeff = 'r+'
@@ -1396,12 +1410,11 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 				if frame == 0: surf_0 = [-dim[2]/4, dim[2]/4]
 				else: 
 					index = (2 * qm + 1)**2 / 2
-					coeff = ut.load_hdf5(surf_dir + file_name_coeff + '_coeff', frame-1)
+					coeff = load_hdf5(surf_dir + file_name_coeff + '_coeff', frame-1)
 					surf_0 = [coeff[0][index], coeff[1][index]]
                         
 				coeff, pivot = build_surface(xmol[frame], ymol[frame], zmol[frame], dim, mol_sigma, 
 								qm, n0, phi, tau, max_r, ncube=ncube, vlim=vlim, recon=recon, surf_0=surf_0, zvec=zvec[frame])
 
-				ut.save_hdf5(surf_dir + file_name_coeff + '_coeff', coeff, frame, mode_coeff)
-				ut.save_hdf5(surf_dir + file_name_coeff + '_pivot', pivot, frame, mode_pivot)
-
+				save_hdf5(surf_dir + file_name_coeff + '_coeff', coeff, frame, mode_coeff)
+				save_hdf5(surf_dir + file_name_coeff + '_pivot', pivot, frame, mode_pivot)
