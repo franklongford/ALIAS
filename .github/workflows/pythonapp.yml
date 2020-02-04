@@ -34,7 +34,7 @@ jobs:
         edm run -- python -m ci install --edm
     - name: Lint with flake8
       run: |
-        edm run -- python -m ci flake8
+        edm run -- python -m ci flake8 --edm
     - name: Test with unittest
       run: |
-        edm run -- python -m ci test
+        edm run -- python -m ci test --edm
