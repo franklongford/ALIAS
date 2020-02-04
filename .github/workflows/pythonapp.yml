@@ -13,6 +13,8 @@ jobs:
         EDM_OS="rh6_x86_64"
         EDM_INSTALLER_PREFIX="edm_cli_"
         EDM_INSTALLER_SUFFIX="_linux_x86_64.sh"
+        EDM_INSTALLER=${EDM_INSTALLER_PREFIX}${EDM_FULL}${EDM_INSTALLER_SUFFIX}
+        PATH=${HOME}/edm/bin:${PATH}
 
     steps:
     - uses: actions/checkout@v2
@@ -22,10 +24,8 @@ jobs:
         python-version: 3.6
     - name: Install EDM
       run: |
-        EDM_INSTALLER=${EDM_INSTALLER_PREFIX}${EDM_FULL}${EDM_INSTALLER_SUFFIX}
         wget https://package-data.enthought.com/edm/${EDM_OS}/${EDM_X_Y}/${EDM_INSTALLER}
         bash ./${EDM_INSTALLER} -b -f -p $HOME
-        export PATH=${HOME}/edm/bin:${PATH}
     - name: Build EDM environment
       run: |
         edm install --version 3.6 -y click setuptools
