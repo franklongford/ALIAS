@@ -39,7 +39,7 @@ ehthumbs.db
 Thumbs.db
 *.cache/
 *.py[cod]     # Will match .pyc, .pyo and .pyd files.
-*__pycache__/  # Exclude the whole folder
+*__pycache__/*  # Exclude the whole folder
 *.ipynb_checkpoints
 *.ipynb
 *.idea

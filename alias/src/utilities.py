@@ -13,12 +13,12 @@ Last modified 27/2/2018 by Frank Longford
 """
 
 import numpy as np
-import subprocess, os, sys, pickle, tables
+import os
+import sys
+import pickle
+import tables
 
-from scipy import stats
 from scipy.signal import convolve
-import scipy.constants as con
-
 import mdtraj as md
 
 from alias.version import __version__
