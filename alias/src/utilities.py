@@ -21,6 +21,8 @@ import scipy.constants as con
 
 import mdtraj as md
 
+from alias.version import __version__
+
 SQRT2 = np.sqrt(2.)
 SQRTPI = np.sqrt(np.pi)
 
@@ -207,24 +209,6 @@ def orientation(traj, AT):
 	return u_vectors
 
 
-def save_npy(file_path, array):
-	"""
-	save_npy(file_path, array)
-
-	General purpose algorithm to save an array to a npy file
-
-	Parameters
-	----------
-
-	file_path:  str
-		Path name of npy file
-	array:  array_like (float);
-		Data array to be saved
-	"""
-
-	np.save(file_path + '.npy', array)
-
-
 def load_npy(file_path, frames=[]):
 	"""
 	load_npy(file_path, frames=[])
@@ -344,12 +328,12 @@ def make_mol_com(traj_file, top_file, directory, file_name, natom, nmol, AT, at_
 
 		print('\nSAVING OUTPUT MOLECULAR POSITION FILES\n')
 
-		save_npy(pos_dir + file_name_pos + '_dim', dim)
-		save_npy(pos_dir + file_name_pos + '_xmol', xmol)
-		save_npy(pos_dir + file_name_pos + '_ymol', ymol)
-		save_npy(pos_dir + file_name_pos + '_zmol', zmol)
-		save_npy(pos_dir + file_name_pos + '_com', COM)
-		save_npy(pos_dir + file_name_pos + '_zvec', zvec)
+		np.save(pos_dir + file_name_pos + '_dim.npy', dim)
+		np.save(pos_dir + file_name_pos + '_xmol.npy', xmol)
+		np.save(pos_dir + file_name_pos + '_ymol.npy', ymol)
+		np.save(pos_dir + file_name_pos + '_zmol.npy', zmol)
+		np.save(pos_dir + file_name_pos + '_com.npy', COM)
+		np.save(pos_dir + file_name_pos + '_zvec.npy', zvec)
 
 	return nframe
 	
@@ -606,3 +590,15 @@ def view_surface(coeff, pivot, qm, qu, xmol, ymol, zmol, nxy, dim):
 	a = anim.FuncAnimation(fig, update, frames=1, repeat=False)
 	#plt.savefig('plot_{}_{}.png'.format(len(pivot[0]), len(pivot[1])))
 	plt.show()
+
+
+def print_alias():
+
+	print(' '+ '_' * 43)
+	print("|                   __ __             ____  |")
+	print("|     /\     |        |       /\     /      |")
+	print("|    /  \    |        |      /  \    \___   |")
+	print("|   /___ \   |        |     /___ \       \  |")
+	print("|  /      \  |____  __|__  /      \  ____/  |")
+	print(f"|'+ '_' * 43 + '|' + '  v{__version__}")
+	print("\n    Air-Liquid Interface Analysis Suite \n")

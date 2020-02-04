@@ -11,22 +11,24 @@ Contributors: Frank Longford
 
 Last modified 27/2/2018 by Frank Longford
 """
+import os, sys, time, tables
 
 import numpy as np
-import scipy as sp, scipy.constants as con
+import scipy as sp
+import scipy.constants as con
 
 from .utilities import (
 	make_hdf5, shape_check_hdf5, load_npy, save_hdf5, load_hdf5,
-	save_npy, unit_vector
+	unit_vector
 )
 from .intrinsic_sampling_method import (
-	xi, wave_function, d_wave_function, dd_wave_function, check_uv
+	xi, wave_function, d_wave_function, dd_wave_function, check_uv,
+	wave_function_array
 )
-
-import os, sys, time, tables
 
 
 vcheck = np.vectorize(check_uv)
+
 
 def make_pos_dxdy(xmol, ymol, coeff, nmol, dim, qm):
 	"""
@@ -537,7 +539,8 @@ def av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, n
 			count_corr_array = load_hdf5(intden_dir + file_name_hist + '_count_corr', frame)
 			int_den_curve_matrix += count_corr_array / (nsample * Vslice)
 
-		save_npy(intden_dir + file_name_dist + '_int_den_curve', int_den_curve_matrix)
+		filename = f"{intden_dir}{file_name_dist}_int_den_curve.npy"
+		np.save(filename, int_den_curve_matrix)
 
 	else:
 		int_den_curve_matrix = load_npy(intden_dir + file_name_dist + '_int_den_curve')
@@ -743,11 +746,11 @@ def H_var_mol(xmol, ymol, coeff, qm, qu, dim):
 				     (u_matrix**2 * v_matrix.T**2 + u_matrix.T**2 * v_matrix**2) / (dim[0]**2 * dim[1]**2))
 
 	"Form the diagonal xi^2 terms and b vector solutions"
-        fuv = np.zeros((n_waves**2, nmol))
-        for u in range(-qu, qu+1):
+	fuv = np.zeros((n_waves**2, nmol))
+	for u in range(-qu, qu+1):
 		for v in range(-qu, qu+1):
 			j = (2 * qm + 1) * (u + qm) + (v + qm)
-                	fuv[j] = ism.wave_function(xmol, u_array[j], dim[0]) * ism.wave_function(ymol, v_array[j], dim[1])
+			fuv[j] = wave_function(xmol, u_array[j], dim[0]) * wave_function(ymol, v_array[j], dim[1])
 	ffuv = np.dot(fuv[indices], fuv[indices].T)
 
 	coeff_matrix = np.tile(coeff[indices], (len([indices]), 1))
@@ -995,29 +998,29 @@ def coeff_to_fourier(coeff, qm, dim):
 
 	frequencies = np.pi * 2 * (u_array.reshape(n_waves, n_waves) / dim[0] + v_array.reshape(n_waves, n_waves) / dim[1])
 
-        amplitudes = np.zeros(coeff.shape, dtype=complex)
+	amplitudes = np.zeros(coeff.shape, dtype=complex)
 
-        for u in range(-qm,qm+1):
-                for v in range(-qm, qm+1):
-                        index = n_waves * (u + qm) + (v + qm)
+	for u in range(-qm,qm+1):
+		for v in range(-qm, qm+1):
+			index = n_waves * (u + qm) + (v + qm)
 
-                        j1 = n_waves * (abs(u) + qm) + (abs(v) + qm)
-                        j2 = n_waves * (-abs(u) + qm) + (abs(v) + qm)
-                        j3 = n_waves * (abs(u) + qm) + (-abs(v) + qm)
-                        j4 = n_waves * (-abs(u) + qm) + (-abs(v) + qm)
+			j1 = n_waves * (abs(u) + qm) + (abs(v) + qm)
+			j2 = n_waves * (-abs(u) + qm) + (abs(v) + qm)
+			j3 = n_waves * (abs(u) + qm) + (-abs(v) + qm)
+			j4 = n_waves * (-abs(u) + qm) + (-abs(v) + qm)
 
 			if abs(u) + abs(v) == 0: amplitudes[index] = coeff[j1]
 
-                        elif v == 0: amplitudes[index] = (coeff[j1] - np.sign(u) * 1j * coeff[j2]) / 2.
-                        elif u == 0: amplitudes[index] = (coeff[j1] - np.sign(v) * 1j * coeff[j3]) / 2.
+			elif v == 0: amplitudes[index] = (coeff[j1] - np.sign(u) * 1j * coeff[j2]) / 2.
+			elif u == 0: amplitudes[index] = (coeff[j1] - np.sign(v) * 1j * coeff[j3]) / 2.
 
-                        elif u < 0 and v < 0: amplitudes[index] = (coeff[j1] + 1j * (coeff[j2] + coeff[j3]) - coeff[j4]) / 4.
-                        elif u > 0 and v > 0: amplitudes[index] = (coeff[j1] - 1j * (coeff[j2] + coeff[j3]) - coeff[j4]) / 4.
+			elif u < 0 and v < 0: amplitudes[index] = (coeff[j1] + 1j * (coeff[j2] + coeff[j3]) - coeff[j4]) / 4.
+			elif u > 0 and v > 0: amplitudes[index] = (coeff[j1] - 1j * (coeff[j2] + coeff[j3]) - coeff[j4]) / 4.
 
-                        elif u < 0: amplitudes[index] = (coeff[j1] + 1j * (coeff[j2] - coeff[j3]) + coeff[j4]) / 4.
-                        elif v < 0: amplitudes[index] = (coeff[j1] - 1j * (coeff[j2] - coeff[j3]) + coeff[j4]) / 4.
+			elif u < 0: amplitudes[index] = (coeff[j1] + 1j * (coeff[j2] - coeff[j3]) + coeff[j4]) / 4.
+			elif v < 0: amplitudes[index] = (coeff[j1] - 1j * (coeff[j2] - coeff[j3]) + coeff[j4]) / 4.
 
-        return amplitudes, frequencies 
+	return amplitudes, frequencies
 
 
 def coeff_to_fourier_2(coeff_2, qm, dim):
