@@ -3,8 +3,9 @@ from unittest import TestCase
 import numpy as np
 
 from alias.src.intrinsic_analysis import (
-    H_xy, H_var_mol, coeff_slice
+    coeff_slice
 )
+from alias.src.surface_reconstruction import H_xy, H_var_mol
 
 
 class TestIA(TestCase):

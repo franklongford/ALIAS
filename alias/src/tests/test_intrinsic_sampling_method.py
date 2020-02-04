@@ -2,9 +2,7 @@ from unittest import TestCase
 
 import numpy as np
 
-from alias.src.intrinsic_sampling_method import (
-    xi, dxy_dxi, ddxy_ddxi
-)
+from alias.src.intrinsic_surface import xi, dxy_dxi, ddxy_ddxi
 
 
 class TestISM(TestCase):

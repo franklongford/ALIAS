@@ -15,7 +15,6 @@ Last modified 27/2/2018 by Frank Longford
 import numpy as np
 
 from scipy.signal import convolve
-
 import mdtraj as md
 
 from alias.version import __version__
