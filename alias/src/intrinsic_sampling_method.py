@@ -20,10 +20,10 @@ import numpy as np
 import scipy as sp
 import scipy.constants as con
 
-from .utilities import (
-    numpy_remove, bubble_sort, load_npy, make_hdf5, load_hdf5,
-    shape_check_hdf5, save_hdf5
-)
+from alias.io.hdf5_io import make_hdf5, load_hdf5, save_hdf5, shape_check_hdf5
+from alias.io.numpy_io import load_npy
+
+from .utilities import numpy_remove, bubble_sort
 
 
 def check_uv(u, v):
