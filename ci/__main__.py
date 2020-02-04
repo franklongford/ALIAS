@@ -23,8 +23,12 @@ DOCS_DEPS = []
 PIP_DEPS = []
 
 
-def get_env_name():
-    return "ALIAS"
+def remove_dot(python_version):
+    return "".join(python_version.split("."))
+
+
+def get_env_name(python_version):
+    return f"alias-py{remove_dot(python_version)}"
 
 
 def edm_run(env_name, command, cwd=None):
@@ -59,7 +63,7 @@ python_version_option = click.option(
 )
 @python_version_option
 def build_env(python_version, edm, conda):
-    env_name = get_env_name()
+    env_name = get_env_name(python_version)
 
     if edm:
         check_call([
@@ -97,7 +101,7 @@ def build_env(python_version, edm, conda):
 
 
 @cli.command(name="install",
-    help=f'Creates the execution binary inside the {get_env_name()} environment'
+    help=f'Creates the execution binary inside the production environment'
 )
 @click.option(
     '--edm', is_flag=True, default=False,
@@ -110,15 +114,15 @@ def build_env(python_version, edm, conda):
 @python_version_option
 def install(python_version, edm, conda):
 
-    env_name = get_env_name()
+    env_name = get_env_name(python_version)
     if edm:
         print('Installing  to edm environment')
         edm_run(env_name, ['pip', 'install', '-e', '.'])
     elif conda:
-        print(f'Installing {get_env_name()} to conda environment')
+        print(f'Installing {get_env_name(python_version)} to conda environment')
         check_call(['pip', 'install', '-e', '.'])
     else:
-        print(f'Installing {get_env_name()} to local environment')
+        print(f'Installing {get_env_name(python_version)} to local environment')
         native_python_version = sys.version_info
 
         for i in range(2):
@@ -143,9 +147,10 @@ def install(python_version, edm, conda):
     '--edm', is_flag=True, default=False,
     help='Toggles EDM call'
 )
-def flake8(edm):
+@python_version_option
+def flake8(python_version, edm):
 
-    env_name = get_env_name()
+    env_name = get_env_name(python_version)
     if edm:
         edm_run(env_name, ["flake8", "."])
     else:
@@ -157,9 +162,10 @@ def flake8(edm):
     '--edm', is_flag=True, default=False,
     help='Toggles EDM call'
 )
-def test(edm):
+@python_version_option
+def test(python_version, edm):
 
-    env_name = get_env_name()
+    env_name = get_env_name(python_version)
     if edm:
         edm_run(env_name,
                 ["python", "-m", "unittest", "discover", "-v"])
