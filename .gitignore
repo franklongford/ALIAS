@@ -7,6 +7,7 @@
 *.o
 *.so
 *.egg-info
+alias/version.py
 
 # Packages #
 ############
