@@ -1,0 +1,37 @@
+name: Python application
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.6
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.6
+    - name: Install EDM
+      run: |
+        export EDM_OS="rh6_x86_64"
+        export EDM_INSTALLER_PREFIX="edm_cli_"
+        export EDM_INSTALLER_SUFFIX="_linux_x86_64.sh"
+        export EDM_INSTALLER=${EDM_INSTALLER_PREFIX}${EDM_FULL}${EDM_INSTALLER_SUFFIX}
+        wget https://package-data.enthought.com/edm/${EDM_OS}/${EDM_X_Y}/${EDM_INSTALLER}
+        bash ./${EDM_INSTALLER} -b -f -p $HOME
+        export PATH="${PATH}:/usr/local/bin"
+    - name: Build EDM environment
+      run: |
+        edm install --version 3.6 -y click setuptools
+        edm run -- python -m ci build-env
+    - name: Install dependencies and package
+      run: |
+        edm run -- python -m ci install --edm
+    - name: Lint with flake8
+      run: |
+        edm run -- python -m ci flake8
+    - name: Test with unittest
+      run: |
+        edm run -- python -m ci test
