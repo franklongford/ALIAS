@@ -15,6 +15,8 @@ jobs:
         python-version: 3.6
     - name: Install EDM
       run: |
+        export EDM_X_Y="2.1"
+        export EDM_FULL="2.1.0"
         export EDM_OS="rh6_x86_64"
         export EDM_INSTALLER_PREFIX="edm_cli_"
         export EDM_INSTALLER_SUFFIX="_linux_x86_64.sh"
