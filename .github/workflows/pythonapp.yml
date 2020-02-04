@@ -24,7 +24,8 @@ jobs:
         export EDM_INSTALLER=${EDM_INSTALLER_PREFIX}${EDM_FULL}${EDM_INSTALLER_SUFFIX}
         wget https://package-data.enthought.com/edm/${EDM_OS}/${EDM_X_Y}/${EDM_INSTALLER}
         bash ./${EDM_INSTALLER} -b -f -p $HOME
-        export PATH=${HOME}/runner/bin:${HOME}/edm/bin:${PATH}
+        echo "::add-path::${HOME}/runner/bin"
+        echo "::add-path::${HOME}/edm/bin"
     - name: Build EDM environment
       run: |
         edm install --version 3.6 -y click setuptools
