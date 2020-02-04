@@ -43,3 +43,4 @@ Thumbs.db
 *.ipynb_checkpoints
 *.ipynb
 *.idea
+*.pyc

@@ -5,10 +5,11 @@ import logging
 import numpy as np
 
 from alias.src.utilities import (
-    load_npy,
-    make_checkfile, update_checkfile, read_checkfile,
-    get_sim_param, make_mol_com
+    get_sim_param
 )
+from alias.src.positions import make_mol_com
+from alias.io.numpy_io import load_npy
+from alias.io.checkfile_io import make_checkfile, read_checkfile, update_checkfile
 from alias.src.intrinsic_sampling_method import (
     optimise_ns_diff, create_intrinsic_surfaces
 )

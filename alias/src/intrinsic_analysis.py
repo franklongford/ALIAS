@@ -18,9 +18,10 @@ import scipy as sp
 import scipy.constants as con
 
 from .utilities import (
-	make_hdf5, shape_check_hdf5, load_npy, save_hdf5, load_hdf5,
-	unit_vector
+    unit_vector
 )
+from alias.io.hdf5_io import make_hdf5, load_hdf5, save_hdf5, shape_check_hdf5
+from alias.io.numpy_io import load_npy
 from .intrinsic_sampling_method import (
 	xi, wave_function, d_wave_function, dd_wave_function, check_uv,
 	wave_function_array
