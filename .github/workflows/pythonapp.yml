@@ -8,13 +8,12 @@ jobs:
     runs-on: ubuntu-latest
     env:
       global: |
-        EDM_FULL=2.1.0
-        EDM_X_Y=2.1
-        EDM_OS="rh6_x86_64"
-        EDM_INSTALLER_PREFIX="edm_cli_"
-        EDM_INSTALLER_SUFFIX="_linux_x86_64.sh"
-        EDM_INSTALLER=${EDM_INSTALLER_PREFIX}${EDM_FULL}${EDM_INSTALLER_SUFFIX}
-        PATH=${HOME}/edm/bin:${PATH}
+        - EDM_FULL=2.1.0
+        - EDM_X_Y=2.1
+        - EDM_OS="rh6_x86_64"
+        - EDM_INSTALLER_PREFIX="edm_cli_"
+        - EDM_INSTALLER_SUFFIX="_linux_x86_64.sh"
+        - EDM_INSTALLER=${EDM_INSTALLER_PREFIX}${EDM_FULL}${EDM_INSTALLER_SUFFIX}
 
     steps:
     - uses: actions/checkout@v2
@@ -24,12 +23,13 @@ jobs:
         python-version: 3.6
     - name: Install EDM
       run: |
-        wget https://package-data.enthought.com/edm/${EDM_OS}/${EDM_X_Y}/${EDM_INSTALLER}
-        bash ./${EDM_INSTALLER} -b -f -p $HOME
+        - wget https://package-data.enthought.com/edm/${EDM_OS}/${EDM_X_Y}/${EDM_INSTALLER}
+        - bash ./${EDM_INSTALLER} -b -f -p $HOME
+        - export PATH=${HOME}/edm/bin:${PATH}
     - name: Build EDM environment
       run: |
-        edm install --version 3.6 -y click setuptools
-        edm run -- python -m ci build-env
+        - edm install --version 3.6 -y click setuptools
+        - edm run -- python -m ci build-env
     - name: Install dependencies and package
       run: |
         edm run -- python -m ci install --edm
