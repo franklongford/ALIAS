@@ -1,8 +1,7 @@
 import numpy as np
 
-from alias.src.intrinsic_analysis import vcheck
 from alias.src.wave_function import wave_function_array, wave_function, d_wave_function_array, d_wave_function, \
-    dd_wave_function_array, dd_wave_function
+    dd_wave_function_array, dd_wave_function, vcheck
 
 
 def xi(x, y, coeff, qm, qu, dim):

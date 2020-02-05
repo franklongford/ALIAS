@@ -109,3 +109,6 @@ def dd_wave_function_array(x, u_array, Lx):
     f_array = wave_function_array(x, u_array, Lx)
 
     return - coeff ** 2 * u_array ** 2 * f_array
+
+
+vcheck = np.vectorize(check_uv)
