@@ -65,16 +65,13 @@ def coeff_to_fourier_2(coeff_2, qm, dim):
     """
 
     n_waves = 2 * qm + 1
-
-    i_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int)
-    j_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int)
-
     u_mat, v_mat = np.meshgrid(np.arange(-qm, qm+1),
                                np.arange(-qm, qm+1))
     x_mat, y_mat = np.meshgrid(np.linspace(0, 1 / dim[0], n_waves),
                                np.linspace(0, 1 / dim[1], n_waves))
 
     Psi = vcheck(u_mat.flatten(), v_mat.flatten()) / 4.
+
     frequencies = np.pi * 2 * (u_mat * x_mat + y_mat * v_mat) / n_waves
     amplitudes_2 = np.reshape(Psi * coeff_2, (n_waves, n_waves))
 
@@ -83,6 +80,5 @@ def coeff_to_fourier_2(coeff_2, qm, dim):
     for i in range(n_waves):
         for j in range(n_waves):
             A[i][j] += (amplitudes_2 * np.exp(-2 * np.pi * 1j * (u_mat * x_mat[i][j] + y_mat[i][j] * v_mat) / n_waves)).sum()
-
 
     return A, frequencies

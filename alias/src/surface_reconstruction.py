@@ -1,7 +1,11 @@
 import numpy as np
 
-from alias.src.intrinsic_sampling_method import LU_decomposition
-from alias.src.wave_function import wave_function_array, wave_function, vcheck
+from alias.src.linear_algebra import LU_decomposition
+from alias.src.wave_function import (
+    wave_function_array,
+    wave_function,
+    vcheck
+)
 
 
 def surface_reconstruction(coeff, A, b, area_diag, curve_matrix, H_var, qm, n0, psi, precision=1E-3, max_step=20):

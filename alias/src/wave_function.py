@@ -14,9 +14,12 @@ def check_uv(u, v):
     return 1.
 
 
+vcheck = np.vectorize(check_uv)
+
+
 def wave_function(x, u, Lx):
     """
-    Wave in Fouier sum
+    Wave in Fourier sum
     """
 
     coeff = 2 * np.pi / Lx
@@ -28,10 +31,7 @@ def wave_function(x, u, Lx):
 
 def d_wave_function(x, u, Lx):
     """
-    d_wave_function(x, u, Lx)
-
-    Derivative of wave in Fouier sum wrt x
-
+    First derivative of wave in Fourier sum wrt x
     """
 
     coeff = 2 * np.pi / Lx
@@ -43,10 +43,7 @@ def d_wave_function(x, u, Lx):
 
 def dd_wave_function(x, u, Lx):
     """
-    dd_wave_function(x, u, Lx)
-
     Second derivative of wave in Fouier sum wrt x
-
     """
 
     coeff = 2 * np.pi / Lx
@@ -54,7 +51,7 @@ def dd_wave_function(x, u, Lx):
     return - coeff ** 2 * u ** 2 * wave_function(x, u, Lx)
 
 
-def wave_indices(u_array):
+def cos_sin_indices(u_array):
     """Return indices of wave function arrays for
     both cos and sin functions"""
 
@@ -71,7 +68,7 @@ def wave_function_array(x, u_array, Lx):
 
     coeff = 2 * np.pi / Lx
     q = coeff * np.abs(u_array) * x
-    cos_indices, sin_indices = wave_indices(u_array)
+    cos_indices, sin_indices = cos_sin_indices(u_array)
 
     f_array = np.zeros(u_array.shape)
     f_array[cos_indices] += np.cos(q[cos_indices])
@@ -91,7 +88,7 @@ def d_wave_function_array(x, u_array, Lx):
 
     coeff = 2 * np.pi / Lx
     q = coeff * np.abs(u_array) * x
-    cos_indices, sin_indices = wave_indices(u_array)
+    cos_indices, sin_indices = cos_sin_indices(u_array)
 
     f_array = np.zeros(u_array.shape)
     f_array[cos_indices] -= np.sin(q[cos_indices])
@@ -111,4 +108,27 @@ def dd_wave_function_array(x, u_array, Lx):
     return - coeff ** 2 * u_array ** 2 * f_array
 
 
-vcheck = np.vectorize(check_uv)
+def wave_arrays(qm):
+    """Return full arrays of each (u, v) 2D wave frequency
+    combination for a given maximum frequency, `qm`"""
+    n_waves = 2 * qm + 1
+    wave_range = np.arange(n_waves ** 2)
+
+    u_array = np.array(wave_range / n_waves, dtype=int) - qm
+    v_array = np.array(wave_range % n_waves, dtype=int) - qm
+
+    return u_array, v_array
+
+
+def wave_indices(qu, u_array, v_array):
+    """Return indices of both u_array and v_array that contain
+    waves resulting from truncation of `qu` upper bound
+    frequency"""
+
+    wave_mask = (
+        (u_array >= -qu) * (u_array <= qu)
+        * (v_array >= -qu) * (v_array <= qu)
+    )
+    indices = np.argwhere(wave_mask).flatten()
+
+    return indices

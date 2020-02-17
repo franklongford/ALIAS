@@ -11,6 +11,7 @@ Contributors: Frank Longford
 
 Last modified 27/2/2018 by Frank Longford
 """
+import os
 
 import numpy as np
 
@@ -31,37 +32,26 @@ def numpy_remove(list1, list2):
     return np.delete(list1, np.where(np.isin(list1, list2)))
 
 
-def get_sim_param(traj_file, top_file):
+def load_traj_frame(traj_file, top_file=None):
     """
-    Returns selected parameters of input trajectory and topology file using mdtraj
+    Returns single frame of input trajectory and topology file using mdtraj
 
     Parameters
     ----------
-    top_dir:  str
-            Directory of topology file
-    traj_dir:  str
-            Directory of trajectory file
     traj_file:  str
             Trajectory file name
-    top_file:  str
+    top_file:  str, optional
             Topology file name
 
     Returns
     -------
     traj:  mdtraj obj
-            Mdtraj trajectory object
-    mol:  str, list
-            List of residue types in simulation cell
-    nframe:  int
-            Number of frames sampled in traj_file
-    dim:  float, array_like; shape=(3):
-            Simulation cell dimensions (angstroms)
+            Single frame of mdtraj trajectory object
     """
 
     traj = md.load_frame(traj_file, 0, top=top_file)
-    mol = list(set([molecule.name for molecule in traj.topology.residues]))
 
-    return traj, mol
+    return traj
 
 
 def bubble_sort(array, key):
@@ -159,5 +149,18 @@ def print_alias():
     print("|    /  \    |        |      /  \    \___   |")
     print("|   /___ \   |        |     /___ \       \  |")
     print("|  /      \  |____  __|__  /      \  ____/  |")
-    print(f"|'+ '_' * 43 + '|' + '  v{__version__}")
+    print("|" + '_' * 43 + '|' + f"  v{__version__}")
     print("\n    Air-Liquid Interface Analysis Suite \n")
+
+
+def create_surface_file_path(file_name, directory, q_m, n0, phi, n_frame, recon):
+
+    coeff_ext = f'_{q_m}_{n0}_{int(1. / phi + 0.5)}_{n_frame}'
+
+    if recon:
+        coeff_ext += '_r'
+
+    file_path = os.path.join(
+        directory, file_name + coeff_ext)
+
+    return file_path

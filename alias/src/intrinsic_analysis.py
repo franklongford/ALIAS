@@ -23,11 +23,12 @@ from alias.io.hdf5_io import (
 )
 from alias.io.numpy_io import load_npy
 from alias.src.conversions import coeff_to_fourier_2
-
 from alias.src.wave_function import (
     wave_function,
     d_wave_function,
-    dd_wave_function)
+    dd_wave_function
+)
+
 from .utilities import unit_vector
 
 

@@ -1,21 +1,11 @@
 import numpy as np
 from scipy import constants as con
 
-from alias.src.wave_function import vcheck
-
-
-def wave_arrays(qm):
-
-    n_waves = 2 * qm + 1
-    wave_range = np.arange(n_waves ** 2)
-
-    u_array = np.array(wave_range / n_waves, dtype=int) - qm
-    v_array = np.array(wave_range % n_waves, dtype=int) - qm
-
-    return u_array, v_array
+from alias.src.wave_function import vcheck, wave_arrays, wave_indices
 
 
 def calculate_frequencies(u_array, v_array, dim):
+    """Calculate wave frequencies in Angstroms^-1"""
 
     q2 = (u_array ** 2 / dim[0] ** 2
           + v_array ** 2 / dim[1] ** 2)
@@ -27,6 +17,8 @@ def calculate_frequencies(u_array, v_array, dim):
 
 
 def filter_frequencies(q, fourier):
+    """Filter redundant frequencies from q by and record
+    average amplitude of each frequency"""
 
     unique_q = np.unique(q)[1:]
     fourier_sum = np.zeros(unique_q.shape)
@@ -73,17 +65,13 @@ def power_spectrum_coeff(coeff_2, qm, qu, dim):
     """
 
     u_array, v_array = wave_arrays(qm)
-    wave_mask = (
-        (u_array >= -qu) * (u_array <= qu)
-        * (v_array >= -qu) * (v_array <= qu)
-    )
-    indices = np.argwhere(wave_mask).flatten()
+
+    indices = wave_indices(qu, u_array, v_array)
 
     q, q2 = calculate_frequencies(
         u_array[indices], v_array[indices], dim)
 
-    fourier = coeff_2[indices] / 4 * vcheck(
-        u_array[indices], v_array[indices])
+    fourier = coeff_2[indices] / 4 * vcheck(u_array[indices], v_array[indices])
 
     # Remove redundant frequencies
     unique_q, av_fourier = filter_frequencies(q, fourier)
@@ -119,11 +107,8 @@ def surface_tension_coeff(coeff_2, qm, qu, dim, T):
     """
 
     u_array, v_array = wave_arrays(qm)
-    wave_mask = (
-            (u_array >= -qu) * (u_array <= qu)
-            * (v_array >= -qu) * (v_array <= qu)
-    )
-    indices = np.argwhere(wave_mask).flatten()
+
+    indices = wave_indices(qu, u_array, v_array)
 
     q, q2 = calculate_frequencies(
         u_array[indices], v_array[indices], dim)
@@ -136,11 +121,11 @@ def surface_tension_coeff(coeff_2, qm, qu, dim, T):
     return unique_q, av_gamma
 
 
-def intrinsic_area_coeff(coeff_2, qm, qu, dim):
+def intrinsic_area(coeff, qm, qu, dim):
     """
-    intrinsic_area_coeff(coeff_2, qm, qu, dim)
+    intrinsic_area(coeff, qm, qu, dim)
 
-    Calculate the intrinsic surface area spectrum from coefficients at resolution qu
+    Calculate the intrinsic surface area from coefficients at resolution qu
 
     Parameters
     ----------
@@ -162,29 +147,26 @@ def intrinsic_area_coeff(coeff_2, qm, qu, dim):
     """
 
     u_array, v_array = wave_arrays(qm)
-    wave_mask = (
-            (u_array >= -qu) * (u_array <= qu)
-            * (v_array >= -qu) * (v_array <= qu)
-    )
-    indices = np.argwhere(wave_mask).flatten()
+    indices = wave_indices(qu, u_array, v_array)
 
-    q2 = np.pi**2  * vcheck(u_array[indices], v_array[indices]) * (u_array[indices]**2 / dim[0]**2 + v_array[indices]**2 / dim[1]**2)
-    int_A = q2 * coeff_2[indices]
+    q2 = np.pi**2 * (u_array[indices]**2 / dim[0]**2 + v_array[indices]**2 / dim[1]**2)
+
+    int_A = q2 * coeff[indices]**2 * vcheck(u_array[indices], v_array[indices])
     int_A = 1 + 0.5 * np.sum(int_A)
 
     return int_A
 
 
-def cw_gamma_sr(q, gamma, kappa): return gamma + kappa * q**2
+def cw_gamma_sr(q, gamma, kappa):
+    return gamma + kappa * q**2
 
 
-def cw_gamma_lr(q, gamma, kappa0, l0): return gamma + q**2 * (kappa0 + l0 * np.log(q))
+def cw_gamma_lr(q, gamma, kappa0, l0):
+    return gamma + q**2 * (kappa0 + l0 * np.log(q))
 
 
 def get_frequency_set(qm, qu, dim):
     """
-    get_frequency_set(qm, qu, dim)
-
     Returns set of unique frequencies in Fourier series
 
     Parameters
@@ -205,14 +187,11 @@ def get_frequency_set(qm, qu, dim):
     """
 
     u_array, v_array = wave_arrays(qm)
-    wave_mask = (
-            (u_array >= -qu) * (u_array <= qu)
-            * (v_array >= -qu) * (v_array <= qu)
-    )
-    indices = np.argwhere(wave_mask).flatten()
 
-    q2 = 4 * np.pi**2 * (u_array[indices]**2 / dim[0]**2 + v_array[indices]**2 / dim[1]**2)
-    q = np.sqrt(q2)
+    indices = wave_indices(qu, u_array, v_array)
+
+    q, q2 = calculate_frequencies(
+        u_array[indices], v_array[indices], dim)
 
     q_set = np.unique(q)[1:]
     q2_set = np.unique(q2)[1:]

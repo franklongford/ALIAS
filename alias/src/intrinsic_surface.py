@@ -1,7 +1,16 @@
 import numpy as np
 
-from alias.src.wave_function import wave_function_array, wave_function, d_wave_function_array, d_wave_function, \
-    dd_wave_function_array, dd_wave_function, vcheck
+from alias.src.wave_function import (
+    wave_function_array,
+    wave_function,
+    d_wave_function_array,
+    d_wave_function,
+    dd_wave_function_array,
+    dd_wave_function,
+    vcheck,
+    wave_arrays,
+    wave_indices
+)
 
 
 def xi(x, y, coeff, qm, qu, dim):
@@ -34,13 +43,9 @@ def xi(x, y, coeff, qm, qu, dim):
 
     """
 
-    n_waves = 2 * qm + 1
-
     if np.isscalar(x):
-        u_array = (np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm)
-        v_array = (np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm)
-        wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
-        indices = np.argwhere(wave_check).flatten()
+        u_array, v_array = wave_arrays(qm)
+        indices = wave_indices(qu, u_array, v_array)
 
         fuv = wave_function_array(x, u_array[indices], dim[0]) * wave_function_array(y, v_array[indices], dim[1])
         xi_z = np.sum(fuv * coeff[indices])
@@ -85,13 +90,9 @@ def dxy_dxi(x, y, coeff, qm, qu, dim):
 
     """
 
-    n_waves = 2 * qm + 1
-
     if np.isscalar(x):
-        u_array = (np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm)
-        v_array = (np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm)
-        wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
-        indices = np.argwhere(wave_check).flatten()
+        u_array, v_array = wave_arrays(qm)
+        indices = wave_indices(qu, u_array, v_array)
 
         dx_dxi = d_wave_function_array(x, u_array[indices], dim[0]) * wave_function_array(y, v_array[indices], dim[1])
         dy_dxi = wave_function_array(x, u_array[indices], dim[0]) * d_wave_function_array(y, v_array[indices], dim[1])
@@ -143,13 +144,9 @@ def ddxy_ddxi(x, y, coeff, qm, qu, dim):
 
     """
 
-    n_waves = 2 * qm + 1
-
     if np.isscalar(x):
-        u_array = (np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm)
-        v_array = (np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm)
-        wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
-        indices = np.argwhere(wave_check).flatten()
+        u_array, v_array = wave_arrays(qm)
+        indices = wave_indices(qu, u_array, v_array)
 
         ddx_ddxi = dd_wave_function_array(x, u_array[indices], dim[0]) * wave_function_array(y, v_array[indices], dim[1])
         ddy_ddxi = wave_function_array(x, u_array[indices], dim[0]) * dd_wave_function_array(y, v_array[indices], dim[1])
@@ -195,17 +192,12 @@ def xi_var(coeff, qm, qu, dim):
 
     """
 
-    nframe = coeff.shape[0]
-    n_waves = 2 * qm +1
-    nxy = 40
+    u_array, v_array = wave_arrays(qm)
+    indices = wave_indices(qu, u_array, v_array)
 
-    u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
-    v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
-    wave_filter = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
-    indices = np.argwhere(wave_filter).flatten()
     Psi = vcheck(u_array[indices], v_array[indices]) / 4.
 
-    coeff_filter = coeff[:,:,indices]
+    coeff_filter = coeff[:, :, indices]
     mid_point = len(indices) / 2
 
     av_coeff = np.mean(coeff_filter[:, :,mid_point], axis=0)
