@@ -9,7 +9,7 @@ from alias.src.utilities import unit_vector
 
 def molecular_positions(
         atom_coord,
-        n_site,
+        atoms,
         masses,
         mode='molecule',
         com_sites=None):
@@ -20,8 +20,8 @@ def molecular_positions(
     ----------
     atom_coord:  array_like of floats
         Positions of particles in 3 dimensions
-    n_site:  int
-        Number of atomic sites per molecule
+    atoms:  list of st
+        Names of each atom in molecule
     masses:  array_like of float
         Masses of all atomic sites in g mol-1
     mode: str, optional, default: 'molecule'
@@ -29,8 +29,8 @@ def molecular_positions(
         if `molecule`, molecular centre of mass is used. Otherwise, if
         'sites', only atoms with corresponding indices given by com_sites
         are used.
-    com_sites: int or list of int, optional
-        List of atomic sites to use in center of mass calculation
+    com_sites: str or list of str, optional
+        List of atomic site names to use in center of mass calculation
 
     Returns
     -------
@@ -39,6 +39,7 @@ def molecular_positions(
     """
 
     # Calculate the expected number of molecules in mol_coord
+    n_site = len(atoms)
     n_mol = atom_coord.shape[0] // n_site
 
     # Create an empty array containing molecular coordinates
@@ -61,7 +62,7 @@ def molecular_positions(
         return mol_coord
 
     # Convert integer com_sites input into a list
-    if isinstance(com_sites, int):
+    if isinstance(com_sites, str):
         com_sites = [com_sites]
 
     assert len(com_sites) < n_site, (
@@ -69,9 +70,11 @@ def molecular_positions(
         f"less than n_sites ({n_site})"
     )
 
+    indices = [atoms.index(site) for site in com_sites]
+
     # Use single atom as molecular position
     if len(com_sites) == 1:
-        mol_list = np.arange(n_mol) * n_site + int(com_sites[0])
+        mol_list = np.arange(n_mol) * n_site + int(indices[0])
         for i in range(3):
             mol_coord[:, i] = atom_coord[mol_list, i]
 
@@ -80,7 +83,7 @@ def molecular_positions(
     elif len(com_sites) > 1:
         mol_list = np.arange(n_mol) * n_site
         mol_list = mol_list.repeat(len(com_sites))
-        mol_list += np.tile(com_sites, n_mol)
+        mol_list += np.tile(indices, n_mol)
 
         for i in range(3):
             mol_coord[:, i] = np.sum(
@@ -92,6 +95,139 @@ def molecular_positions(
             mol_coord[:, i] *= n_mol / masses[mol_list].sum()
 
     return mol_coord
+
+
+def minimum_image(d_array, pbc_box):
+    """Mutates d_array to yield the minimum signed value of each
+    element, based on periodic boundary conditions given by pbc_box
+    Parameters
+    ---------
+    d_array: array_like of float
+        Array of elements in n dimensions, where the last axis
+        corresponds to a vector with periodic boundary conditions
+        enforced by values in pbc_box
+    pbc_box: array_like of floats
+        Vector containing maximum signed value for each element
+        in d_array
+    """
+
+    assert d_array.shape[-1] == pbc_box.shape[-1]
+
+    # Obtain minimum image distances based on rectangular
+    # prism geometry
+    for i, dim in enumerate(pbc_box):
+        d_array[..., i] -= dim * np.rint(
+            d_array[..., i] / dim
+        )
+
+
+def coordinate_arrays(traj, atoms, masses, mode='molecule', com_sites=None):
+    """Return arrays of molecular centre of masses for each frame in
+    trajectory"""
+
+    atom_traj = traj.xyz * 10
+    mol_traj = np.empty((0, traj.n_residues, 3))
+
+    for index, atom_coord in enumerate(atom_traj):
+
+        mol_coord = molecular_positions(
+            atom_coord,
+            atoms,
+            masses,
+            mode=mode,
+            com_sites=com_sites
+        )
+
+        mol_traj = np.concatenate([
+            mol_traj, np.expand_dims(mol_coord, 0)])
+
+    return mol_traj
+
+
+def orientation(traj, center_atom, vector_atoms):
+    """
+    Calculates orientational unit vector for lipid models,
+    based on vector between phosphorus group
+    and carbon backbone.
+    """
+
+    center_indices = [
+        atom.index for atom in traj.topology.atoms
+        if (atom.name == center_atom)]
+    atom_indices = [
+        [atom.index for atom in traj.topology.atoms
+         if (atom.name == name)]
+        for name in vector_atoms
+    ]
+
+    atom_coord = traj.xyz * 10
+    dim = traj.unitcell_lengths * 10
+    u_vectors = np.zeros((atom_coord.shape[0], len(center_indices), 3))
+
+    for j in range(atom_coord.shape[0]):
+
+        midpoint = [
+            atom_coord[j][index] for index in atom_indices
+        ]
+        midpoint = sum(midpoint) / len(midpoint)
+        vector = atom_coord[j][center_indices] - midpoint
+
+        for i, l in enumerate(dim[j]):
+            vector[:, i] -= l * np.array(2 * vector[:, i] / l, dtype=int)
+
+        u_vectors[j] = unit_vector(vector)
+
+    return u_vectors
+
+
+def batch_coordinate_loader(
+        trajectory, surface_parameters, topology=None, chunk=500):
+    """Generates molecular positions and centre of mass for each frame
+
+    Parameters
+    ----------
+    trajectory:  str
+        Path to trajectory file
+    surface_parameters:  instance of SurfaceParameters
+        Parameters for intrinsic surface
+    topology:  str, optional
+        Path to topology file
+    mode:  str
+        Mode for molecular coordinate determination
+    com_sites:  list(int), optional
+        Indicies of atomic sites to determine molecular centre of mass
+    chunk  int, optional
+        Maximum chunk size for mdtraj batch loading
+    """
+    mol_traj = np.empty((0, surface_parameters.n_mols, 3))
+    mol_vec = np.empty((0, surface_parameters.n_mols, 3))
+    com_traj = np.empty((0, 3))
+    cell_dim = np.zeros((0, 3))
+
+    masses = np.repeat(surface_parameters.masses, surface_parameters.n_mols)
+
+    for index, traj in enumerate(md.iterload(trajectory, chunk=chunk, top=topology)):
+
+        cell_dim_chunk = traj.unitcell_lengths * 10
+        com_chunk = md.compute_center_of_mass(traj) * 10
+
+        traj = traj.atom_slice(surface_parameters.atom_indices)
+        mol_chunk = coordinate_arrays(
+            traj, surface_parameters.atoms, masses,
+            mode=surface_parameters.com_mode,
+            com_sites=surface_parameters.com_sites)
+
+        mol_traj = np.concatenate([mol_traj, mol_chunk])
+        com_traj = np.concatenate([com_traj, com_chunk])
+        cell_dim = np.concatenate([cell_dim, cell_dim_chunk])
+
+        vec_chunk = orientation(
+            traj, surface_parameters.center_atom,
+            surface_parameters.vector_atoms
+        )
+        mol_vec = np.concatenate([mol_vec, vec_chunk])
+
+    return mol_traj, com_traj, cell_dim
 
 
 def molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com):
@@ -189,7 +325,8 @@ def make_mol_com(traj_file, top_file, directory, file_name, natom, nmol, AT, at_
     print("\n-----------CREATING POSITIONAL FILES------------\n")
 
     pos_dir = directory + 'pos/'
-    if not os.path.exists(pos_dir): os.mkdir(pos_dir)
+    if not os.path.exists(pos_dir):
+        os.mkdir(pos_dir)
 
     file_name_pos = file_name + '_{}'.format(nframe)
 
@@ -253,39 +390,6 @@ def make_mol_com(traj_file, top_file, directory, file_name, natom, nmol, AT, at_
         np.save(pos_dir + file_name_pos + '_zvec.npy', zvec)
 
     return nframe
-
-
-def orientation(traj, AT):
-    """
-    Calculates orientational unit vector for lipid models, based on vector between phosphorus group
-    and carbon backbone.
-    """
-
-    if len(AT) == 134:
-        P_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'P')]
-        C1_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'C218')]
-        C2_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'C316')]
-
-    elif len(AT) == 138:
-        P_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'P')]
-        C1_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'C218')]
-        C2_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'C318')]
-    else:
-        P_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'PO4')]
-        C1_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'C4A')]
-        C2_atoms = [atom.index for atom in traj.topology.atoms if (atom.name == 'C4B')]
-
-    XYZ = traj.xyz * 10
-    dim = traj.unitcell_lengths * 10
-    u_vectors = np.zeros((XYZ.shape[0], len(P_atoms), 3))
-
-    for j in range(XYZ.shape[0]):
-        midpoint = (XYZ[j][C1_atoms] + XYZ[j][C2_atoms]) / 2
-        vector = XYZ[j][P_atoms] - midpoint
-        for i, l in enumerate(dim[j]): vector[:, i] -= l * np.array(2 * vector[:, i] / l, dtype=int)
-        u_vectors[j] = unit_vector(vector)
-
-    return u_vectors
 
 
 def check_pbc(xmol, ymol, zmol, pivots, dim, max_r=30):
