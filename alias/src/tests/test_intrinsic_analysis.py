@@ -1,14 +1,14 @@
-from unittest import TestCase
-
 import numpy as np
 
 from alias.src.intrinsic_analysis import (
     coeff_slice
 )
-from alias.src.surface_reconstruction import H_xy, H_var_mol
+from alias.src.surface_reconstruction import (
+    H_xy, H_var_mol)
+from alias.tests.alias_test_case import AliasTestCase
 
 
-class TestIA(TestCase):
+class TestIA(AliasTestCase):
 
     def setUp(self):
         self.qm = 8
@@ -31,7 +31,7 @@ class TestIA(TestCase):
         for index, x in enumerate(self.pos):
             H = H_xy(x, x, self.coeff, self.qm, self.qu, self.dim)
 
-            self.assertTrue(np.allclose(H, H_array[index]))
+            self.assertArrayAlmostEqual(H, H_array[index])
 
     def test_H_var_mol(self):
 

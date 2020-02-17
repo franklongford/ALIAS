@@ -44,3 +44,4 @@ Thumbs.db
 *.ipynb
 *.idea
 *.pyc
+alias/tests/fixtures/alias_analysis/

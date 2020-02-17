@@ -7,7 +7,7 @@ from alias.src.wave_function import (
     wave_function,
     d_wave_function,
     dd_wave_function,
-    wave_indices
+    cos_sin_indices
 )
 
 
@@ -75,7 +75,7 @@ class TestWaveFunction(TestCase):
 
         u_array = np.arange(-4, 5)
 
-        cos_indices, sin_indices = wave_indices(u_array)
+        cos_indices, sin_indices = cos_sin_indices(u_array)
         self.assertListEqual(
             [[0], [1], [2], [3]], sin_indices.tolist())
         self.assertListEqual(

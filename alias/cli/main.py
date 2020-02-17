@@ -17,12 +17,18 @@ import logging
 import os
 
 from alias.src.run_alias import run_alias
+from alias.src.alias_options import AliasOptions
+from alias.src.surface_parameters import SurfaceParameters
 from alias.src.utilities import print_alias
 from alias.version import __version__
 
 
 @click.command()
 @click.version_option(version=__version__)
+@click.option(
+    '--topology', type=click.Path(exists=True), default=None,
+    help='File path of optional topology file for system'
+)
 @click.option(
     '--debug', is_flag=True, default=False,
     help="Prints extra debug information in pyfibre.log"
@@ -48,10 +54,6 @@ from alias.version import __version__
     help='Toggles overwrite intrinsic positions'
 )
 @click.option(
-    '--ow_intpos', is_flag=True, default=False,
-    help='Toggles overwrite network extraction'
-)
-@click.option(
     '--ow_hist', is_flag=True, default=False,
     help='Toggles overwrite histograms of position and angles'
 )
@@ -60,16 +62,16 @@ from alias.version import __version__
     help='Toggles overwrite intrinsic probability distributions'
 )
 @click.argument(
-    'traj_file', type=click.Path(exists=True),
-    required=True, default='.'
+    'trajectory', type=click.Path(exists=True),
+    required=True, default=None
 )
 @click.argument(
-    'top_file', type=click.Path(exists=True),
-    required=True, default='.'
+    'parameters', type=click.Path(exists=True),
+    required=True, default=None
 )
-def alias(traj_file, top_file, recon,
+def alias(trajectory, topology, debug, recon, parameters,
           ow_coeff, ow_recon, ow_pos, ow_intpos, ow_hist, ow_dist,
-          debug):
+          ):
 
     if debug:
         logging.basicConfig(filename="pyfibre.log", filemode="w",
@@ -80,14 +82,24 @@ def alias(traj_file, top_file, recon,
 
     print_alias()
 
-    while not os.path.exists(traj_file):
-        traj_file = input("\nTrajectory file not recognised: Re-enter file path: ")
+    log = logging.getLogger(__name__)
 
-    while not os.path.exists(top_file):
-        top_file = input("\nTopology file not recognised: Re-enter file path: ")
+    log.info(f'Starting ALIAS version {__version__}')
+
+    while not os.path.exists(trajectory):
+        trajectory = input("\nTrajectory file not recognised: Re-enter file path: ")
+
+    if topology is not None:
+        while not os.path.exists(topology):
+            topology = input("\nTopology file not recognised: Re-enter file path: ")
 
     if ow_hist:
         ow_dist = True
 
-    run_alias(traj_file, top_file, recon, ow_coeff, ow_recon, ow_pos,
-              ow_intpos, ow_hist, ow_dist)
+    options = AliasOptions(
+        recon, ow_coeff, ow_recon, ow_pos,
+        ow_intpos, ow_hist, ow_dist
+    )
+    parameters = SurfaceParameters.from_json(parameters)
+
+    run_alias(trajectory, options, parameters, topology=topology)
