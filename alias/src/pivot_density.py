@@ -125,9 +125,10 @@ def optimise_pivot_diffusion(file_name, directory, surf_param, mol_vec=None, sta
         os.mkdir(surface_dir)
 
     pos_file_name = os.path.join(pos_dir, file_name)
-    mol_traj = load_npy(pos_file_name + '_mol_traj', frames=range(n_frame))
-    com_traj = load_npy(pos_file_name + '_com_traj', frames=range(n_frame))
-    cell_dim = load_npy(pos_file_name + '_cell_dim', frames=range(n_frame))
+    mol_traj = load_npy(pos_file_name + f'{surf_param.n_frames}_mol_traj', frames=range(n_frame))
+    com_traj = load_npy(pos_file_name + f'{surf_param.n_frames}_com_traj', frames=range(n_frame))
+    mol_vec = load_npy(pos_file_name + f'{surf_param.n_frames}_mol_vec', frames=range(n_frame))
+    cell_dim = load_npy(pos_file_name + f'{surf_param.n_frames}_cell_dim', frames=range(n_frame))
 
     mol_ex_1 = []
     mol_ex_2 = []

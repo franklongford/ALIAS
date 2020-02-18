@@ -291,14 +291,15 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 
     if not file_check:
         print("IMPORTING GLOBAL POSITION DISTRIBUTIONS\n")
-        xmol = load_npy(pos_dir + file_name + '_{}_xmol'.format(nframe))
-        ymol = load_npy(pos_dir + file_name + '_{}_ymol'.format(nframe))
-        zmol = load_npy(pos_dir + file_name + '_{}_zmol'.format(nframe))
-        zvec = load_npy(pos_dir + file_name + '_{}_zvec'.format(nframe))
-        COM = load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
-        nmol = xmol.shape[1]
-        com_tile = np.moveaxis(np.tile(COM, (nmol, 1, 1)), [0, 1, 2], [2, 1, 0])[2]
-        zmol = zmol - com_tile
+        mol_traj = load_npy(pos_dir + file_name + '_{}_mol_traj'.format(nframe))
+        mol_vec = load_npy(pos_dir + file_name + '_{}_mol_vec'.format(nframe))
+        com_traj = load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
+
+        n_mols = mol_traj.shape[1]
+        com_tile = np.moveaxis(
+            np.tile(com_traj, (n_mols, 1, 1)),
+            [0, 1, 2], [2, 1, 0])[2]
+        mol_traj[:, :, 2] -= com_tile
 
         for frame in range(nframe):
 
@@ -333,8 +334,10 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
                     coeff = load_hdf5(coeff_file_name + '_coeff', frame-1)
                     surf_0 = [coeff[0][index], coeff[1][index]]
 
-                coeff, pivot = build_surface(xmol[frame], ymol[frame], zmol[frame], dim, qm, n0, phi, tau, max_r,
-                                             ncube=ncube, vlim=vlim, recon=recon, surf_0=surf_0, zvec=zvec[frame])
+                coeff, pivot = build_surface(
+                    mol_traj[frame, :, 0], mol_traj[frame, :, 1], mol_traj[frame, :, 2],
+                    dim, qm, n0, phi, tau, max_r,
+                    ncube=ncube, vlim=vlim, recon=recon, surf_0=surf_0, zvec=mol_vec[frame])
 
                 save_hdf5(coeff_file_name + '_coeff', coeff, frame, mode_coeff)
                 save_hdf5(coeff_file_name + '_pivot', pivot, frame, mode_pivot)

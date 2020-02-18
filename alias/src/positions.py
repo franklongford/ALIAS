@@ -170,6 +170,7 @@ def orientation(traj, center_atom, vector_atoms):
             atom_coord[j][index] for index in atom_indices
         ]
         midpoint = sum(midpoint) / len(midpoint)
+
         vector = atom_coord[j][center_indices] - midpoint
 
         for i, l in enumerate(dim[j]):
@@ -192,10 +193,6 @@ def batch_coordinate_loader(
         Parameters for intrinsic surface
     topology:  str, optional
         Path to topology file
-    mode:  str
-        Mode for molecular coordinate determination
-    com_sites:  list(int), optional
-        Indicies of atomic sites to determine molecular centre of mass
     chunk  int, optional
         Maximum chunk size for mdtraj batch loading
     """
@@ -227,7 +224,7 @@ def batch_coordinate_loader(
         )
         mol_vec = np.concatenate([mol_vec, vec_chunk])
 
-    return mol_traj, com_traj, cell_dim
+    return mol_traj, com_traj, cell_dim, mol_vec
 
 
 def molecules(xat, yat, zat, nmol, nsite, mol_M, mol_com):

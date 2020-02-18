@@ -24,8 +24,10 @@ def run_alias(trajectory, alias_options, surface_parameters, topology=None):
 
     if not os.path.exists(alias_dir):
         os.mkdir(alias_dir)
+
     if not os.path.exists(data_dir):
         os.mkdir(data_dir)
+
     if not os.path.exists(figure_dir):
         os.mkdir(figure_dir)
 
@@ -69,17 +71,20 @@ def run_alias(trajectory, alias_options, surface_parameters, topology=None):
     pos_file_name = os.path.join(pos_dir, file_name)
 
     try:
-        mol_traj = load_npy(pos_file_name + '_mol_traj')
-        com_traj = load_npy(pos_file_name + '_com_traj')
-        cell_dim = load_npy(pos_file_name + '_cell_dim')
-    except IOError:
-        mol_traj, com_traj, cell_dim = batch_coordinate_loader(
+        mol_traj = load_npy(pos_file_name + f'{surface_parameters.n_frames}_mol_traj')
+        com_traj = load_npy(pos_file_name + f'{surface_parameters.n_frames}_com_traj')
+        mol_vec = load_npy(pos_file_name + f'{surface_parameters.n_frames}_mol_vec')
+        cell_dim = load_npy(pos_file_name + f'{surface_parameters.n_frames}_cell_dim')
+    except (FileNotFoundError, IOError):
+
+        mol_traj, com_traj, cell_dim, mol_vec = batch_coordinate_loader(
             trajectory, surface_parameters, topology=topology
         )
 
-        np.save(pos_file_name + '_mol_traj', mol_traj)
-        np.save(pos_file_name + '_com_traj', com_traj)
-        np.save(pos_file_name + '_cell_dim', cell_dim)
+        np.save(pos_file_name + f'{surface_parameters.n_frames}_mol_traj', mol_traj)
+        np.save(pos_file_name + f'{surface_parameters.n_frames}_mol_vec', mol_vec)
+        np.save(pos_file_name + f'{surface_parameters.n_frames}_com_traj', com_traj)
+        np.save(pos_file_name + f'{surface_parameters.n_frames}_cell_dim', cell_dim)
 
     surface_parameters.n_frames = mol_traj.shape[0]
     mean_cell_dim = np.mean(cell_dim, axis=0)
