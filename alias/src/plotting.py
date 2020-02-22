@@ -4,7 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as anim
 
-from alias.src.wave_function import check_uv
 from alias.src.intrinsic_surface import xi
 from alias.src.positions import check_pbc
 
@@ -15,14 +14,6 @@ def view_surface(coeff, pivot, qm, qu, xmol, ymol, zmol, nxy, dim):
 
     X = np.linspace(0, dim[0], nxy)
     Y = np.linspace(0, dim[1], nxy)
-
-    vcheck = np.vectorize(check_uv)
-
-    n_waves = 2 * qm + 1
-    u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
-    v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
-    wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
-    Delta = 1. / 4 * np.sum(coeff**2 * wave_check * vcheck(u_array, v_array))
 
     surface = np.zeros((2, nxy, nxy))
 

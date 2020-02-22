@@ -150,7 +150,8 @@ def intrinsic_area(coeff, qm, qu, dim):
     -------
 
     int_A:  float
-        Relative size of intrinsic surface area, compared to cell cross section XY
+        Relative size of intrinsic surface area, compared
+        to cell cross section XY
     """
 
     u_array, v_array = wave_arrays(qm)
@@ -185,7 +186,8 @@ def get_frequency_set(qm, qu, dim):
     ----------
 
     qm:  int
-        Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+        Maximum number of wave frequencies in Fourier Sum
+        representing intrinsic surface
     dim:  float, array_like; shape=(3)
         XYZ dimensions of simulation cell
 

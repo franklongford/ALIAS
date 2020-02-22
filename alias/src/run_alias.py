@@ -8,7 +8,7 @@ from alias.io.checkfile_io import (
     save_checkfile
 )
 from alias.src.positions import batch_coordinate_loader
-from alias.src.surf_param import SurfaceParameters
+from alias.src.surface_parameters import SurfaceParameters
 from alias.src.intrinsic_sampling_method import (
     create_intrinsic_surfaces
 )
@@ -112,8 +112,11 @@ def run_alias(trajectory, alias_options, checkpoint=None, topology=None):
           f"{surf_param.area}\n")
 
     print("\n------STARTING INTRINSIC SAMPLING-------\n")
-    print("Max wavelength = {:12.4f} sigma   Min wavelength = {:12.4f} sigma".format(
-        surf_param.q_max, surf_param.q_min))
+    print(
+        "Max wavelength = {:12.4f} sigma  "
+        "Min wavelength = {:12.4f} sigma".format(
+            surf_param.q_max, surf_param.q_min)
+    )
     print("Max frequency qm = {:6d}".format(
         surf_param.q_m))
 
@@ -123,7 +126,8 @@ def run_alias(trajectory, alias_options, checkpoint=None, topology=None):
 
     freq_range = range(1, surf_param.q_m+1)
     print("\nResolution parameters:")
-    print("\n{:12s} | {:12s} | {:12s}".format('qu', "lambda (sigma)", "lambda (nm)"))
+    print("\n{:12s} | {:12s} | {:12s}".format(
+        'qu', "lambda (sigma)", "lambda (nm)"))
     print("-" * 14 * 5)
 
     for q_u in freq_range:
@@ -140,7 +144,8 @@ def run_alias(trajectory, alias_options, checkpoint=None, topology=None):
         recon=surf_param.recon, ncube=surf_param.n_cube,
         vlim=surf_param.v_lim, tau=surf_param.tau,
         max_r=surf_param.max_r,
-        ow_coeff=alias_options.ow_coeff, ow_recon=alias_options.ow_recon)
+        ow_coeff=alias_options.ow_coeff,
+        ow_recon=alias_options.ow_recon)
 
     create_intrinsic_positions_dxdyz(
         data_dir, file_name, surf_param.n_mol,

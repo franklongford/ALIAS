@@ -82,7 +82,7 @@ def pivot_diffusion(file_name, surface_dir, mol_traj, cell_dim, mol_vec,
     return ex_1, ex_2
 
 
-def optimise_pivot_diffusion(file_name, directory, surf_param, mol_vec=None, start_density=0.85, step_density=0.05,
+def optimise_pivot_diffusion(file_name, directory, surf_param, start_density=0.85, step_density=0.05,
                              n_frame=20, precision=5E-4, gamma=0.5):
     """
     Routine to find optimised pivot density coefficient ns and pivot number n0 based on lowest pivot diffusion rate
@@ -93,16 +93,8 @@ def optimise_pivot_diffusion(file_name, directory, surf_param, mol_vec=None, sta
         File name of trajectory being analysed.
     directory:  str
         File path of directory of alias analysis.
-    mol_traj:  array_like
-        Trajectory of molecular coordinates
-    com_traj:  array_like
-        Trajectory of molecular centre of mass
-    cell_dim:  array_like
-        Trajectory of simulation cell dimensions
     surf_param: instance SurfaceParameters
         Parameters for intrinsic surface builder
-    mol_vec: array_like
-        Trajectory of molecular orientations
     start_density:  float
         Initial value for pivot density optimisation routine
     step_density:  float
