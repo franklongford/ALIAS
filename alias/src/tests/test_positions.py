@@ -41,7 +41,8 @@ class TestPositions(AliasTestCase):
 
         self.cell_dim = np.array([8., 8., 8.])
         self.parameters = ProbeSurfaceParameters()
-        self.traj = md.load(amber_trajectory, top=amber_topology)
+        self.traj = md.load(
+            amber_trajectory, top=amber_topology)
 
     def test_coordinate_arrays(self):
 
@@ -77,14 +78,15 @@ class TestPositions(AliasTestCase):
 
     def test_batch_coordinate_loader(self):
 
-        mol_traj, com_traj, cell_dim = batch_coordinate_loader(
+        (mol_traj, com_traj,
+         cell_dim, mol_vec) = batch_coordinate_loader(
             amber_trajectory, self.parameters,
-            topology=amber_topology, mode='molecule')
+            topology=amber_topology)
 
         self.assertEqual((10, 4, 3), mol_traj.shape)
+        self.assertEqual((10, 4, 3), mol_vec.shape)
         self.assertEqual((10, 3), cell_dim.shape)
         self.assertEqual((10, 3), com_traj.shape)
-        self.assertEqual(10, self.parameters.n_frames)
 
     def test_simple_molecular_positions(self):
 
@@ -160,18 +162,24 @@ class TestPositions(AliasTestCase):
                 "Argument mode==invalid must be either"
                 " 'molecule' or 'sites'"):
             molecular_positions(
-                self.simple_coord, 2, self.simple_masses,
+                self.simple_coord, self.parameters.atoms,
+                self.simple_masses,
                 mode='invalid')
 
     def test_invalid_com_sites(self):
 
+        com_sites = ['C'] * (len(self.parameters.atoms) + 1)
+
         with self.assertRaisesRegex(
                 AssertionError,
                 "Argument com_sites must have a length "
-                r"\(3\) less than n_sites \(2\)"):
+                r"\(25\) less than n_sites \(24\)"):
             molecular_positions(
-                self.simple_coord, 2, self.simple_masses,
-                mode='sites', com_sites=[0, 1, 2])
+                self.simple_coord, self.parameters.atoms,
+                self.simple_masses,
+                mode='sites',
+                com_sites=com_sites
+            )
 
     def test_minimum_image(self):
         d_coord = np.array([[[0, 0, 0],

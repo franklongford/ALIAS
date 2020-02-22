@@ -1,5 +1,6 @@
 from unittest import mock, TestCase
 
+from alias.io.tests.test_command_line_input import INPUT_PATH
 from alias.tests.probe_classes import ProbeSurfaceParameters
 
 
@@ -18,8 +19,7 @@ class TestSurfaceParameters(TestCase):
 
     def test_select_residue(self):
 
-        with mock.patch('alias.src.surface_parameters.input',
-                        return_value='TRP'):
+        with mock.patch(INPUT_PATH, return_value='TRP'):
             self.parameters.select_residue()
 
         self.assertEqual('TRP', self.parameters.molecule)
@@ -36,17 +36,10 @@ class TestSurfaceParameters(TestCase):
 
     def test_select_masses(self):
 
-        with mock.patch('alias.src.surface_parameters.input',
-                        return_value='TRP'):
-            self.parameters.select_residue()
-
-        self.assertEqual(0, len(self.parameters.masses))
-
-        with mock.patch('alias.src.surface_parameters.input',
-                        return_value='Y'):
+        with mock.patch(INPUT_PATH, return_value='Y'):
             self.parameters.select_masses()
 
         self.assertEqual(
             24, len(self.parameters.masses))
         self.assertAlmostEqual(
-            186.21092, self.parameters.masses.sum())
+            186.21092, sum(self.parameters.masses))
