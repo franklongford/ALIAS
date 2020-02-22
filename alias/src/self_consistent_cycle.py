@@ -246,10 +246,9 @@ def pivot_selection(mol_list, zeta_list, piv_n, tau, n0):
     return mol_list, new_piv, piv_n
 
 
-def initialise_surface(qm, phi, dim, recon=False):
+def initialise_surface(qm, phi, dim):
     """
-    Calculate initial parameters for ISM and reconstructed
-    ISM fitting procedure
+    Calculate initial parameters for ISM
 
     Parameters
     ----------
@@ -261,8 +260,6 @@ def initialise_surface(qm, phi, dim, recon=False):
         optimisation function
     dim:  float, array_like; shape=(3)
         XYZ dimensions of simulation cell
-    recon:  bool (optional)
-        Surface reconstruction
 
     Returns
     -------
@@ -280,36 +277,74 @@ def initialise_surface(qm, phi, dim, recon=False):
         for both surfaces
     area_diag: float, array_like; shape=(n_waves**2)
         Surface area diagonal terms for A matrix
+    """
+
+    n_waves = 2*qm+1
+
+    # Form the diagonal xi^2 terms
+    u_array, v_array = wave_arrays(qm)
+    uv_check = vcheck(u_array, v_array)
+
+    # Make diagonal terms of A matrix
+    area_diag = phi * (
+        u_array**2 * dim[1] / dim[0]
+        + v_array**2 * dim[0] / dim[1]
+    )
+    area_diag = 4 * np.pi**2 * np.diagflat(area_diag * uv_check)
+
+    # Create empty A matrix and b vector for linear algebra
+    # equation Ax = b
+    A = np.zeros((2, n_waves**2, n_waves**2))
+    b = np.zeros((2, n_waves**2))
+    coeff = np.zeros((2, n_waves**2))
+
+    return coeff, A, b, area_diag
+
+
+def initialise_recon(qm, phi, dim):
+    """
+    Calculate initial parameters for reconstructed
+    ISM fitting procedure
+
+    Parameters
+    ----------
+    qm:  int
+        Maximum number of wave frequencies in Fourier Sum
+        representing intrinsic surface
+    phi:  float
+        Weighting factor of minimum surface area term in surface
+        optimisation function
+    dim:  float, array_like; shape=(3)
+        XYZ dimensions of simulation cell
+
+    Returns
+    -------
+    psi:  float
+        Weighting factor for surface reconstruction function
     curve_matrix: float, array_like; shape=(n_waves**2, n_waves**2)
         Surface curvature terms for A matrix
     H_var: float, array_like; shape=(n_waves**2)
         Diagonal terms for global variance of mean curvature
     """
 
-    n_waves = 2*qm+1
+    psi = phi * dim[0] * dim[1]
+    n_waves = 2 * qm + 1
 
     "Form the diagonal xi^2 terms"
     u_array, v_array = wave_arrays(qm)
     uv_check = vcheck(u_array, v_array)
 
-    "Make diagonal terms of A matrix"
-    area_diag = phi * (u_array**2 * dim[1] / dim[0] + v_array**2 * dim[0] / dim[1])
-    area_diag = 4 * np.pi**2 * np.diagflat(area_diag * uv_check)
+    u_matrix = np.tile(u_array, (n_waves**2, 1))
+    v_matrix = np.tile(v_array, (n_waves**2, 1))
 
-    "Create empty A matrix and b vector for linear algebra equation Ax = b"
-    A = np.zeros((2, n_waves**2, n_waves**2))
-    b = np.zeros((2, n_waves**2))
-    coeff = np.zeros((2, n_waves**2))
+    H_var = 4 * np.pi**4 * uv_check * (
+        u_array**4 / dim[0]**4 + v_array**4 / dim[1]**4
+        + 2 * (u_array * v_array)**2 / np.prod(dim**2)
+    )
 
-    if recon:
-        u_matrix = np.tile(u_array, (n_waves**2, 1))
-        v_matrix = np.tile(v_array, (n_waves**2, 1))
+    curve_matrix = 16 * np.pi**4 * (
+        (u_matrix * u_matrix.T)**2 / dim[0]**4 + (v_matrix * v_matrix.T)**2 / dim[1]**4 +
+        ((u_matrix * v_matrix.T)**2 + (u_matrix.T * v_matrix)**2) / np.prod(dim**2)
+    )
 
-        H_var = 4 * np.pi**4 * uv_check * (u_array**4 / dim[0]**4 + v_array**4 / dim[1]**4 + 2 * (u_array * v_array)**2 / np.prod(dim**2))
-
-        curve_matrix = 16 * np.pi**4 * ((u_matrix * u_matrix.T)**2 / dim[0]**4 + (v_matrix * v_matrix.T)**2 / dim[1]**4 +
-                                        ((u_matrix * v_matrix.T)**2 + (u_matrix.T * v_matrix)**2) / np.prod(dim**2))
-
-        return coeff, A, b, area_diag, curve_matrix, H_var
-
-    return coeff, A, b, area_diag
+    return psi, curve_matrix, H_var

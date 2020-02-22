@@ -91,18 +91,3 @@ class TestCommandLineOutput(TestCase):
            '|          0          1 ||               2 |',
            self.stdout_table.row([0, 1, 2])
         )
-
-    def test_build_surface(self):
-
-        names = ['TIMINGS (s)', 'PIVOTS', 'INT AREA']
-        headings = [
-            ['Pivot selection', 'Matrix Formation', 'LU Decomposition', 'TOTAL'],
-            ['n_piv1', 'n_piv2'],
-            ['surf1', 'surf2']
-        ]
-
-        for name, heading in zip(names, headings):
-            self.stdout_table.add_section(name, heading)
-
-        print(self.stdout_table.table_header())
-        print(self.stdout_table.row([1] * 8))

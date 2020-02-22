@@ -1,5 +1,3 @@
-from unittest import TestCase
-
 import numpy as np
 
 from alias.src.wave_function import (
@@ -7,11 +5,13 @@ from alias.src.wave_function import (
     wave_function,
     d_wave_function,
     dd_wave_function,
-    cos_sin_indices
+    cos_sin_indices,
+    wave_arrays
 )
+from alias.tests.alias_test_case import AliasTestCase
 
 
-class TestWaveFunction(TestCase):
+class TestWaveFunction(AliasTestCase):
 
     def setUp(self):
 
@@ -81,3 +81,18 @@ class TestWaveFunction(TestCase):
         self.assertListEqual(
             [[4], [5], [6], [7], [8]], cos_indices.tolist())
 
+    def test_wave_arrays(self):
+
+        u_array, v_array = wave_arrays(1)
+        self.assertArrayAlmostEqual(
+            np.array([-1, -1, -1, 0, 0, 0, 1, 1, 1]),
+            u_array
+        )
+        self.assertArrayAlmostEqual(
+            np.array([-1, 0, 1, -1, 0, 1, -1, 0, 1]),
+            v_array
+        )
+
+        u_array, v_array = wave_arrays(2)
+        self.assertEqual((25,), u_array.shape)
+        self.assertEqual((25,), v_array.shape)

@@ -426,7 +426,8 @@ def check_pbc(xmol, ymol, zmol, pivots, dim, max_r=30):
                      zmol[p_map] - zmol[n])
                 )
                 for index_k, l in enumerate(dim[:2]):
-                    dxyz[index_k] -= l * np.array(2 * dxyz[index_k] / l, dtype=int)
+                    dxyz[index_k] -= l * np.array(
+                        2 * dxyz[index_k] / l, dtype=int)
 
                 dr2 = np.sum(dxyz**2, axis=0)
                 neighbour_count = np.count_nonzero(dr2 < max_r**2)

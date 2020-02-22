@@ -1,7 +1,8 @@
 import numpy as np
 from scipy import constants as con
 
-from alias.src.wave_function import vcheck, wave_arrays, wave_indices
+from alias.src.wave_function import (
+    vcheck, wave_arrays, wave_indices)
 
 
 def calculate_frequencies(u_array, v_array, dim):
@@ -71,7 +72,8 @@ def power_spectrum_coeff(coeff_2, qm, qu, dim):
     q, q2 = calculate_frequencies(
         u_array[indices], v_array[indices], dim)
 
-    fourier = coeff_2[indices] / 4 * vcheck(u_array[indices], v_array[indices])
+    fourier = coeff_2[indices] / 4 * vcheck(
+        u_array[indices], v_array[indices])
 
     # Remove redundant frequencies
     unique_q, av_fourier = filter_frequencies(q, fourier)
@@ -81,7 +83,8 @@ def power_spectrum_coeff(coeff_2, qm, qu, dim):
 
 def surface_tension_coeff(coeff_2, qm, qu, dim, T):
     """
-    Returns spectrum of surface tension, corresponding to the frequencies in q2_set
+    Returns spectrum of surface tension, corresponding to
+    the frequencies in q2_set
 
     Parameters
     ----------
@@ -89,9 +92,11 @@ def surface_tension_coeff(coeff_2, qm, qu, dim, T):
     coeff_2:  float, array_like; shape=(n_waves**2)
         Square of optimised surface coefficients
     qm:  int
-        Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+        Maximum number of wave frequencies in Fourier Sum
+        representing intrinsic surface
     qu:  int
-        Upper limit of wave frequencies in Fouier Sum representing intrinsic surface
+        Upper limit of wave frequencies in Fourier Sum
+        representing intrinsic surface
     dim:  float, array_like; shape=(3)
         XYZ dimensions of simulation cell
     T:  float
@@ -113,7 +118,8 @@ def surface_tension_coeff(coeff_2, qm, qu, dim, T):
     q, q2 = calculate_frequencies(
         u_array[indices], v_array[indices], dim)
 
-    int_A = dim[0] * dim[1] * q2 * coeff_2[indices] * vcheck(u_array[indices], v_array[indices]) / 4
+    int_A = dim[0] * dim[1] * q2 * coeff_2[indices] * vcheck(
+        u_array[indices], v_array[indices]) / 4
     gamma = con.k * T * 1E23 / int_A
 
     unique_q, av_gamma = filter_frequencies(q, gamma)
@@ -123,9 +129,8 @@ def surface_tension_coeff(coeff_2, qm, qu, dim, T):
 
 def intrinsic_area(coeff, qm, qu, dim):
     """
-    intrinsic_area(coeff, qm, qu, dim)
-
-    Calculate the intrinsic surface area from coefficients at resolution qu
+    Calculate the intrinsic surface area from coefficients
+    at resolution qu
 
     Parameters
     ----------
@@ -133,9 +138,11 @@ def intrinsic_area(coeff, qm, qu, dim):
     coeff:	float, array_like; shape=(n_waves**2)
         Optimised surface coefficients
     qm:  int
-        Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+        Maximum number of wave frequencies in Fourier Sum
+        representing intrinsic surface
     qu:  int
-        Upper limit of wave frequencies in Fouier Sum representing intrinsic surface
+        Upper limit of wave frequencies in Fourier Sum
+        representing intrinsic surface
     dim:  float, array_like; shape=(3)
         XYZ dimensions of simulation cell
 
@@ -149,9 +156,14 @@ def intrinsic_area(coeff, qm, qu, dim):
     u_array, v_array = wave_arrays(qm)
     indices = wave_indices(qu, u_array, v_array)
 
-    q2 = np.pi**2 * (u_array[indices]**2 / dim[0]**2 + v_array[indices]**2 / dim[1]**2)
+    q2 = np.pi**2 * (
+        u_array[indices]**2 / dim[0]**2 +
+        v_array[indices]**2 / dim[1]**2
+    )
 
-    int_A = q2 * coeff[indices]**2 * vcheck(u_array[indices], v_array[indices])
+    int_A = q2 * coeff[indices]**2 * vcheck(
+        u_array[indices], v_array[indices]
+    )
     int_A = 1 + 0.5 * np.sum(int_A)
 
     return int_A

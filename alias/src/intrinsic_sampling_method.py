@@ -25,7 +25,7 @@ from alias.io.command_line_output import StdOutTable
 from alias.src.linear_algebra import update_A_b, lu_decomposition
 from alias.src.self_consistent_cycle import (
     self_consistent_cycle,
-    initialise_surface
+    initialise_surface, initialise_recon
 )
 from alias.src.spectra import intrinsic_area
 from alias.src.utilities import create_surface_file_path
@@ -93,13 +93,10 @@ def build_surface(xmol, ymol, zmol, dim, qm, n0, phi, tau, max_r,
 
     start = time.time()
 
-    surf_param = initialise_surface(qm, phi, dim, recon)
+    coeff, A, b, area_diag = initialise_surface(qm, phi, dim)
 
-    if recon == 1:
-        psi = phi * dim[0] * dim[1]
-        coeff, A, b, area_diag, curve_matrix, H_var = surf_param
-    else:
-        coeff, A, b, area_diag = surf_param
+    if recon:
+        psi, curve_matrix, H_var = initialise_recon(qm, phi, dim)
 
     # Remove molecules from vapour phase and assign an initial
     # grid of pivots furthest away from centre of mass

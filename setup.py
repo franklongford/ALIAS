@@ -54,4 +54,3 @@ setup(
         'gui_scripts': ['ALIAS = alias.cli.main:alias']},
     install_requires=REQUIREMENTS
 )
-
