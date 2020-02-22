@@ -4,7 +4,7 @@ import numpy as np
 
 from alias.src.utilities import (
     unit_vector, numpy_remove,
-    bubble_sort
+    bubble_sort, create_surface_file_path
 )
 
 
@@ -12,6 +12,8 @@ class TestUtilities(TestCase):
 
     def setUp(self):
         self.test_data = np.arange(50)
+        self.file_name = 'some_file_name'
+        self.directory = '/some/directory'
 
     def test_unit_vector(self):
 
@@ -49,3 +51,28 @@ class TestUtilities(TestCase):
             np.array([0, 7,2, 3, 5, 6, 4, 8, 1]),
             array))
         self.assertTrue(np.allclose(key, np.arange(9)))
+
+    def test_create_surface_file_path(self):
+
+        q_m = 10
+        n0 = 12
+        phi = 1E-8
+        n_frame = 5
+
+        file_name = create_surface_file_path(
+            self.file_name, self.directory, q_m, n0,
+            phi, n_frame, False)
+
+        self.assertEqual(
+            '/some/directory/some_file_name_10_12_100000000_5',
+            file_name
+        )
+
+        file_name = create_surface_file_path(
+            self.file_name, self.directory, q_m, n0,
+            phi, n_frame, True)
+
+        self.assertEqual(
+            '/some/directory/some_file_name_10_12_100000000_5_r',
+            file_name
+        )

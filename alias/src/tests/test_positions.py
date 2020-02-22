@@ -1,13 +1,23 @@
-from unittest import TestCase
-
 import numpy as np
+import mdtraj as md
 
 from alias.src.positions import (
-    molecules, molecular_positions
+    molecules,
+    molecular_positions,
+    minimum_image,
+    coordinate_arrays,
+    orientation,
+    batch_coordinate_loader
 )
+from alias.tests.alias_test_case import AliasTestCase
+from alias.tests.fixtures import (
+    amber_topology,
+    amber_trajectory
+)
+from alias.tests.probe_classes import ProbeSurfaceParameters
 
 
-class TestPositions(TestCase):
+class TestPositions(AliasTestCase):
 
     def setUp(self):
 
@@ -29,12 +39,61 @@ class TestPositions(TestCase):
             [10, 5, 5, 5] * 3
         )
 
+        self.cell_dim = np.array([8., 8., 8.])
+        self.parameters = ProbeSurfaceParameters()
+        self.traj = md.load(
+            amber_trajectory, top=amber_topology)
+
+    def test_coordinate_arrays(self):
+
+        traj = self.traj.atom_slice(self.parameters.atom_indices)[:5]
+        masses = np.repeat(self.parameters.masses, self.parameters.n_mols)
+
+        mol_coord = coordinate_arrays(
+            traj, self.parameters.atoms, masses)
+
+        self.assertEqual((5, 4, 3), mol_coord.shape)
+
+        mol_coord = coordinate_arrays(
+            traj, self.parameters.atoms, masses,
+            mode='sites', com_sites=['N'])
+
+        self.assertEqual((5, 4, 3), mol_coord.shape)
+
+        mol_traj = coordinate_arrays(
+            traj, self.parameters.atoms, masses,
+            mode='sites', com_sites=['N', 'H'])
+
+        self.assertEqual((5, 4, 3), mol_traj.shape)
+
+    def test_orientation(self):
+
+        traj = self.traj.atom_slice(self.parameters.atom_indices)[:5]
+
+        mol_vec = orientation(
+            traj, self.parameters.center_atom,
+            self.parameters.vector_atoms)
+
+        self.assertEqual((5, 4, 3), mol_vec.shape)
+
+    def test_batch_coordinate_loader(self):
+
+        (mol_traj, com_traj,
+         cell_dim, mol_vec) = batch_coordinate_loader(
+            amber_trajectory, self.parameters,
+            topology=amber_topology)
+
+        self.assertEqual((10, 4, 3), mol_traj.shape)
+        self.assertEqual((10, 4, 3), mol_vec.shape)
+        self.assertEqual((10, 3), cell_dim.shape)
+        self.assertEqual((10, 3), com_traj.shape)
+
     def test_simple_molecular_positions(self):
 
         coord = self.simple_coord[:-1]
 
         molecules = molecular_positions(
-            coord, 2, self.simple_masses)
+            coord, ['A', 'B'], self.simple_masses,)
 
         self.assertEqual((2, 3), molecules.shape)
         self.assertTrue(
@@ -44,8 +103,8 @@ class TestPositions(TestCase):
         )
 
         molecules = molecular_positions(
-            coord, 2, self.simple_masses, mode='sites',
-            com_sites=0)
+            coord, ['A', 'B'], self.simple_masses,
+            mode='sites', com_sites='A')
 
         self.assertEqual((2, 3), molecules.shape)
         self.assertTrue(
@@ -58,7 +117,8 @@ class TestPositions(TestCase):
 
         # Test centre of mass for whole molecule
         molecules = molecular_positions(
-            self.large_coord, 4, self.large_masses)
+            self.large_coord, ['A', 'B', 'C', 'D'],
+            self.large_masses)
         self.assertEqual((3, 3), molecules.shape)
         self.assertTrue(
             np.allclose(np.array([[3.1422, 7.621, 3.0632],
@@ -69,8 +129,9 @@ class TestPositions(TestCase):
 
         # Test include atom as site
         molecules = molecular_positions(
-            self.large_coord, 4, self.large_masses,
-            mode='sites', com_sites=0
+            self.large_coord, ['A', 'B', 'C', 'D'],
+            self.large_masses, mode='sites',
+            com_sites='A'
         )
         self.assertEqual((3, 3), molecules.shape)
         self.assertTrue(
@@ -82,8 +143,9 @@ class TestPositions(TestCase):
 
         # Test centre of mass for first 3 atoms
         molecules = molecular_positions(
-            self.large_coord, 4, self.large_masses,
-            mode='sites', com_sites=[0, 1, 2]
+            self.large_coord, ['A', 'B', 'C', 'D'],
+            self.large_masses, mode='sites',
+            com_sites=['A', 'B', 'C']
         )
         self.assertEqual((3, 3), molecules.shape)
         self.assertTrue(
@@ -100,18 +162,42 @@ class TestPositions(TestCase):
                 "Argument mode==invalid must be either"
                 " 'molecule' or 'sites'"):
             molecular_positions(
-                self.simple_coord, 2, self.simple_masses,
+                self.simple_coord, self.parameters.atoms,
+                self.simple_masses,
                 mode='invalid')
 
     def test_invalid_com_sites(self):
 
+        com_sites = ['C'] * (len(self.parameters.atoms) + 1)
+
         with self.assertRaisesRegex(
                 AssertionError,
                 "Argument com_sites must have a length "
-                r"\(3\) less than n_sites \(2\)"):
+                r"\(25\) less than n_sites \(24\)"):
             molecular_positions(
-                self.simple_coord, 2, self.simple_masses,
-                mode='sites', com_sites=[0, 1, 2])
+                self.simple_coord, self.parameters.atoms,
+                self.simple_masses,
+                mode='sites',
+                com_sites=com_sites
+            )
+
+    def test_minimum_image(self):
+        d_coord = np.array([[[0, 0, 0],
+                             [1, 7, 1]],
+                            [[-1, -7, -1],
+                             [0, 0, 0]]], dtype=float)
+
+        minimum_image(d_coord, self.cell_dim)
+
+        self.assertTrue(np.allclose(
+            np.array([[[0, 0, 0],
+                       [1, -1, 1]],
+                      [[-1, 1, -1],
+                       [0, 0, 0]]]), d_coord)
+        )
+
+        with self.assertRaises(AssertionError):
+            minimum_image(d_coord, self.cell_dim[:2])
 
     def test_molecules(self):
         xat = np.array(

@@ -51,7 +51,7 @@ setup(
     packages=find_packages(exclude=('tests', 'docs')),
     python_requires=f'>={PYTHON_MAJOR_VERSION}.{PYTHON_MINOR_VERSION}',
     entry_points={
-        'gui_scripts': ['ALIAS = alias.src.main:alias']},
+        'gui_scripts': ['ALIAS = alias.cli.main:alias']},
     install_requires=REQUIREMENTS
 )
 

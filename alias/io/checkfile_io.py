@@ -1,4 +1,4 @@
-import pickle
+import json
 
 
 def make_checkfile(checkfile_name):
@@ -7,17 +7,30 @@ def make_checkfile(checkfile_name):
     """
 
     checkfile = {}
-    with open(checkfile_name + '.pkl', 'wb') as outfile:
-        pickle.dump(checkfile, outfile, pickle.HIGHEST_PROTOCOL)
+
+    save_checkfile(checkfile, checkfile_name)
+
+    return checkfile
 
 
-def read_checkfile(checkfile_name):
+def save_checkfile(checkfile, checkfile_name):
+    """
+    Saves checkfile, storing key paramtere
+    """
+
+    with open(checkfile_name, 'w') as outfile:
+        json.dump(checkfile, outfile, indent=4)
+
+
+def load_checkfile(checkfile_name):
     """
     Reads checkfile to lookup stored key paramters
     """
 
-    with open(checkfile_name + '.pkl', 'rb') as infile:
-        return pickle.load(infile)
+    with open(checkfile_name, 'r') as infile:
+        checkfile = json.load(infile)
+
+    return checkfile
 
 
 def update_checkfile(checkfile_name, symb, obj):
@@ -39,10 +52,10 @@ def update_checkfile(checkfile_name, symb, obj):
             Dictionary of key parameters
     """
 
-    with open(checkfile_name + '.pkl', 'rb') as infile:
-        checkfile = pickle.load(infile)
+    checkfile = load_checkfile(checkfile_name)
+
     checkfile[symb] = obj
 
-    with open(checkfile_name + '.pkl', 'wb') as outfile:
-        pickle.dump(checkfile, outfile, pickle.HIGHEST_PROTOCOL)
+    save_checkfile(checkfile, checkfile_name)
+
     return checkfile

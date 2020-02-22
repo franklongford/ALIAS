@@ -8,7 +8,7 @@ from alias.io.hdf5_io import (
     make_hdf5, load_hdf5, save_hdf5, shape_check_hdf5)
 from alias.io.numpy_io import load_npy
 from alias.io.checkfile_io import (
-    make_checkfile, read_checkfile, update_checkfile)
+    make_checkfile, load_checkfile, update_checkfile)
 
 
 class TestIO(TestCase):
@@ -20,7 +20,7 @@ class TestIO(TestCase):
         with tempfile.NamedTemporaryFile() as tmp_file:
             make_checkfile(tmp_file.name)
 
-            checkfile = read_checkfile(tmp_file.name)
+            checkfile = load_checkfile(tmp_file.name)
 
             self.assertFalse(checkfile)
 

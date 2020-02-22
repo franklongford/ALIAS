@@ -14,15 +14,22 @@ Last modified 27/2/2018 by Frank Longford
 import os, sys, tables
 
 import numpy as np
-import scipy.constants as con
 
-from alias.io.hdf5_io import make_hdf5, load_hdf5, save_hdf5, shape_check_hdf5
+from alias.io.hdf5_io import (
+    make_hdf5,
+    load_hdf5,
+    save_hdf5,
+    shape_check_hdf5
+)
 from alias.io.numpy_io import load_npy
+from alias.src.conversions import coeff_to_fourier_2
+from alias.src.wave_function import (
+    wave_function,
+    d_wave_function,
+    dd_wave_function
+)
 
-from alias.src.wave_function import check_uv, wave_function, d_wave_function, dd_wave_function
 from .utilities import unit_vector
-
-vcheck = np.vectorize(check_uv)
 
 
 def make_pos_dxdy(xmol, ymol, coeff, nmol, dim, qm):
@@ -504,8 +511,10 @@ def av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, n
 
     intden_dir = directory + 'intden/'
 
-    file_name_hist = '{}_{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)
-    file_name_dist = '{}_{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nsample)
+    file_name_hist = '{}_{}_{}_{}_{}_{}_{}'.format(
+        file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)
+    file_name_dist = '{}_{}_{}_{}_{}_{}_{}'.format(
+        file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nsample)
 
     if recon:
         file_name_hist += '_r'
@@ -539,197 +548,6 @@ def av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, n
     return int_den_curve_matrix, int_density, int_curvature
 
 
-def get_frequency_set(qm, qu, dim):
-    """
-    get_frequency_set(qm, qu, dim)
-
-    Returns set of unique frequencies in Fourier series
-
-    Parameters
-    ----------
-
-    qm:  int
-        Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
-    dim:  float, array_like; shape=(3)
-        XYZ dimensions of simulation cell
-
-    Returns
-    -------
-
-    q_set:  float, array_like
-        Set of unique frequencies
-    q2_set:  float, array_like
-        Set of unique frequencies to bin coefficients to
-    """
-
-    n_waves = 2 * qm +1
-
-    u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
-    v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
-    wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
-    indices = np.argwhere(wave_check).flatten()
-
-    q2 = 4 * np.pi**2 * (u_array[indices]**2 / dim[0]**2 + v_array[indices]**2 / dim[1]**2)
-    q = np.sqrt(q2)
-
-    q_set = np.unique(q)[1:]
-    q2_set = np.unique(q2)[1:]
-
-    return q_set, q2_set
-
-
-def power_spectrum_coeff(coeff_2, qm, qu, dim):
-    """
-    power_spectrum_coeff(coeff_2, qm, qu, dim)
-
-    Returns power spectrum of average surface coefficients, corresponding to the frequencies in q2_set
-
-    Parameters
-    ----------
-
-    coeff_2:  float, array_like; shape=(n_waves**2)
-        Square of optimised surface coefficients
-    qm:  int
-        Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
-    qu:  int
-        Upper limit of wave frequencies in Fouier Sum representing intrinsic surface
-    dim:  float, array_like; shape=(3)
-        XYZ dimensions of simulation cell
-
-    Returns
-    -------
-    q_set:  float, array_like
-        Set of frequencies for power spectrum histogram
-    p_spec_hist:  float, array_like
-        Power spectrum histogram of Fouier series coefficients
-
-    """
-
-    n_waves = 2 * qm +1
-
-    u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
-    v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
-    wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
-    indices = np.argwhere(wave_check).flatten()
-
-    q2 = 4 * np.pi**2 * (u_array[indices]**2 / dim[0]**2 + v_array[indices]**2 / dim[1]**2)
-    q = np.sqrt(q2)
-    fourier = coeff_2[indices] * vcheck(u_array[indices], v_array[indices]) / 4
-
-    unique_q = np.unique(q)[1:]
-    fourier_sum = np.zeros(unique_q.shape)
-    fourier_count = np.zeros(unique_q.shape)
-
-    for i, qi in enumerate(q):
-        index = np.where(unique_q == qi)
-        fourier_sum[index] += fourier[i]
-        fourier_count[index] += 1
-
-    av_fourier = fourier_sum / fourier_count
-
-    return unique_q, av_fourier
-
-
-def surface_tension_coeff(coeff_2, qm, qu, dim, T):
-    """
-    surface_tension_coeff(coeff_2, qm, qu, dim, T)
-
-    Returns spectrum of surface tension, corresponding to the frequencies in q2_set
-
-    Parameters
-    ----------
-
-    coeff_2:  float, array_like; shape=(n_waves**2)
-        Square of optimised surface coefficients
-    qm:  int
-        Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
-    qu:  int
-        Upper limit of wave frequencies in Fouier Sum representing intrinsic surface
-    dim:  float, array_like; shape=(3)
-        XYZ dimensions of simulation cell
-    T:  float
-        Average temperature of simulation (K)
-
-    Returns
-    -------
-    unique_q:  float, array_like
-        Set of frequencies for power spectrum histogram
-    av_gamma:  float, array_like
-        Surface tension histogram of Fouier series frequencies
-
-    """
-
-    n_waves = 2 * qm +1
-
-    u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
-    v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
-    wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
-    indices = np.argwhere(wave_check).flatten()
-
-    q2 = 4 * np.pi**2 * (u_array[indices]**2 / dim[0]**2 + v_array[indices]**2 / dim[1]**2)
-    q = np.sqrt(q2)
-    int_A = dim[0] * dim[1] * q2 * coeff_2[indices] * vcheck(u_array[indices], v_array[indices]) / 4
-    gamma = con.k * T * 1E23 / int_A
-
-    unique_q = np.unique(q)[1:]
-    gamma_sum = np.zeros(unique_q.shape)
-    gamma_count = np.zeros(unique_q.shape)
-
-    for i, qi in enumerate(q):
-        index = np.where(unique_q == qi)
-        gamma_sum[index] += gamma[i]
-        gamma_count[index] += 1
-
-    av_gamma = gamma_sum / gamma_count
-
-    return unique_q, av_gamma
-
-
-def intrinsic_area_coeff(coeff_2, qm, qu, dim):
-    """
-    intrinsic_area_coeff(coeff_2, qm, qu, dim)
-
-    Calculate the intrinsic surface area spectrum from coefficients at resolution qu
-
-    Parameters
-    ----------
-
-    coeff:	float, array_like; shape=(n_waves**2)
-        Optimised surface coefficients
-    qm:  int
-        Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
-    qu:  int
-        Upper limit of wave frequencies in Fouier Sum representing intrinsic surface
-    dim:  float, array_like; shape=(3)
-        XYZ dimensions of simulation cell
-
-    Returns
-    -------
-
-    int_A:  float
-        Relative size of intrinsic surface area, compared to cell cross section XY
-    """
-
-    n_waves = 2 * qm +1
-
-    u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
-    v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
-    wave_check = (u_array >= -qu) * (u_array <= qu) * (v_array >= -qu) * (v_array <= qu)
-    indices = np.argwhere(wave_check).flatten()
-
-    q2 = np.pi**2  * vcheck(u_array[indices], v_array[indices]) * (u_array[indices]**2 / dim[0]**2 + v_array[indices]**2 / dim[1]**2)
-    int_A = q2 * coeff_2[indices]
-    int_A = 1 + 0.5 * np.sum(int_A)
-
-    return int_A
-
-
-def cw_gamma_sr(q, gamma, kappa): return gamma + kappa * q**2
-
-
-def cw_gamma_lr(q, gamma, kappa0, l0): return gamma + q**2 * (kappa0 + l0 * np.log(q))
-
-
 def coeff_slice(coeff, qm, qu):
     """
     coeff_slice(coeff, qm, qu)
@@ -747,91 +565,6 @@ def coeff_slice(coeff, qm, qu):
     coeff_qu = coeff_matrix[[slice(index_1, index_2) for _ in coeff_matrix.shape]].flatten()
 
     return coeff_qu
-
-
-def coeff_to_fourier(coeff, qm, dim):
-    """
-    coeff_to_fourier(coeff, nm)
-
-    Returns Fouier coefficients for Fouier series representing intrinsic surface from linear algebra coefficients
-
-    Parameters
-    ----------
-
-    coeff:	float, array_like; shape=(n_waves**2)
-        Optimised linear algebra surface coefficients
-    qm:  int
-        Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
-
-    Returns
-    -------
-
-    f_coeff:  float, array_like; shape=(n_waves**2)
-        Optimised Fouier surface coefficients
-
-    """
-
-    n_waves = 2 * qm + 1
-
-    u_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int) - qm
-    v_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int) - qm
-
-    frequencies = np.pi * 2 * (u_array.reshape(n_waves, n_waves) / dim[0] + v_array.reshape(n_waves, n_waves) / dim[1])
-
-    amplitudes = np.zeros(coeff.shape, dtype=complex)
-
-    for u in range(-qm,qm+1):
-        for v in range(-qm, qm+1):
-            index = n_waves * (u + qm) + (v + qm)
-
-            j1 = n_waves * (abs(u) + qm) + (abs(v) + qm)
-            j2 = n_waves * (-abs(u) + qm) + (abs(v) + qm)
-            j3 = n_waves * (abs(u) + qm) + (-abs(v) + qm)
-            j4 = n_waves * (-abs(u) + qm) + (-abs(v) + qm)
-
-            if abs(u) + abs(v) == 0: amplitudes[index] = coeff[j1]
-
-            elif v == 0: amplitudes[index] = (coeff[j1] - np.sign(u) * 1j * coeff[j2]) / 2.
-            elif u == 0: amplitudes[index] = (coeff[j1] - np.sign(v) * 1j * coeff[j3]) / 2.
-
-            elif u < 0 and v < 0: amplitudes[index] = (coeff[j1] + 1j * (coeff[j2] + coeff[j3]) - coeff[j4]) / 4.
-            elif u > 0 and v > 0: amplitudes[index] = (coeff[j1] - 1j * (coeff[j2] + coeff[j3]) - coeff[j4]) / 4.
-
-            elif u < 0: amplitudes[index] = (coeff[j1] + 1j * (coeff[j2] - coeff[j3]) + coeff[j4]) / 4.
-            elif v < 0: amplitudes[index] = (coeff[j1] - 1j * (coeff[j2] - coeff[j3]) + coeff[j4]) / 4.
-
-    return amplitudes, frequencies
-
-
-def coeff_to_fourier_2(coeff_2, qm, dim):
-    """
-    coeff_to_fouier_2(coeff_2, qm)
-
-    Converts square coefficients to square fouier coefficients
-    """
-
-    n_waves = 2 * qm + 1
-
-    i_array = np.array(np.arange(n_waves**2) / n_waves, dtype=int)
-    j_array = np.array(np.arange(n_waves**2) % n_waves, dtype=int)
-
-    u_mat, v_mat = np.meshgrid(np.arange(-qm, qm+1),
-                               np.arange(-qm, qm+1))
-    x_mat, y_mat = np.meshgrid(np.linspace(0, 1 / dim[0], n_waves),
-                               np.linspace(0, 1 / dim[1], n_waves))
-
-    Psi = vcheck(u_mat.flatten(), v_mat.flatten()) / 4.
-    frequencies = np.pi * 2 * (u_mat * x_mat + y_mat * v_mat) / n_waves
-    amplitudes_2 = np.reshape(Psi * coeff_2, (n_waves, n_waves))
-
-    A = np.zeros((n_waves, n_waves))
-
-    for i in range(n_waves):
-        for j in range(n_waves):
-            A[i][j] += (amplitudes_2 * np.exp(-2 * np.pi * 1j * (u_mat * x_mat[i][j] + y_mat[i][j] * v_mat) / n_waves)).sum()
-
-
-    return A, frequencies
 
 
 def xy_correlation(coeff_2, qm, qu, dim):
