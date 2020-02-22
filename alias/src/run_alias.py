@@ -27,9 +27,6 @@ def run_alias(trajectory, alias_options, surface_parameters, topology=None):
     data_dir = os.path.join(alias_dir, 'data')
     figure_dir = os.path.join(alias_dir, 'figures')
 
-    if not os.path.exists(alias_dir):
-        os.mkdir(alias_dir)
-
     if not os.path.exists(data_dir):
         os.mkdir(data_dir)
 
@@ -39,12 +36,9 @@ def run_alias(trajectory, alias_options, surface_parameters, topology=None):
     file_name, _ = os.path.splitext(trajectory)
     file_name = os.path.basename(file_name)
 
-    log.info("Loading trajectory file {} using {} topology".format(trajectory, topology))
+    log.info("Loading trajectory file {} using {} topology".format(
+        trajectory, topology))
     checkfile_name = os.path.join(alias_dir, file_name + '_chk.json')
-    checkfile = surface_parameters.serialize()
-
-    if not os.path.exists(checkfile_name):
-        save_checkfile(checkfile, checkfile_name)
 
     surface_parameters.load_traj_parameters(
         trajectory, topology)
@@ -90,6 +84,10 @@ def run_alias(trajectory, alias_options, surface_parameters, topology=None):
         np.save(pos_file_name + f'{surface_parameters.n_frames}_mol_vec', mol_vec)
         np.save(pos_file_name + f'{surface_parameters.n_frames}_com_traj', com_traj)
         np.save(pos_file_name + f'{surface_parameters.n_frames}_cell_dim', cell_dim)
+
+    surface_parameters.select_mol_sigma()
+    checkfile = surface_parameters.serialize()
+    save_checkfile(checkfile, checkfile_name)
 
     surface_parameters.n_frames = mol_traj.shape[0]
     mean_cell_dim = np.mean(cell_dim, axis=0)

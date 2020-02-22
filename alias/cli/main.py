@@ -61,12 +61,12 @@ from alias.version import __version__
     '--ow_dist', is_flag=True, default=False,
     help='Toggles overwrite intrinsic probability distributions'
 )
-@click.argument(
-    'trajectory', type=click.Path(exists=True),
-    required=True, default=None
+@click.option(
+    '--parameters', is_flag=True, default=None,
+    help='Provide file with intrinsic surface parameters'
 )
 @click.argument(
-    'parameters', type=click.Path(exists=True),
+    'trajectory', type=click.Path(exists=True),
     required=True, default=None
 )
 def alias(trajectory, topology, debug, recon, parameters,
@@ -100,6 +100,19 @@ def alias(trajectory, topology, debug, recon, parameters,
         recon, ow_coeff, ow_recon, ow_pos,
         ow_intpos, ow_hist, ow_dist
     )
+
+    traj_dir = os.path.dirname(trajectory)
+    alias_dir = os.path.join(traj_dir, 'alias_analysis')
+
+    if not os.path.exists(alias_dir):
+        os.mkdir(alias_dir)
+
+    file_name, _ = os.path.splitext(trajectory)
+    file_name = os.path.basename(file_name)
+
+    if parameters is None:
+        parameters = os.path.join(alias_dir, file_name + '_chk.json')
+
     parameters = SurfaceParameters.from_json(parameters)
 
     run_alias(trajectory, options, parameters, topology=topology)
