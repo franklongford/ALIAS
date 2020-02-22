@@ -19,8 +19,8 @@ class SurfaceParameters:
     json_attributes = [
         'molecule', 'mol_sigma', 'masses', 'com_mode',
         'com_sites', 'center_atom', 'vector_atoms',
-        'pivot_density', 'n_frames', 'cell_dim', 'v_lim', 'n_cube',
-        'tau', 'max_r', 'phi', 'recon']
+        'pivot_density', 'n_frames', 'cell_dim', 'v_lim',
+        'n_cube', 'tau', 'max_r', 'phi', 'recon']
 
     def __init__(self, molecule=None, mol_sigma=None, masses=None, v_lim=3,
                  n_cube=3, tau=0.5, max_r=1.5, phi=5E-8, com_mode='molecule',
