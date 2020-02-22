@@ -511,8 +511,10 @@ def av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi, n
 
     intden_dir = directory + 'intden/'
 
-    file_name_hist = '{}_{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)
-    file_name_dist = '{}_{}_{}_{}_{}_{}_{}'.format(file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nsample)
+    file_name_hist = '{}_{}_{}_{}_{}_{}_{}'.format(
+        file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe)
+    file_name_dist = '{}_{}_{}_{}_{}_{}_{}'.format(
+        file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nsample)
 
     if recon:
         file_name_hist += '_r'

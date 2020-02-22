@@ -112,7 +112,8 @@ def run_alias(trajectory, alias_options, surface_parameters, topology=None):
     freq_range = range(1, surface_parameters.q_m+1)
     print("\nResolution parameters:")
     print("\n{:12s} | {:12s} | {:12s}".format('qu', "lambda (sigma)", "lambda (nm)"))
-    print("-" * 14 * 5 )
+    print("-" * 14 * 5)
+
     for q_u in freq_range:
         print("{:12d} | {:12.4f} | {:12.4f}".format(
             q_u,
