@@ -171,6 +171,9 @@ def coverage(python_version):
         ["coverage", "report", "-m"]
     )
 
+    if os.path.exists('.coverage'):
+        os.remove('.coverage')
+
 
 @cli.command(help="Run flake (dev)")
 @click.option(
