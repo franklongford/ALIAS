@@ -12,6 +12,7 @@ EDM_CORE_DEPS = [
 ]
 EDM_DEV_DEPS = [
     "flake8==3.7.7-1",
+    "coverage==4.3.4-1",
     "mock==2.0.0-3"
 ]
 
@@ -152,6 +153,23 @@ def install(python_version, edm, conda):
             + CONDA_CORE_DEPS + CONDA_DEV_DEPS + DOCS_DEPS
         )
         check_call(['pip', 'install', '-e', '.'])
+
+
+@cli.command(help="Runs the coverage")
+@python_version_option
+def coverage(python_version):
+
+    env_name = get_env_name(python_version)
+
+    edm_run(
+        env_name,
+        ["coverage", "run", "-m", "unittest", "discover"]
+    )
+
+    edm_run(
+        env_name,
+        ["coverage", "report", "-m"]
+    )
 
 
 @cli.command(help="Run flake (dev)")
