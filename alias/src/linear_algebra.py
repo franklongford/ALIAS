@@ -8,8 +8,8 @@ def update_A_b(xmol, ymol, zmol, dim, qm, new_pivot):
     """
     Update A matrix and b vector for new pivot selection
 
-    Paramters
-    ---------
+    Parameters
+    ----------
     xmol:  float, array_like; shape=(nmol)
         Molecular coordinates in x dimension
     ymol:  float, array_like; shape=(nmol)
@@ -19,7 +19,8 @@ def update_A_b(xmol, ymol, zmol, dim, qm, new_pivot):
     dim:  float, array_like; shape=(3)
         XYZ dimensions of simulation cell
     qm:  int
-        Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+        Maximum number of wave frequencies in Fouier Sum
+        representing intrinsic surface
     n_waves:  int
         Number of coefficients / waves in surface
     new_pivot:  int, array_like
@@ -28,10 +29,13 @@ def update_A_b(xmol, ymol, zmol, dim, qm, new_pivot):
     Returns
     -------
     A:  float, array_like; shape=(2, n_waves**2, n_waves**2)
-        Matrix containing wave product weightings f(x, u1, Lx).f(y, v1, Ly).f(x, u2, Lx).f(y, v2, Ly)
-        for each coefficient in the linear algebra equation Ax = b for both surfaces
+        Matrix containing wave product weightings
+        f(x, u1, Lx).f(y, v1, Ly).f(x, u2, Lx).f(y, v2, Ly)
+        for each coefficient in the linear algebra equation
+        Ax = b for both surfaces
     b:  float, array_like; shape=(2, n_waves**2)
-        Vector containing solutions z.f(x, u, Lx).f(y, v, Ly) to the linear algebra equation Ax = b
+        Vector containing solutions z.f(x, u, Lx).f(y, v, Ly)
+        to the linear algebra equation Ax = b
         for both surfaces
 
     """
@@ -42,41 +46,39 @@ def update_A_b(xmol, ymol, zmol, dim, qm, new_pivot):
     A = np.zeros((2, n_waves**2, n_waves**2))
     b = np.zeros((2, n_waves**2))
 
-    fuv1 = np.zeros((n_waves**2, len(new_pivot[0])))
-    fuv2 = np.zeros((n_waves**2, len(new_pivot[1])))
+    fuv = np.zeros((2, n_waves**2, len(new_pivot[0])))
 
-    for j in range(n_waves**2):
-        fuv1[j] = wave_function(xmol[new_pivot[0]], u_array[j], dim[0]) * wave_function(ymol[new_pivot[0]], v_array[j], dim[1])
-        b[0][j] += np.sum(zmol[new_pivot[0]] * fuv1[j])
+    for surf in range(2):
+        for index in range(n_waves**2):
+            wave_x = wave_function(xmol[new_pivot[surf]], u_array[index], dim[0])
+            wave_y = wave_function(ymol[new_pivot[surf]], v_array[index], dim[1])
+            fuv[surf][index] = wave_x * wave_y
+            b[surf][index] += np.sum(zmol[new_pivot[index]] * fuv[surf][index])
 
-        fuv2[j] = wave_function(xmol[new_pivot[1]], u_array[j], dim[0]) * wave_function(ymol[new_pivot[1]], v_array[j], dim[1])
-        b[1][j] += np.sum(zmol[new_pivot[1]] * fuv2[j])
+        A[surf] += np.dot(fuv[surf], fuv[surf].T)
 
-    A[0] += np.dot(fuv1, fuv1.T)
-    A[1] += np.dot(fuv2, fuv2.T)
-
-    return A, b, fuv1, fuv2
+    return A, b, fuv
 
 
-def LU_decomposition(A, b):
+def lu_decomposition(A, b):
     """
-    LU_decomposition(A, b)
-
-    Perform lower-upper decomposition to solve equation Ax = b using scipy linalg lover-upper solver
+    Perform lower-upper decomposition to solve equation Ax = b
+    using scipy linalg lover-upper solver
 
     Parameters
     ----------
-
     A:  float, array_like; shape=(2, n_waves**2, n_waves**2)
-        Matrix containing wave product weightings f(x, u1, Lx).f(y, v1, Ly).f(x, u2, Lx).f(y, v2, Ly)
-        for each coefficient in the linear algebra equation Ax = b for both surfaces
+        Matrix containing wave product weightings
+        f(x, u1, Lx).f(y, v1, Ly).f(x, u2, Lx).f(y, v2, Ly)
+        for each coefficient in the linear algebra equation Ax = b
+        for both surfaces
     b:  float, array_like; shape=(2, n_waves**2)
-        Vector containing solutions z.f(x, u, Lx).f(y, v, Ly) to the linear algebra equation Ax = b
+        Vector containing solutions z.f(x, u, Lx).f(y, v, Ly)
+        to the linear algebra equation Ax = b
         for both surfaces
 
     Returns
     -------
-
     coeff:	array_like (float); shape=(n_waves**2)
         Optimised surface coefficients
 

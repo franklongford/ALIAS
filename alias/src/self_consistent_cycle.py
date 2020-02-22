@@ -3,7 +3,7 @@ import time
 import numpy as np
 
 from alias.src.intrinsic_surface import xi
-from alias.src.linear_algebra import update_A_b, LU_decomposition
+from alias.src.linear_algebra import update_A_b, lu_decomposition
 from alias.src.spectra import intrinsic_area
 from alias.src.surface_reconstruction import surface_reconstruction
 from alias.src.utilities import bubble_sort, numpy_remove
@@ -44,7 +44,7 @@ def self_consistent_cycle(
         start1 = time.time()
 
         "Update A matrix and b vector"
-        temp_A, temp_b, fuv1, fuv2 = update_A_b(xmol, ymol, zmol, dim, qm, [new_piv1, new_piv2])
+        temp_A, temp_b, fuv = update_A_b(xmol, ymol, zmol, dim, qm, [new_piv1, new_piv2])
 
         A += temp_A
         b += temp_b
@@ -53,9 +53,9 @@ def self_consistent_cycle(
 
         "Perform LU decomosition to solve Ax = b"
         if build_surf1:
-            coeff[0] = LU_decomposition(A[0] + area_diag, b[0])
+            coeff[0] = lu_decomposition(A[0] + area_diag, b[0])
         if build_surf2:
-            coeff[1] = LU_decomposition(A[1] + area_diag, b[1])
+            coeff[1] = lu_decomposition(A[1] + area_diag, b[1])
 
         if recon:
             if build_surf1:

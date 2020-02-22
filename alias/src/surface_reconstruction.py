@@ -1,6 +1,6 @@
 import numpy as np
 
-from alias.src.linear_algebra import LU_decomposition
+from alias.src.linear_algebra import lu_decomposition
 from alias.src.wave_function import (
     wave_function_array,
     wave_function,
@@ -73,7 +73,7 @@ def surface_reconstruction(coeff, A, b, area_diag, curve_matrix, H_var, qm, n0, 
         A_recon = A * (1. + curve_matrix * psi_array[1] / n0)
 
         "Update coeffs by performing LU decomosition to solve Ax = b"
-        coeff_recon = LU_decomposition(A_recon + area_diag, b)
+        coeff_recon = lu_decomposition(A_recon + area_diag, b)
 
         H_var_coeff[1], H_var_piv[1], H_var_func[1] = H_var_values(coeff_recon, A_recon, curve_matrix, H_var, qm, n0)
 

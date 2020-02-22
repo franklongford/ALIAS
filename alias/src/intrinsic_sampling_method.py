@@ -21,7 +21,7 @@ import numpy as np
 from alias.io.hdf5_io import (
     make_hdf5, load_hdf5, save_hdf5, shape_check_hdf5)
 from alias.io.numpy_io import load_npy
-from alias.src.linear_algebra import update_A_b, LU_decomposition
+from alias.src.linear_algebra import update_A_b, lu_decomposition
 from alias.src.self_consistent_cycle import (
     self_consistent_cycle,
     initialise_surface
@@ -133,7 +133,7 @@ def build_surface(xmol, ymol, zmol, dim, qm, n0, phi, tau, max_r,
         end1 = time.time()
 
         "Update A matrix and b vector"
-        temp_A, temp_b, fuv1, fuv2 = update_A_b(xmol, ymol, zmol, dim, qm, pivot)
+        temp_A, temp_b, fuv = update_A_b(xmol, ymol, zmol, dim, qm, pivot)
 
         A += temp_A
         b += temp_b
@@ -141,8 +141,8 @@ def build_surface(xmol, ymol, zmol, dim, qm, n0, phi, tau, max_r,
         end2 = time.time()
 
         "Perform LU decomosition to solve Ax = b"
-        coeff[0] = LU_decomposition(A[0] + area_diag, b[0])
-        coeff[1] = LU_decomposition(A[1] + area_diag, b[1])
+        coeff[0] = lu_decomposition(A[0] + area_diag, b[0])
+        coeff[1] = lu_decomposition(A[1] + area_diag, b[1])
 
         if recon:
             coeff[0], _ = surface_reconstruction(coeff[0], A[0], b[0], area_diag, curve_matrix, H_var, qm, pivot[0].size, psi)
