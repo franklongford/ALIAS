@@ -9,6 +9,11 @@ from alias.io.checkfile_io import (
 )
 from alias.src.positions import batch_coordinate_loader
 from alias.src.intrinsic_sampling_method import create_intrinsic_surfaces
+from alias.src.intrinsic_analysis import (
+    create_intrinsic_positions_dxdyz,
+    create_intrinsic_den_curve_hist,
+    av_intrinsic_distributions
+)
 
 log = logging.getLogger(__name__)
 
@@ -88,7 +93,7 @@ def run_alias(trajectory, alias_options, surface_parameters, topology=None):
 
     surface_parameters.n_frames = mol_traj.shape[0]
     mean_cell_dim = np.mean(cell_dim, axis=0)
-    surface_parameters.area = mean_cell_dim[0] * mean_cell_dim[1]
+    surface_parameters.cell_dim = mean_cell_dim.tolist()
 
     checkfile = surface_parameters.serialize()
     save_checkfile(checkfile, checkfile_name)
@@ -125,15 +130,29 @@ def run_alias(trajectory, alias_options, surface_parameters, topology=None):
         vlim=surface_parameters.v_lim, tau=surface_parameters.tau,
         max_r=surface_parameters.max_r,
         ow_coeff=alias_options.ow_coeff, ow_recon=alias_options.ow_recon)
-    """
+
     create_intrinsic_positions_dxdyz(
-        data_dir, file_name, nmol, nframe, qm, N0[recon], phi, dim,
-        recon=recon, ow_pos=ow_intpos)
+        data_dir, file_name, surface_parameters.n_mol,
+        surface_parameters.n_frames, surface_parameters.q_m,
+        surface_parameters.n_pivots, surface_parameters.phi,
+        mean_cell_dim,
+        recon=surface_parameters.recon,
+        ow_pos=alias_options.ow_intpos)
+
     create_intrinsic_den_curve_hist(
-        data_dir, file_name, qm, N0[recon], phi, nframe, nslice, dim,
-        recon=recon, ow_hist=ow_hist)
+        data_dir, file_name, surface_parameters.q_m, surface_parameters.n_pivots,
+        surface_parameters.phi, surface_parameters.n_frames,
+        surface_parameters, surface_parameters.n_slice,
+        surface_parameters.cell_dim,
+        recon=surface_parameters.recon,
+        ow_hist=alias_options.ow_hist)
+
     av_intrinsic_distributions(
-        data_dir, file_name, dim, nslice, qm, N0[recon], phi, nframe, nframe,
-        recon=recon, ow_dist=ow_dist)
-    """
+        data_dir, file_name, surface_parameters.cell_dim,
+        surface_parameters.n_slice, surface_parameters.q_m,
+        surface_parameters.n_pivots, surface_parameters.phi,
+        surface_parameters.n_frames, surface_parameters.n_frames,
+        recon=surface_parameters.recon,
+        ow_dist=alias_options.ow_dist)
+
     print("\n---- ENDING PROGRAM ----\n")

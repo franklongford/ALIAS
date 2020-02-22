@@ -14,13 +14,13 @@ class SurfaceParameters:
     json_attributes = [
         'molecule', 'mol_sigma', 'masses', 'com_mode',
         'com_sites', 'center_atom', 'vector_atoms',
-        'pivot_density', 'n_frames', 'area', 'v_lim', 'n_cube',
+        'pivot_density', 'n_frames', 'cell_dim', 'v_lim', 'n_cube',
         'tau', 'max_r', 'phi', 'recon']
 
     def __init__(self, molecule=None, mol_sigma=None, masses=None, v_lim=3,
                  n_cube=3, tau=0.5, max_r=1.5, phi=5E-8, com_mode='molecule',
                  com_sites=None, center_atom=None, vector_atoms=None,
-                 n_frames=None, pivot_density=None, area=None, recon=False):
+                 n_frames=None, pivot_density=None, cell_dim=None, recon=False):
         """Initialise parameters for a Intrinsic surface
 
         Parameters
@@ -61,7 +61,7 @@ class SurfaceParameters:
 
         self.pivot_density = pivot_density
         self.n_frames = n_frames
-        self.area = area
+        self.cell_dim = cell_dim
         self.recon = recon
 
         self._traj = None
@@ -109,8 +109,16 @@ class SurfaceParameters:
         return self._traj.topology.residue(index)
 
     @property
+    def area(self):
+        return self.cell_dim[0] * self.cell_dim[1]
+
+    @property
     def l_slice(self):
         return 0.05 * self.mol_sigma
+
+    @property
+    def n_slice(self):
+        return self.cell_dim[2] / self.l_slice
 
     @property
     def q_max(self):

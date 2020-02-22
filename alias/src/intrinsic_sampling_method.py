@@ -56,7 +56,7 @@ def build_surface(xmol, ymol, zmol, dim, qm, n0, phi, tau, max_r,
     mol_sigma:  float
         Radius of spherical molecular interaction sphere
     qm:  int
-        Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+        Maximum number of wave frequencies in Fourier Sum representing intrinsic surface
     n0:  int
         Maximum number of molecular pivot in intrinsic surface
     phi:  float
@@ -74,10 +74,8 @@ def build_surface(xmol, ymol, zmol, dim, qm, n0, phi, tau, max_r,
     surf_0: float, array-like; shape=(2) (optional)
         Initial guesses for surface plane positions
 
-
     Returns
     -------
-
     coeff:	array_like (float); shape=(2, n_waves**2)
         Optimised surface coefficients
     pivot:  array_like (int); shape=(2, n0)
