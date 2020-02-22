@@ -111,11 +111,14 @@ def dd_wave_function_array(x, u_array, Lx):
 def wave_arrays(qm):
     """Return full arrays of each (u, v) 2D wave frequency
     combination for a given maximum frequency, `qm`"""
-    n_waves = 2 * qm + 1
-    wave_range = np.arange(n_waves ** 2)
 
-    u_array = np.array(wave_range / n_waves, dtype=int) - qm
-    v_array = np.array(wave_range % n_waves, dtype=int) - qm
+    v_mat, u_mat = np.meshgrid(
+        np.arange(-qm, qm + 1),
+        np.arange(-qm, qm + 1)
+    )
+
+    u_array = u_mat.flatten()
+    v_array = v_mat.flatten()
 
     return u_array, v_array
 

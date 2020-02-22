@@ -39,7 +39,7 @@ def update_A_b(xmol, ymol, zmol, dim, qm, new_pivot):
         for both surfaces
 
     """
-    n_waves = 2 * qm +1
+    n_waves = 2 * qm + 1
 
     u_array, v_array = wave_arrays(qm)
 
@@ -50,10 +50,13 @@ def update_A_b(xmol, ymol, zmol, dim, qm, new_pivot):
 
     for surf in range(2):
         for index in range(n_waves**2):
-            wave_x = wave_function(xmol[new_pivot[surf]], u_array[index], dim[0])
-            wave_y = wave_function(ymol[new_pivot[surf]], v_array[index], dim[1])
+            wave_x = wave_function(
+                xmol[new_pivot[surf]], u_array[index], dim[0])
+            wave_y = wave_function(
+                ymol[new_pivot[surf]], v_array[index], dim[1])
             fuv[surf][index] = wave_x * wave_y
-            b[surf][index] += np.sum(zmol[new_pivot[index]] * fuv[surf][index])
+            b[surf][index] += np.sum(
+                zmol[new_pivot[index]] * fuv[surf][index])
 
         A[surf] += np.dot(fuv[surf], fuv[surf].T)
 
@@ -70,8 +73,8 @@ def lu_decomposition(A, b):
     A:  float, array_like; shape=(2, n_waves**2, n_waves**2)
         Matrix containing wave product weightings
         f(x, u1, Lx).f(y, v1, Ly).f(x, u2, Lx).f(y, v2, Ly)
-        for each coefficient in the linear algebra equation Ax = b
-        for both surfaces
+        for each coefficient in the linear algebra equation
+        Ax = b for both surfaces
     b:  float, array_like; shape=(2, n_waves**2)
         Vector containing solutions z.f(x, u, Lx).f(y, v, Ly)
         to the linear algebra equation Ax = b
@@ -83,7 +86,7 @@ def lu_decomposition(A, b):
         Optimised surface coefficients
 
     """
-    lu, piv  = sp.linalg.lu_factor(A)
+    lu, piv = sp.linalg.lu_factor(A)
     coeff = sp.linalg.lu_solve((lu, piv), b)
 
     return coeff

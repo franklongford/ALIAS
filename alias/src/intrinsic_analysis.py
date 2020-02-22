@@ -34,7 +34,8 @@ from .utilities import unit_vector
 
 def make_pos_dxdy(xmol, ymol, coeff, nmol, dim, qm):
     """
-    Calculate distances and derivatives at each molecular position with respect to intrinsic surface
+    Calculate distances and derivatives at each molecular position with
+    respect to intrinsic surface
 
     Parameters
     ----------
@@ -50,7 +51,8 @@ def make_pos_dxdy(xmol, ymol, coeff, nmol, dim, qm):
     dim:  float, array_like; shape=(3)
         XYZ dimensions of simulation cell
     qm:  int
-        Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+        Maximum number of wave frequencies in Fourier Sum
+        representing intrinsic surface
 
     Returns
     -------
@@ -138,9 +140,12 @@ def make_pos_dxdy(xmol, ymol, coeff, nmol, dim, qm):
     return int_z_mol, int_dxdy_mol, int_ddxddy_mol
 
 
-def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0, phi, dim, recon=0, ow_pos=False):
+def create_intrinsic_positions_dxdyz(
+        directory, file_name, nmol, nframe, qm, n0,
+        phi, dim, recon=0, ow_pos=False):
     """
-    Calculate distances and derivatives at each molecular position with respect to intrinsic surface in simulation frame
+    Calculate distances and derivatives at each molecular position
+    with respect to intrinsic surface in simulation frame
 
     Parameters
     ----------
@@ -154,11 +159,13 @@ def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0,
     nframe:  int
         Number of frames in simulation trajectory
     qm:  int
-        Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+        Maximum number of wave frequencies in Fourier Sum
+        representing intrinsic surface
     n0:  int
         Maximum number of molecular pivots in intrinsic surface
     phi:  float
-        Weighting factor of minimum surface area term in surface optimisation function
+        Weighting factor of minimum surface area term in surface
+        optimisation function
     dim:  float, array_like; shape=(3)
         XYZ dimensions of simulation cell
     recon:  bool (default=False)
@@ -169,8 +176,6 @@ def create_intrinsic_positions_dxdyz(directory, file_name, nmol, nframe, qm, n0,
     """
 
     print("\n--- Running Intrinsic Positions and Derivatives Routine ---\n")
-
-    n_waves = 2 * qm + 1
 
     surf_dir = directory + 'surface/'
     pos_dir = directory + 'pos/'

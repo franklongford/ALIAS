@@ -21,10 +21,11 @@ import numpy as np
 from alias.io.hdf5_io import (
     make_hdf5, load_hdf5, save_hdf5, shape_check_hdf5)
 from alias.io.numpy_io import load_npy
+from alias.io.command_line_output import StdOutTable
 from alias.src.linear_algebra import update_A_b, lu_decomposition
 from alias.src.self_consistent_cycle import (
     self_consistent_cycle,
-    initialise_surface
+    initialise_surface, initialise_recon
 )
 from alias.src.spectra import intrinsic_area
 from alias.src.utilities import create_surface_file_path
@@ -56,19 +57,23 @@ def build_surface(xmol, ymol, zmol, dim, qm, n0, phi, tau, max_r,
     mol_sigma:  float
         Radius of spherical molecular interaction sphere
     qm:  int
-        Maximum number of wave frequencies in Fourier Sum representing intrinsic surface
+        Maximum number of wave frequencies in Fourier Sum
+        representing intrinsic surface
     n0:  int
         Maximum number of molecular pivot in intrinsic surface
     phi:  float
-        Weighting factor of minimum surface area term in surface optimisation function
+        Weighting factor of minimum surface area term in surface
+        optimisation function
     tau:  float
-        Tolerance along z axis either side of existing intrinsic surface for selection of new pivot points
+        Tolerance along z axis either side of existing intrinsic
+        surface for selection of new pivot points
     max_r:  float
         Maximum radius for selection of vapour phase molecules
     ncube:	int (optional)
         Grid size for initial pivot molecule selection
     vlim:  int (optional)
-        Minimum number of molecular meighbours within radius max_r required for molecular NOT to be considered in vapour region
+        Minimum number of molecular meighbours within radius max_r
+        required for molecular NOT to be considered in vapour region
     recon: bool (optional)
         Whether to peform surface reconstruction routine
     surf_0: float, array-like; shape=(2) (optional)
@@ -88,26 +93,31 @@ def build_surface(xmol, ymol, zmol, dim, qm, n0, phi, tau, max_r,
 
     start = time.time()
 
-    surf_param = initialise_surface(qm, phi, dim, recon)
+    coeff, A, b, area_diag = initialise_surface(qm, phi, dim)
 
-    if recon == 1:
-        psi = phi * dim[0] * dim[1]
-        coeff, A, b, area_diag, curve_matrix, H_var = surf_param
-    else:
-        coeff, A, b, area_diag = surf_param
+    if recon:
+        psi, curve_matrix, H_var = initialise_recon(qm, phi, dim)
 
-    "Remove molecules from vapour phase and assign an initial grid of pivots furthest away from centre of mass"
-    print('Lx = {:5.3f}   Ly = {:5.3f}   qm = {:5d}\nphi = {}   n_piv = {:5d}   vlim = {:5d}   max_r = {:5.3f}'.format(dim[0], dim[1], qm, phi, n0, vlim, max_r))
+    # Remove molecules from vapour phase and assign an initial
+    # grid of pivots furthest away from centre of mass
+    print('Lx = {:5.3f}   Ly = {:5.3f}   qm = {:5d}\n'
+          'phi = {}   n_piv = {:5d}   vlim = {:5d}   max_r = {:5.3f}'.format(
+        dim[0], dim[1], qm, phi, n0, vlim, max_r))
     print('Surface plane initial guess = {} {}'.format(surf_0[0], surf_0[1]))
 
     pivot_search = (ncube > 0)
 
+    stdout_table = StdOutTable()
+    stdout_table.add_section(
+        'TIMINGS (s)',
+        ['Pivot selection', 'Matrix Formation',
+         'LU Decomposition', 'TOTAL'])
+    stdout_table.add_section('PIVOTS', ['n_piv1', 'n_piv2'])
+    stdout_table.add_section('INT AREA', ['surf1', 'surf2'])
+
     if not pivot_search:
 
-        print("\n{:^74s} | {:^21s} | {:^21s}".format('TIMINGS (s)', 'PIVOTS', 'INT AREA'))
-        print(' {:20s} {:20s} {:20s} {:10s} | {:10s} {:10s} | {:10s} {:10s}'.format(
-            'Pivot selection', 'Matrix Formation', 'LU Decomposition', 'TOTAL', 'n_piv1', 'n_piv2', 'surf1', 'surf2'))
-        print("_" * 120)
+        print(stdout_table.table_header())
 
         start1 = time.time()
 
@@ -124,8 +134,10 @@ def build_surface(xmol, ymol, zmol, dim, qm, n0, phi, tau, max_r,
         pivot = [piv_n1, piv_n2]
 
         if not (len(pivot[0]) == n0) * (len(pivot[1]) == n0):
-            #ut.view_surface(coeff, pivot, qm, qm, xmol, ymol, zmol, 2, dim)
-            zmol, pivot = pivot_swap(xmol, ymol, zmol, pivot, dim, max_r, n0)
+            #ut.view_surface(
+            #   coeff, pivot, qm, qm, xmol, ymol, zmol, 2, dim)
+            zmol, pivot = pivot_swap(
+                xmol, ymol, zmol, pivot, dim, max_r, n0)
 
         zmol = check_pbc(xmol, ymol, zmol, pivot, dim)
         pivot = np.array(pivot, dtype=int)
@@ -145,8 +157,12 @@ def build_surface(xmol, ymol, zmol, dim, qm, n0, phi, tau, max_r,
         coeff[1] = lu_decomposition(A[1] + area_diag, b[1])
 
         if recon:
-            coeff[0], _ = surface_reconstruction(coeff[0], A[0], b[0], area_diag, curve_matrix, H_var, qm, pivot[0].size, psi)
-            coeff[1], _ = surface_reconstruction(coeff[1], A[1], b[1], area_diag, curve_matrix, H_var, qm, pivot[1].size, psi)
+            coeff[0], _ = surface_reconstruction(
+                coeff[0], A[0], b[0], area_diag, curve_matrix,
+                H_var, qm, pivot[0].size, psi)
+            coeff[1], _ = surface_reconstruction(
+                coeff[1], A[1], b[1], area_diag, curve_matrix,
+                H_var, qm, pivot[1].size, psi)
 
         end3 = time.time()
 
@@ -156,8 +172,11 @@ def build_surface(xmol, ymol, zmol, dim, qm, n0, phi, tau, max_r,
 
         end = time.time()
 
-        print(' {:20.3f} {:20.3f} {:20.3f} {:10.3f} | {:10d} {:10d} | {:10.3f} {:10.3f}'.format(
-            end1 - start1, end2 - end1, end3 - end2, end - start1, len(pivot[0]), len(pivot[1]), area1, area2))
+        output = [
+            end1 - start1, end2 - end1, end3 - end2, end - start1,
+            len(pivot[0]), len(pivot[1]), area1, area2
+        ]
+        print(stdout_table.row(output))
 
     #ut.view_surface(coeff, pivot, qm, qm, xmol, ymol, zmol, 50, dim)
 
@@ -170,9 +189,14 @@ def build_surface(xmol, ymol, zmol, dim, qm, n0, phi, tau, max_r,
         new_piv1 = []
         new_piv2 = []
 
-        dxyz = np.reshape(np.tile(np.stack((xmol, ymol, zmol)), (1, nmol)), (3, nmol, nmol))
+        dxyz = np.reshape(
+            np.tile(
+                np.stack((xmol, ymol, zmol)), (1, nmol)),
+            (3, nmol, nmol)
+        )
         dxyz = np.transpose(dxyz, axes=(0, 2, 1)) - dxyz
-        for i, l in enumerate(dim[:2]): dxyz[i] -= l * np.array(2 * dxyz[i] / l, dtype=int)
+        for i, l in enumerate(dim[:2]):
+            dxyz[i] -= l * np.array(2 * dxyz[i] / l, dtype=int)
         dr2 = np.sum(dxyz**2, axis=0)
 
         vapour_list = np.where(np.count_nonzero(dr2 < max_r**2, axis=1) < vlim)

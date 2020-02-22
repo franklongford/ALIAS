@@ -46,9 +46,9 @@ class TestUtilities(TestCase):
         key = np.array([0, 6, 3, 2, 1, 7, 8, 4, 5])
 
         bubble_sort(array, key)
-        
+
         self.assertTrue(np.allclose(
-            np.array([0, 7,2, 3, 5, 6, 4, 8, 1]),
+            np.array([0, 7, 2, 3, 5, 6, 4, 8, 1]),
             array))
         self.assertTrue(np.allclose(key, np.arange(9)))
 

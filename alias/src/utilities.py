@@ -14,8 +14,6 @@ Last modified 27/2/2018 by Frank Longford
 import os
 
 import numpy as np
-
-from scipy.signal import convolve
 import mdtraj as md
 
 from alias.version import __version__
@@ -87,73 +85,24 @@ def unit_vector(vector, axis=-1):
     return u_vector
 
 
-def linear(x, m, c):
-    return m * x + c
-
-
-def gaussian(x, mean, std):
-    return np.exp(-(x-mean)**2 / (2 * std**2)) / (SQRT2 * std * SQRTPI)
-
-
-def gaussian_convolution(array, centre, delta, dim, nslice):
-    """
-    Convolution of distributions 'arrays' using a normal probability distribution with mean=centres and variance=deltas
-
-    Parameters
-    ----------
-    array:  float, array_like; shape=(nslice)
-        Array to convolute
-    centre: float
-        Mean value for normal probability distribution
-    delta: float
-        Variance for normal probability distribution
-    dim:  float, array_like; shape=(3)
-        XYZ dimensions of simulation cell
-    nslice: int
-        Number of bins in density histogram along axis normal to surface
-
-    Returns
-    -------
-    conv_array:  float, array_like; shape=(nslice)
-        Convoluted array
-    """
-
-    std = np.sqrt(delta)
-    lslice = dim[2] / nslice
-    length = int(std / lslice) * 10
-    ZG = np.arange(0, dim[2], lslice)
-
-    index = nslice / 8
-    array = np.roll(array, -index)
-
-    gaussian_array = gaussian(ZG, centre+ZG[index], std) * lslice
-    conv_array = convolve(array, gaussian_array, mode='same')
-
-    """
-    import matplotlib.pyplot as plt
-    plt.figure(100)
-    plt.plot(ZG, gaussian_array)
-    plt.plot(ZG, array)
-    plt.plot(ZG, conv_array)
-    plt.show()
-    #"""
-
-    return conv_array
-
-
 def print_alias():
 
-    print(' '+ '_' * 43)
-    print("|                   __ __             ____  |")
-    print("|     /\     |        |       /\     /      |")
-    print("|    /  \    |        |      /  \    \___   |")
-    print("|   /___ \   |        |     /___ \       \  |")
-    print("|  /      \  |____  __|__  /      \  ____/  |")
-    print("|" + '_' * 43 + '|' + f"  v{__version__}")
-    print("\n    Air-Liquid Interface Analysis Suite \n")
+    logo = ""
+
+    logo += ' ' + '_' * 43
+    logo += r"|                   __ __             ____  |\n"
+    logo += r"|     /\     |        |       /\     /      |\n"
+    logo += r"|    /  \    |        |      /  \    \___   |\n"
+    logo += r"|   /___ \   |        |     /___ \       \  |\n"
+    logo += r"|  /      \  |____  __|__  /      \  ____/  |\n"
+    logo += "|" + '_' * 43 + '|' + f"  v{__version__}\n"
+    logo += "\n    Air-Liquid Interface Analysis Suite \n"
+
+    print(logo)
 
 
-def create_surface_file_path(file_name, directory, q_m, n0, phi, n_frame, recon):
+def create_surface_file_path(file_name, directory, q_m, n0,
+                             phi, n_frame, recon):
 
     coeff_ext = f'_{q_m}_{n0}_{int(1. / phi + 0.5)}_{n_frame}'
 

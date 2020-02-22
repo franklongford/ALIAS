@@ -78,7 +78,7 @@ def alias(trajectory, topology, debug, checkpoint,
 
     log = logging.getLogger(__name__)
     log.info(f'Starting ALIAS version {__version__}')
-    log.info(print_alias())
+    print_alias()
 
     # Get trajectory file path and topology is required
     trajectory = enter_path('Trajectory', file_path=trajectory)

@@ -23,13 +23,15 @@ class TestIA(AliasTestCase):
     def test_H_xy(self):
 
         H_array = H_xy(
-            self.pos, self.pos, self.coeff, self.qm, self.qu, self.dim
+            self.pos, self.pos, self.coeff,
+            self.qm, self.qu, self.dim
         )
 
         self.assertEqual((10,), H_array.shape)
 
         for index, x in enumerate(self.pos):
-            H = H_xy(x, x, self.coeff, self.qm, self.qu, self.dim)
+            H = H_xy(x, x, self.coeff, self.qm,
+                     self.qu, self.dim)
 
             self.assertArrayAlmostEqual(H, H_array[index])
 
@@ -37,10 +39,12 @@ class TestIA(AliasTestCase):
 
         pos = np.arange(100)
         H_array = H_xy(
-            pos, pos, self.coeff, self.qm, self.qu, self.dim)
+            pos, pos, self.coeff, self.qm,
+            self.qu, self.dim)
 
         H_var = H_var_mol(
-            pos, pos, self.coeff, self.qm, self.qu, self.dim)
+            pos, pos, self.coeff, self.qm,
+            self.qu, self.dim)
 
         self.assertTrue(np.allclose(H_var, np.var(H_array), 0.07))
 
@@ -49,13 +53,15 @@ class TestIA(AliasTestCase):
         qu = 3
 
         n_waves_qm = 2 * qm + 1
+        range_qm = np.arange(n_waves_qm ** 2)
         n_waves_qu = 2 * qu + 1
+        range_qu = np.arange(n_waves_qu ** 2)
 
-        u_array_qm = np.array(np.arange(n_waves_qm ** 2) / n_waves_qm, dtype=int) - qm
-        v_array_qm = np.array(np.arange(n_waves_qm ** 2) % n_waves_qm, dtype=int) - qm
+        u_array_qm = np.array(range_qm / n_waves_qm, dtype=int) - qm
+        v_array_qm = np.array(range_qm % n_waves_qm, dtype=int) - qm
 
-        u_array_qu = np.array(np.arange(n_waves_qu ** 2) / n_waves_qu, dtype=int) - qu
-        v_array_qu = np.array(np.arange(n_waves_qu ** 2) % n_waves_qu, dtype=int) - qu
+        u_array_qu = np.array(range_qu / n_waves_qu, dtype=int) - qu
+        v_array_qu = np.array(range_qu % n_waves_qu, dtype=int) - qu
 
         q_array_qm = np.sqrt(u_array_qm ** 2 + v_array_qm ** 2)
         q_array_qu = np.sqrt(u_array_qu ** 2 + v_array_qu ** 2)

@@ -10,14 +10,19 @@ APP_REPO = os.path.abspath('.')
 EDM_CORE_DEPS = [
     'Click==7.0-1'
 ]
-EDM_DEV_DEPS = ["flake8==3.7.7-1",
-                "mock==2.0.0-3"]
+EDM_DEV_DEPS = [
+    "flake8==3.7.7-1",
+    "coverage==4.3.4-1",
+    "mock==2.0.0-3"
+]
 
 CONDA_CORE_DEPS = [
     'Click'
 ]
-CONDA_DEV_DEPS = ["flake8==3.7.7",
-                  "mock==2.0.0"]
+CONDA_DEV_DEPS = [
+    "flake8==3.7.7",
+    "mock==2.0.0"
+]
 
 DOCS_DEPS = []
 PIP_DEPS = []
@@ -51,8 +56,10 @@ python_version_option = click.option(
     help="Python version for environment"
 )
 
-@cli.command(name="build-env",
-             help="Creates the edm execution environment")
+
+@cli.command(
+    name="build-env",
+    help="Creates the edm execution environment")
 @click.option(
     '--edm', is_flag=True, default=False,
     help='Toggles EDM build'
@@ -76,8 +83,8 @@ def build_env(python_version, edm, conda):
         )
 
         check_call([
-            "edm", "install", "-e", env_name,
-            "--yes"] + EDM_CORE_DEPS + EDM_DEV_DEPS + DOCS_DEPS
+            "edm", "install", "-e", env_name, "--yes"]
+            + EDM_CORE_DEPS + EDM_DEV_DEPS + DOCS_DEPS
         )
 
     elif conda:
@@ -92,16 +99,19 @@ def build_env(python_version, edm, conda):
         )
 
         check_call([
-           "conda", "install", "-n", env_name,
-           "--yes"] + CONDA_CORE_DEPS + CONDA_DEV_DEPS + DOCS_DEPS
+           "conda", "install", "-n", env_name, "--yes"]
+            + CONDA_CORE_DEPS + CONDA_DEV_DEPS + DOCS_DEPS
                    )
     else:
-        print('Include flag to specify environment package manager,'
-              ' either EDM (--edm) or Conda (--conda)')
+        print('Include flag to specify environment '
+              'package manager, either EDM (--edm) or '
+              'Conda (--conda)')
 
 
-@cli.command(name="install",
-    help=f'Creates the execution binary inside the production environment'
+@cli.command(
+    name="install",
+    help=('Creates the execution binary inside the'
+          ' production environment')
 )
 @click.option(
     '--edm', is_flag=True, default=False,
@@ -119,10 +129,12 @@ def install(python_version, edm, conda):
         print('Installing  to edm environment')
         edm_run(env_name, ['pip', 'install', '-e', '.'])
     elif conda:
-        print(f'Installing {get_env_name(python_version)} to conda environment')
+        print(f'Installing {get_env_name(python_version)}'
+              f' to conda environment')
         check_call(['pip', 'install', '-e', '.'])
     else:
-        print(f'Installing {get_env_name(python_version)} to local environment')
+        print(f'Installing {get_env_name(python_version)}'
+              f' to local environment')
         native_python_version = sys.version_info
 
         for i in range(2):
@@ -136,10 +148,31 @@ def install(python_version, edm, conda):
 
         command = input('Enter the installation command for your local '
                         'package manager: ')
-        check_call(command.split()
-                   + CONDA_CORE_DEPS + CONDA_DEV_DEPS + DOCS_DEPS
+        check_call(
+            command.split()
+            + CONDA_CORE_DEPS + CONDA_DEV_DEPS + DOCS_DEPS
         )
         check_call(['pip', 'install', '-e', '.'])
+
+
+@cli.command(help="Runs the coverage")
+@python_version_option
+def coverage(python_version):
+
+    env_name = get_env_name(python_version)
+
+    edm_run(
+        env_name,
+        ["coverage", "run", "-m", "unittest", "discover"]
+    )
+
+    edm_run(
+        env_name,
+        ["coverage", "report", "-m"]
+    )
+
+    if os.path.exists('.coverage'):
+        os.remove('.coverage')
 
 
 @cli.command(help="Run flake (dev)")
