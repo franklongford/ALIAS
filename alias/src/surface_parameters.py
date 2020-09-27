@@ -25,7 +25,8 @@ class SurfaceParameters:
     def __init__(self, molecule=None, mol_sigma=None, masses=None, v_lim=3,
                  n_cube=3, tau=0.5, max_r=1.5, phi=5E-8, com_mode='molecule',
                  com_sites=None, center_atom=None, vector_atoms=None,
-                 n_frames=None, pivot_density=None, cell_dim=None, recon=False):
+                 n_frames=None, pivot_density=None, cell_dim=None,
+                 recon=False):
         """Initialise parameters for a Intrinsic surface
 
         Parameters
@@ -219,7 +220,8 @@ class SurfaceParameters:
         else:
             self.molecule = residues[0].name
 
-        log.info("Using residue {} for surface identification".format(self.molecule))
+        log.info(f"Using residue {self.molecule} "
+                 f"for surface identification")
 
     def select_masses(self):
         """Select masses for each site in chosen molecule"""
@@ -235,7 +237,8 @@ class SurfaceParameters:
             self.masses = []
             for index in range(self.n_sites):
                 self.masses.append(float(
-                    instruction(f"  Enter mass for site {self.atoms[index]} g mol-1")
+                    instruction(f"  Enter mass for site "
+                                f"{self.atoms[index]} g mol-1")
                 ))
 
         print(f"Using atomic site masses: {self.masses} g mol-1")

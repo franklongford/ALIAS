@@ -110,9 +110,9 @@ def save_hdf5(file_path, array, frame, mode='a'):
             outfile.root.dataset[frame] = array
 
 
-def shape_check_hdf5(file_path):
+def _hdf5_shape(file_path):
     """
-    General purpose algorithm to check the shape the dataset
+    General purpose algorithm to load the dataset shape
     in a hdf5 file
 
     Parameters
@@ -125,8 +125,54 @@ def shape_check_hdf5(file_path):
     shape_hdf5:  int, tuple
         Shape of object dataset in hdf5 file
     """
-
     with tables.open_file(file_path + '.hdf5', 'r') as infile:
         shape_hdf5 = infile.root.dataset.shape
 
     return shape_hdf5
+
+
+def shape_check_hdf5(file_path, shape):
+    """
+    General purpose algorithm to check the shape the dataset
+    in a hdf5 file
+
+    Parameters
+    ----------
+    file_path:  str
+        Path name of hdf5 file
+    shape: tuple
+
+    Returns
+    -------
+    Bool:  int, tuple
+        Whether shape is the same as hdf5 file
+    """
+    return _hdf5_shape(file_path) == shape
+
+
+def frame_check_hdf5(file_path, nframe):
+    """
+    General purpose algorithm to check the shape the dataset
+    in a hdf5 file
+
+    Parameters
+    ----------
+    file_path:  str
+        Path name of hdf5 file
+    nframe: int
+        Number of frames to check in hd5f dataset
+
+    Returns
+    -------
+    Bool:  int, tuple
+        Whether numeber of frames is the same as hdf5 file
+    """
+    return _hdf5_shape(file_path)[0] <= nframe
+
+
+def mode_check_hdf5(frame_check, ow=False):
+    if frame_check:
+        return 'a'
+    elif ow:
+        return 'r+'
+    return False

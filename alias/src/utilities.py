@@ -22,6 +22,14 @@ SQRT2 = np.sqrt(2.)
 SQRTPI = np.sqrt(np.pi)
 
 
+def join_str_values(values, char):
+    return char.join([str(value) for value in values])
+
+
+def create_file_name(values):
+    return join_str_values(values, '_')
+
+
 def numpy_remove(list1, list2):
     """
     Deletes overlapping elements of list2 from list1
@@ -104,12 +112,14 @@ def print_alias():
 def create_surface_file_path(file_name, directory, q_m, n0,
                              phi, n_frame, recon):
 
-    coeff_ext = f'_{q_m}_{n0}_{int(1. / phi + 0.5)}_{n_frame}'
+    coeff_ext = create_file_name(
+        [q_m, n0, int(1. / phi + 0.5), n_frame]
+    )
 
     if recon:
         coeff_ext += '_r'
 
     file_path = os.path.join(
-        directory, file_name + coeff_ext)
+        directory, f"{file_name}_{coeff_ext}")
 
     return file_path

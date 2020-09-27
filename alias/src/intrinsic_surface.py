@@ -215,7 +215,7 @@ def xi_var(coeff, qm, qu):
     coeff_filter = coeff[:, :, indices]
     mid_point = len(indices) / 2
 
-    av_coeff = np.mean(coeff_filter[:, :,mid_point], axis=0)
+    av_coeff = np.mean(coeff_filter[:, :, mid_point], axis=0)
     av_coeff_2 = np.mean(coeff_filter**2, axis=(0, 1)) * Psi
 
     calc_var = np.sum(av_coeff_2) - np.mean(av_coeff**2, axis=0)

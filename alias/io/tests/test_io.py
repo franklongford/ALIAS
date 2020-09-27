@@ -51,9 +51,10 @@ class TestIO(TestCase):
             make_hdf5(tmp_file.name, self.test_data.shape, tables.Int64Atom())
             save_hdf5(tmp_file.name, self.test_data, 0)
 
-            self.assertEqual(
-                (1,) + self.test_data.shape,
-                shape_check_hdf5(tmp_file.name))
+            self.assertTrue(
+                shape_check_hdf5(
+                    tmp_file.name, (1,) + self.test_data.shape)
+            )
 
             load_data = load_hdf5(tmp_file.name, 0)
 

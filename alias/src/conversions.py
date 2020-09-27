@@ -48,14 +48,18 @@ def coeff_to_fourier(coeff, qm, dim):
                 value = (coeff[j1] - np.sign(v) * 1j * coeff[j3]) / 2.
 
             elif u < 0 and v < 0:
-                value = (coeff[j1] + 1j * (coeff[j2] + coeff[j3]) - coeff[j4]) / 4.
+                value = (
+                    coeff[j1] + 1j * (coeff[j2] + coeff[j3]) - coeff[j4]) / 4.
             elif u > 0 and v > 0:
-                value = (coeff[j1] - 1j * (coeff[j2] + coeff[j3]) - coeff[j4]) / 4.
+                value = (
+                    coeff[j1] - 1j * (coeff[j2] + coeff[j3]) - coeff[j4]) / 4.
 
             elif u < 0:
-                value = (coeff[j1] + 1j * (coeff[j2] - coeff[j3]) + coeff[j4]) / 4.
+                value = (
+                    coeff[j1] + 1j * (coeff[j2] - coeff[j3]) + coeff[j4]) / 4.
             elif v < 0:
-                value = (coeff[j1] - 1j * (coeff[j2] - coeff[j3]) + coeff[j4]) / 4.
+                value = (
+                    coeff[j1] - 1j * (coeff[j2] - coeff[j3]) + coeff[j4]) / 4.
 
             amplitudes[index] = value
 
@@ -84,8 +88,11 @@ def coeff_to_fourier_2(coeff_2, qm, dim):
     for i in range(n_waves):
         for j in range(n_waves):
             A[i][j] += (
-                amplitudes_2 * np.exp(-2 * np.pi * 1j *
-                (u_mat * x_mat[i][j] + y_mat[i][j] * v_mat) / n_waves)
+                amplitudes_2 * np.exp(
+                    -2 * np.pi * 1j / n_waves * (
+                        u_mat * x_mat[i][j] + y_mat[i][j] * v_mat
+                    )
+                )
             ).sum()
 
     return A, frequencies

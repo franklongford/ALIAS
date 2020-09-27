@@ -18,6 +18,7 @@ from alias.src.intrinsic_analysis import (
     av_intrinsic_distributions
 )
 from alias.io.utilities import make_directory
+from alias.src.utilities import create_file_name, join_str_values
 
 log = logging.getLogger(__name__)
 
@@ -67,9 +68,10 @@ def run_alias(trajectory, alias_options, checkpoint=None, topology=None):
     checkfile = surf_param.serialize()
     save_checkfile(checkfile, checkpoint)
 
-    com_ref = '_'.join([
+    com_ref = create_file_name([
         surf_param.com_mode,
-        '-'.join([str(m) for m in surf_param.com_sites])])
+        join_str_values(surf_param.com_sites)]
+    )
     file_name = f"{file_name}_{com_ref}"
 
     surf_param.select_orientation_vector()
@@ -83,8 +85,6 @@ def run_alias(trajectory, alias_options, checkpoint=None, topology=None):
 
     try:
         mol_traj = load_npy(pos_file_name + f'{surf_param.n_frames}_mol_traj')
-        com_traj = load_npy(pos_file_name + f'{surf_param.n_frames}_com_traj')
-        mol_vec = load_npy(pos_file_name + f'{surf_param.n_frames}_mol_vec')
         cell_dim = load_npy(pos_file_name + f'{surf_param.n_frames}_cell_dim')
     except (FileNotFoundError, IOError):
 
