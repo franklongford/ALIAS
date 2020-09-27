@@ -33,7 +33,7 @@ from alias.src.wave_function import (
     dd_wave_function
 )
 
-from .utilities import unit_vector
+from .utilities import unit_vector, create_file_name
 
 
 def make_pos_dxdy(xmol, ymol, coeff, nmol, dim, qm):
@@ -187,10 +187,10 @@ def create_intrinsic_positions_dxdyz(
     if not os.path.exists(intpos_dir):
         os.mkdir(intpos_dir)
 
-    file_name_coeff = '{}_{}_{}_{}_{}'.format(
-        file_name, qm, n0, int(1/phi + 0.5), nframe)
-    file_name_pos = '{}_{}_{}_{}_{}'.format(
-        file_name, qm, n0, int(1/phi + 0.5), nframe)
+    file_name_pos = create_file_name(
+        [file_name, qm, n0, int(1/phi + 0.5), nframe]
+    )
+    file_name_coeff = file_name_pos
 
     if recon:
         file_name_coeff += '_r'
@@ -444,9 +444,9 @@ def create_intrinsic_den_curve_hist(directory, file_name, qm, n0, phi, nframe,
     if not os.path.exists(intden_dir):
         os.mkdir(intden_dir)
 
-    file_name_pos = '_'.join(
+    file_name_pos = create_file_name(
         [file_name, qm, n0, int(1./phi + 0.5), nframe])
-    file_name_hist = '_'.join(
+    file_name_hist = create_file_name(
         [file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe])
 
     if recon:
@@ -562,9 +562,9 @@ def av_intrinsic_distributions(directory, file_name, dim, nslice, qm, n0, phi,
     """
 
     intden_dir = os.path.join(directory, 'intden')
-    file_name_hist = '_'.join(
+    file_name_hist = create_file_name(
         [file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe])
-    file_name_dist = '_'.join(
+    file_name_dist = create_file_name(
         [file_name, nslice, nz, qm, n0, int(1. / phi + 0.5), nsample])
 
     if recon:
@@ -781,11 +781,11 @@ def create_intrinsic_den_curve_dist(directory, file_name, qm, n0, phi, nframe,
     if not os.path.exists(intden_dir):
         os.mkdir(intden_dir)
 
-    file_name_pos = '_'.join(
+    file_name_pos = create_file_name(
         [file_name, qm, n0, int(1./phi + 0.5), nframe]
     )
     file_name_coeff = file_name_pos
-    file_name_hist = '_'.join(
+    file_name_hist = create_file_name(
         [file_name, nslice, nz, qm, n0, int(1./phi + 0.5), nframe])
 
     if recon:

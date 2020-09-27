@@ -4,7 +4,8 @@ import numpy as np
 
 from alias.src.utilities import (
     unit_vector, numpy_remove,
-    bubble_sort, create_surface_file_path
+    bubble_sort, create_surface_file_path,
+    create_file_name
 )
 
 
@@ -14,6 +15,14 @@ class TestUtilities(TestCase):
         self.test_data = np.arange(50)
         self.file_name = 'some_file_name'
         self.directory = '/some/directory'
+
+    def test_create_file_name(self):
+        self.assertEqual(
+            'some_file_name_6',
+            create_file_name(
+                ['some', 'file', 'name', 6]
+            )
+        )
 
     def test_unit_vector(self):
 
