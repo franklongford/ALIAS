@@ -1,6 +1,3 @@
-import os
-import sys
-
 import mdtraj as md
 import numpy as np
 

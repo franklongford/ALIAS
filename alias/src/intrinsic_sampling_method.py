@@ -1,7 +1,7 @@
 """
 *************** INTRINSIC SAMPLING METHOD MODULE *******************
 
-Performs intrinsic sampling analysis on a set of interfacial 
+Performs intrinsic sampling analysis on a set of interfacial
 simulation configurations
 
 ********************************************************************
@@ -19,7 +19,13 @@ import tables
 import numpy as np
 
 from alias.io.hdf5_io import (
-    make_hdf5, load_hdf5, save_hdf5, shape_check_hdf5)
+    make_hdf5,
+    load_hdf5,
+    save_hdf5,
+    shape_check_hdf5,
+    frame_check_hdf5,
+    mode_check_hdf5
+)
 from alias.io.numpy_io import load_npy
 from alias.io.command_line_output import StdOutTable
 from alias.src.linear_algebra import update_A_b, lu_decomposition
@@ -39,8 +45,6 @@ def build_surface(xmol, ymol, zmol, dim, qm, n0, phi, tau, max_r,
                   ncube=3, vlim=3, recon=0, surf_0=[0, 0], zvec=None):
 
     """
-    build_surface(xmol, ymol, zmol, dim, mol_sigma, qm, n0, phi, tau, max_r, ncube=3, vlim=3, recon=0, surf_0=[0, 0])
-
     Create coefficients for Fourier sum representing intrinsic surface.
 
     Parameters
@@ -102,7 +106,7 @@ def build_surface(xmol, ymol, zmol, dim, qm, n0, phi, tau, max_r,
     # grid of pivots furthest away from centre of mass
     print('Lx = {:5.3f}   Ly = {:5.3f}   qm = {:5d}\n'
           'phi = {}   n_piv = {:5d}   vlim = {:5d}   max_r = {:5.3f}'.format(
-        dim[0], dim[1], qm, phi, n0, vlim, max_r))
+           dim[0], dim[1], qm, phi, n0, vlim, max_r))
     print('Surface plane initial guess = {} {}'.format(surf_0[0], surf_0[1]))
 
     pivot_search = (ncube > 0)
@@ -134,7 +138,7 @@ def build_surface(xmol, ymol, zmol, dim, qm, n0, phi, tau, max_r,
         pivot = [piv_n1, piv_n2]
 
         if not (len(pivot[0]) == n0) * (len(pivot[1]) == n0):
-            #ut.view_surface(
+            # ut.view_surface(
             #   coeff, pivot, qm, qm, xmol, ymol, zmol, 2, dim)
             zmol, pivot = pivot_swap(
                 xmol, ymol, zmol, pivot, dim, max_r, n0)
@@ -178,16 +182,13 @@ def build_surface(xmol, ymol, zmol, dim, qm, n0, phi, tau, max_r,
         ]
         print(stdout_table.row(output))
 
-    #ut.view_surface(coeff, pivot, qm, qm, xmol, ymol, zmol, 50, dim)
+    # ut.view_surface(coeff, pivot, qm, qm, xmol, ymol, zmol, 50, dim)
 
     else:
         piv_n1 = np.arange(ncube**2)
         piv_n2 = np.arange(ncube**2)
         piv_z1 = np.zeros(ncube**2)
         piv_z2 = np.zeros(ncube**2)
-        vapour_list = []
-        new_piv1 = []
-        new_piv2 = []
 
         dxyz = np.reshape(
             np.tile(
@@ -220,14 +221,12 @@ def build_surface(xmol, ymol, zmol, dim, qm, n0, phi, tau, max_r,
         mol_list = numpy_remove(mol_list, piv_n1)
         mol_list = numpy_remove(mol_list, piv_n2)
 
-        new_piv1 = piv_n1
-        new_piv2 = piv_n2
-
         assert np.sum(np.isin(vapour_list, mol_list)) == 0
         assert np.sum(np.isin(piv_n1, mol_list)) == 0
         assert np.sum(np.isin(piv_n2, mol_list)) == 0
 
-        print('Initial {} pivots selected: {:10.3f} s'.format(ncube**2, time.time() - start))
+        print('Initial {} pivots selected: {:10.3f} s'.format(
+              ncube**2, time.time() - start))
 
         "Split molecular position lists into two volumes for each surface"
         mol_list1 = mol_list
@@ -246,11 +245,13 @@ def build_surface(xmol, ymol, zmol, dim, qm, n0, phi, tau, max_r,
     return coeff, pivot
 
 
-def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=False, ncube=3, vlim=3, tau=0.5, max_r=1.5, ow_coeff=False, ow_recon=False):
+def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi,
+                              mol_sigma, nframe, recon=False, ncube=3,
+                              vlim=3, tau=0.5,
+                              max_r=1.5, ow_coeff=False, ow_recon=False):
     """
-    create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma, nframe, recon=False, ow_coeff=False, ow_recon=False)
-
-    Routine to find optimised pivot density coefficient ns and pivot number n0 based on lowest pivot diffusion rate
+    Routine to find optimised pivot density coefficient ns and pivot number n0
+    based on lowest pivot diffusion rate
 
     Parameters
     ----------
@@ -262,11 +263,13 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
     dim:  float, array_like; shape=(3)
         XYZ dimensions of simulation cell
     qm:  int
-        Maximum number of wave frequencies in Fouier Sum representing intrinsic surface
+        Maximum number of wave frequencies in Fouier Sum representing
+        intrinsic surface
     n0:  int
         Maximum number of molecular pivots in intrinsic surface
     phi:  float
-        Weighting factor of minimum surface area term in surface optimisation function
+        Weighting factor of minimum surface area term in surface optimisation
+        function
     mol_sigma:  float
         Radius of spherical molecular interaction sphere
     nframe:  int
@@ -282,8 +285,8 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 
     print("\n--- Running Intrinsic Surface Routine ---\n")
 
-    surf_dir = directory + 'surface/'
-    pos_dir = directory + 'pos/'
+    surf_dir = os.path.join(directory, 'surface')
+    pos_dir = os.path.join(directory, 'pos')
 
     if not os.path.exists(surf_dir):
         os.mkdir(surf_dir)
@@ -298,24 +301,30 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 
     "Make coefficient and pivot files"
     if not os.path.exists(coeff_file_name + '_coeff.hdf5'):
-        make_hdf5(coeff_file_name + '_coeff', (2, n_waves**2), tables.Float64Atom())
-        make_hdf5(coeff_file_name + '_pivot', (2, n0), tables.Int64Atom())
+        make_hdf5(coeff_file_name + '_coeff',
+                  (2, n_waves**2), tables.Float64Atom())
+        make_hdf5(coeff_file_name + '_pivot',
+                  (2, n0), tables.Int64Atom())
         file_check = False
+
     elif not ow_coeff:
         "Checking number of frames in current coefficient files"
         try:
-            file_check = (shape_check_hdf5(coeff_file_name + '_coeff') == (nframe, 2, n_waves**2))
-            file_check *= (shape_check_hdf5(coeff_file_name + '_pivot') == (nframe, 2, n0))
-        except:
+            file_check = shape_check_hdf5(
+                coeff_file_name + '_coeff', (nframe, 2, n_waves**2))
+            file_check *= shape_check_hdf5(
+                coeff_file_name + '_pivot', (nframe, 2, n0))
+        except FileNotFoundError:
             file_check = False
     else:
         file_check = False
 
     if not file_check:
         print("IMPORTING GLOBAL POSITION DISTRIBUTIONS\n")
-        mol_traj = load_npy(pos_dir + file_name + '_{}_mol_traj'.format(nframe))
-        mol_vec = load_npy(pos_dir + file_name + '_{}_mol_vec'.format(nframe))
-        com_traj = load_npy(pos_dir + file_name + '_{}_com'.format(nframe))
+        pos_data_file = os.path.join(pos_dir, file_name)
+        mol_traj = load_npy(pos_data_file + f'_{nframe}_mol_traj')
+        mol_vec = load_npy(pos_data_file + f'_{nframe}_mol_vec')
+        com_traj = load_npy(pos_data_file + f'_{nframe}_com')
 
         n_mols = mol_traj.shape[1]
         com_tile = np.moveaxis(
@@ -325,28 +334,19 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 
         for frame in range(nframe):
 
-            "Checking number of frames in coeff and pivot files"
-            frame_check_coeff = (shape_check_hdf5(coeff_file_name + '_coeff')[0] <= frame)
-            frame_check_pivot = (shape_check_hdf5(coeff_file_name + '_pivot')[0] <= frame)
+            # Checking number of frames in coeff and pivot files
+            frame_check_coeff = frame_check_hdf5(
+                coeff_file_name + '_coeff', frame)
+            frame_check_pivot = frame_check_hdf5(
+                coeff_file_name + '_pivot', frame)
 
-            if frame_check_coeff:
-                mode_coeff = 'a'
-            elif ow_coeff:
-                mode_coeff = 'r+'
-            else:
-                mode_coeff = False
+            mode_coeff = mode_check_hdf5(frame_check_coeff, ow_coeff)
+            mode_pivot = mode_check_hdf5(frame_check_pivot, ow_coeff)
 
-            if frame_check_pivot:
-                mode_pivot = 'a'
-            elif ow_coeff:
-                mode_pivot = 'r+'
-            else:
-                mode_pivot = False
-
-            if not mode_coeff and not mode_pivot:
-                pass
-            else:
-                sys.stdout.write("Optimising Intrinsic Surface coefficients: frame {}\n".format(frame))
+            if mode_coeff or mode_pivot:
+                sys.stdout.write(
+                    "Optimising Intrinsic Surface coefficients:"
+                    " frame {}\n".format(frame))
                 sys.stdout.flush()
 
                 if frame == 0:
@@ -357,9 +357,12 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
                     surf_0 = [coeff[0][index], coeff[1][index]]
 
                 coeff, pivot = build_surface(
-                    mol_traj[frame, :, 0], mol_traj[frame, :, 1], mol_traj[frame, :, 2],
+                    mol_traj[frame, :, 0],
+                    mol_traj[frame, :, 1],
+                    mol_traj[frame, :, 2],
                     dim, qm, n0, phi, tau, max_r,
-                    ncube=ncube, vlim=vlim, recon=recon, surf_0=surf_0, zvec=mol_vec[frame])
+                    ncube=ncube, vlim=vlim, recon=recon,
+                    surf_0=surf_0, zvec=mol_vec[frame])
 
                 save_hdf5(coeff_file_name + '_coeff', coeff, frame, mode_coeff)
                 save_hdf5(coeff_file_name + '_pivot', pivot, frame, mode_pivot)
@@ -367,30 +370,39 @@ def create_intrinsic_surfaces(directory, file_name, dim, qm, n0, phi, mol_sigma,
 
 def pivot_swap(xmol, ymol, zmol, pivots, dim, max_r, n0):
 
-    assert (pivots[0].size + pivots[1].size == 2 * n0), (pivots[0].size + pivots[1].size, 2 * n0)
+    assert (pivots[0].size + pivots[1].size == 2 * n0)
 
-    "Check equal number of pivots exists for each surface"
+    # Check equal number of pivots exists for each surface
     while pivots[0].size != n0 or pivots[1].size != n0:
 
-        "Identify the overloaded surface"
+        # Identify the overloaded surface"
         surf_g = int(pivots[0].size < pivots[1].size)
         surf_l = int(pivots[0].size > pivots[1].size)
         piv_g = pivots[surf_g]
 
-        "Calculate radial distances between each pivot in the surface"
-        dxyz = np.reshape(np.tile(np.stack((xmol[piv_g], ymol[piv_g], zmol[piv_g])),
-                                  (1, pivots[surf_g].size)),
-                          (3, pivots[surf_g].size, pivots[surf_g].size))
+        # Calculate radial distances between each pivot in the surface
+        dxyz = np.reshape(
+            np.tile(
+                np.stack(
+                    (xmol[piv_g], ymol[piv_g], zmol[piv_g])
+                ),
+                (1, pivots[surf_g].size)
+            ),
+            (3, pivots[surf_g].size, pivots[surf_g].size)
+        )
+
         dxyz = np.transpose(dxyz, axes=(0, 2, 1)) - dxyz
         for i, l in enumerate(dim[:2]):
             dxyz[i] -= l * np.array(2 * dxyz[i] / l, dtype=int)
         dr2 = np.sum(dxyz**2, axis=0)
 
-        "Compose a nearest neighbour list, ordered by number of neighbours"
-        vapour_list = np.argsort(np.count_nonzero(dr2 < max_r**2, axis=1))[:1]
+        # Compose a nearest neighbour list, ordered by number of neighbours
+        vapour_list = np.argsort(
+            np.count_nonzero(dr2 < max_r**2, axis=1))[:1]
         piv = pivots[surf_g][vapour_list]
 
-        "Swap the pivot molecule with the smallest number of neighbours to the other surface"
+        # Swap the pivot molecule with the smallest number of neighbours
+        # to the other surface
         pivots[surf_l] = np.concatenate((pivots[surf_l], piv))
         pivots[surf_g] = np.delete(pivots[surf_g], vapour_list)
 

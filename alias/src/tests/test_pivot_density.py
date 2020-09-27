@@ -23,4 +23,3 @@ class TestPivotDensity(TestCase):
 
         self.assertEqual(0.25, ex_1)
         self.assertEqual(0.625, ex_2)
-

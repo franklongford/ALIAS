@@ -23,7 +23,7 @@ def view_surface(coeff, pivot, qm, qu, xmol, ymol, zmol, nxy, dim):
 
     surface = np.moveaxis(surface, 1, 2)
 
-    fig = plt.figure(0, figsize=(15,15))
+    fig = plt.figure(0, figsize=(15, 15))
     ax = fig.gca(projection='3d')
     ax.set_xlabel(r'$x$ (\AA)')
     ax.set_ylabel(r'$y$ (\AA)')
@@ -40,6 +40,6 @@ def view_surface(coeff, pivot, qm, qu, xmol, ymol, zmol, nxy, dim):
         ax.plot_wireframe(X_grid, Y_grid, surface[1], color='r')
         ax.scatter(xmol[pivot[1]], ymol[pivot[1]], zmol[pivot[1]], color='g')
 
-    a = anim.FuncAnimation(fig, update, frames=1, repeat=False)
-    #plt.savefig('plot_{}_{}.png'.format(len(pivot[0]), len(pivot[1])))
+    anim.FuncAnimation(fig, update, frames=1, repeat=False)
+    # plt.savefig('plot_{}_{}.png'.format(len(pivot[0]), len(pivot[1])))
     plt.show()

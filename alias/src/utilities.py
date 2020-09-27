@@ -104,12 +104,15 @@ def print_alias():
 def create_surface_file_path(file_name, directory, q_m, n0,
                              phi, n_frame, recon):
 
-    coeff_ext = f'_{q_m}_{n0}_{int(1. / phi + 0.5)}_{n_frame}'
+    coeff_ext = '_'.join(
+        [str(value) for value in
+         [q_m, n0, int(1. / phi + 0.5), n_frame]]
+    )
 
     if recon:
         coeff_ext += '_r'
 
     file_path = os.path.join(
-        directory, file_name + coeff_ext)
+        directory, f"{file_name}_{coeff_ext}")
 
     return file_path

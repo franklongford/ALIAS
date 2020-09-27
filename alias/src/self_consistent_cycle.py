@@ -76,7 +76,10 @@ def self_consistent_cycle(
 
         end2 = time.time()
 
-        #ut.view_surface(coeff, [piv_n1, piv_n2], qm, qm, xmol, ymol, zmol, 30, dim)
+        # ut.view_surface(
+        #    coeff, [piv_n1, piv_n2], qm, qm,
+        #    xmol, ymol, zmol, 30, dim
+        # )
 
         "Calculate surface areas excess"
         area1 = intrinsic_area(coeff[0], qm, qm, dim)
@@ -99,7 +102,8 @@ def self_consistent_cycle(
             building_surface = False
             print("ENDING SEARCH")
 
-        "Calculate distance between molecular z positions and intrinsic surface"
+        # Calculate distance between molecular z positions
+        # and intrinsic surface
         if build_surf1:
             zeta_list1 = make_zeta_list(
                 xmol, ymol, zmol, dim, mol_list1, coeff[0], qm, qm)
@@ -107,10 +111,10 @@ def self_consistent_cycle(
             zeta_list2 = make_zeta_list(
                 xmol, ymol, zmol, dim, mol_list2, coeff[1], qm, qm)
 
-        "Search for more molecular pivot sites"
+        # Search for more molecular pivot sites"
 
         while finding_pivots:
-            "Perform pivot selectrion"
+            # Perform pivot selection
             if piv_search1 and build_surf1:
                 mol_list1, new_piv1, pivot[0] = pivot_selection(
                     mol_list1, zeta_list1, pivot[0], tau1, n0)
@@ -118,7 +122,7 @@ def self_consistent_cycle(
                 mol_list2, new_piv2, pivot[1] = pivot_selection(
                     mol_list2, zeta_list2, pivot[1], tau2, n0)
 
-            "Check whether threshold distance tau needs to be increased"
+            # Check whether threshold distance tau needs to be increased
             if len(new_piv1) == 0 and len(pivot[0]) < n0:
                 tau1 += inc
             else:
@@ -129,8 +133,7 @@ def self_consistent_cycle(
             else:
                 piv_search2 = False
 
-            if piv_search1 or piv_search2: finding_pivots = True
-            else: finding_pivots = False
+            finding_pivots = (piv_search1 or piv_search2)
 
         end = time.time()
 
@@ -343,8 +346,10 @@ def initialise_recon(qm, phi, dim):
     )
 
     curve_matrix = 16 * np.pi**4 * (
-        (u_matrix * u_matrix.T)**2 / dim[0]**4 + (v_matrix * v_matrix.T)**2 / dim[1]**4 +
-        ((u_matrix * v_matrix.T)**2 + (u_matrix.T * v_matrix)**2) / np.prod(dim**2)
+        (u_matrix * u_matrix.T)**2 / dim[0]**4 +
+        (v_matrix * v_matrix.T)**2 / dim[1]**4 +
+        ((u_matrix * v_matrix.T)**2 +
+         (u_matrix.T * v_matrix)**2) / np.prod(dim**2)
     )
 
     return psi, curve_matrix, H_var
