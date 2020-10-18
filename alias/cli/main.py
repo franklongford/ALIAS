@@ -15,7 +15,7 @@ Last modified 27/2/2018 by Frank Longford
 import click
 import logging
 
-from alias.io.command_line_input import enter_path
+from alias.io.command_line_input import enter_file
 from alias.src.run_alias import run_alias
 from alias.src.alias_options import AliasOptions
 from alias.src.utilities import print_alias
@@ -81,11 +81,11 @@ def alias(trajectory, topology, debug, checkpoint,
     print_alias()
 
     # Get trajectory file path and topology is required
-    trajectory = enter_path('Trajectory', file_path=trajectory)
+    trajectory = enter_file('Trajectory', file_path=trajectory)
     log.info(f'Using trajectory file {trajectory}')
 
     if topology is not None:
-        topology = enter_path('Topology', file_path=topology)
+        topology = enter_file('Topology', file_path=topology)
         log.info(f'Using topology file {topology}')
 
     # Collate options for overwriting files
