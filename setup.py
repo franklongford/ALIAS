@@ -5,7 +5,7 @@ import os
 from setuptools import setup, find_packages
 
 AUTHOR = 'Frank Longford'
-AUTHOR_EMAIL = 'f.longford@soton.ac.uk'
+AUTHOR_EMAIL = 'franklongford@gmail.com'
 URL = 'https://github.com/franklongford/ALIAS'
 PLATFORMS = ['Linux', 'Unix', 'Mac OS X']
 VERSION = '2.0.0'

@@ -45,7 +45,7 @@ A light-weight installation can be performed using the Enthought Deployment Mana
     edm install --version 3.6 -y click setuptools
     edm shell
 
-Then build the `PyFibre` environment using the following command:
+Then build the `alias-py36` environment using the following command:
 
     python -m ci build-env --edm
 
@@ -65,13 +65,13 @@ If using anaconda or miniconda python distribution, this can be easily initiated
     conda create -n setup python=3.6 -y click setuptools
     source activate setup
 
-Then build the `ALIAS` environment using same command as before but with the `--conda` flag:
+Then build the `alias-py36` environment using same command as before but with the `--conda` flag:
 
     python -m ci build-env --conda
 
 Afterwards, activate the PyFibre environment and install a package egg with all binaries using:
 
-    source activate ALIAS
+    source activate alias-py36
     python -m ci install --conda
 
 This will install all required libraries and create the local `ALIAS` binary.
@@ -83,9 +83,9 @@ To make sure the installation has been successful, please run the unittests
 Instructions:
 -------------
 
-Main routine of ALIAS can be run via the following commands:
+Main routine of ALIAS can be run from inside the ``alias-py36`` environment via the following commands:
 
-1) ``./ALIAS.sh [traj] [top] [flags]``
+1) ``ALIAS [traj] [top] [flags]``
 
 	`traj`: Trajectory file
 		
