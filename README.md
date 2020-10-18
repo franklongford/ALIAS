@@ -40,10 +40,11 @@ a virtual environment.
 #### EDM Installation (recommended)
 
 A light-weight installation can be performed using the Enthought Deployment Manager (EDM). After downloading
-[edm](https://www.enthought.com/product/enthought-deployment-manager/), simply create a default environment using:
+[edm](https://www.enthought.com/product/enthought-deployment-manager/), simply create a default bootstrap environment
+using:
 
-    edm install --version 3.6 -y click setuptools
-    edm shell
+    edm install -e bootstrap --version 3.6 -y click setuptools
+    edm shell -e bootstrap
 
 Then build the `alias-py36` environment using the following command:
 
@@ -60,10 +61,11 @@ To make sure the installation has been successful, please run the unittests
 
 #### Conda Installation
 
-If using anaconda or miniconda python distribution, this can be easily initiated by creating a default environment:
+If using anaconda or miniconda python distribution, this can be easily initiated by creating a default bootstrap
+environment:
 
-    conda create -n setup python=3.6 -y click setuptools
-    source activate setup
+    conda create -n bootstrap python=3.6 -y click setuptools
+    source activate bootstrap
 
 Then build the `alias-py36` environment using same command as before but with the `--conda` flag:
 
